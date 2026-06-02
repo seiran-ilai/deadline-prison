@@ -4,7 +4,6 @@ import { supabase } from './supabaseClient'
 function App() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [claimResult, setClaimResult] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('me')
 
@@ -18,10 +17,7 @@ function App() {
     if (!user) { setProfile(null); setLoading(false); return }
     async function init() {
       setLoading(true)
-      // 先嘗試認領(配對預約名單)
-      const { data: result } = await supabase.rpc('claim_profile')
-      setClaimResult(result)
-      // 再讀自己的 profile
+      await supabase.rpc('claim_profile')
       const { data: p } = await supabase.from('profiles')
         .select('inmate_no, display_name, game_name, role').eq('id', user.id).single()
       setProfile(p)
@@ -40,8 +36,8 @@ function App() {
   }
   if (loading) return <div style={box}><p>核對身分中…</p></div>
 
-  // 配不到預約資料(unmatched 且沒有 profile)
-  if (!profile) {
+  // 未配對:有 profile 但沒編號
+  if (!profile || profile.inmate_no == null) {
     return (
       <div style={box}>
         <h1>死線監獄</h1>
@@ -73,29 +69,49 @@ function App() {
 
 function WardenPanel() {
   const [pending, setPending] = useState([])
+  const [unmatched, setUnmatched] = useState([])
   const [inmates, setInmates] = useState([])
   const [form, setForm] = useState({ game_name: '', discord_account: '', avatar_url: '' })
   const [msg, setMsg] = useState('')
 
   async function load() {
     const { data: pend } = await supabase.from('pending_inmates').select('*').order('created_at')
-    const { data: inm } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name').not('inmate_no', 'is', null).order('inmate_no')
+    const { data: all } = await supabase.from('profiles')
+      .select('id, inmate_no, game_name, display_name, discord_account, role').order('inmate_no', { nullsFirst: true })
     setPending(pend ?? [])
-    setInmates(inm ?? [])
+    setUnmatched((all ?? []).filter(p => p.inmate_no == null))
+    setInmates((all ?? []).filter(p => p.inmate_no != null))
   }
   useEffect(() => { load() }, [])
 
   async function addPending() {
     if (!form.game_name || !form.discord_account) { setMsg('遊戲暱稱和 Discord 帳號必填'); return }
     const { error } = await supabase.from('pending_inmates').insert({
-      game_name: form.game_name,
-      discord_account: form.discord_account,
-      avatar_url: form.avatar_url || null
+      game_name: form.game_name, discord_account: form.discord_account, avatar_url: form.avatar_url || null
     })
     if (error) { setMsg('新增失敗:' + error.message); return }
-    setMsg('已加入預約名單')
-    setForm({ game_name: '', discord_account: '', avatar_url: '' })
-    load()
+    setMsg('已加入預約名單'); setForm({ game_name: '', discord_account: '', avatar_url: '' }); load()
+  }
+
+  // 情況二:直接收押(填暱稱發編號)
+  async function admitDirect(userId) {
+    const name = prompt('請輸入遊戲暱稱:')
+    if (!name) return
+    const { error } = await supabase.rpc('admit_unmatched', { target_id: userId, p_game_name: name })
+    if (error) { setMsg('收押失敗:' + error.message); return }
+    setMsg('已收押'); load()
+  }
+
+  // 情況一:指到現有預約(合併 + 更新 username)
+  async function linkToPending(userId, username) {
+    if (pending.length === 0) { setMsg('沒有預約資料可指定'); return }
+    const list = pending.map((p, i) => `${i + 1}. ${p.game_name}（${p.discord_account}）`).join('\n')
+    const pick = prompt('指到哪筆預約?輸入編號:\n' + list)
+    const idx = parseInt(pick) - 1
+    if (isNaN(idx) || !pending[idx]) return
+    const { error } = await supabase.rpc('link_to_pending', { target_id: userId, pending_id: pending[idx].id })
+    if (error) { setMsg('指定失敗:' + error.message); return }
+    setMsg('已指定並收押'); load()
   }
 
   return (
@@ -108,6 +124,19 @@ function WardenPanel() {
         <button onClick={addPending}>加入預約</button>
       </div>
       {msg && <p style={{ color: '#2a7' }}>{msg}</p>}
+
+      <h3 style={{ marginTop: 24, color: '#c60' }}>⚠️ 未配對登入者(待處理)</h3>
+      {unmatched.length === 0 ? <p style={{ color: '#888' }}>沒有未配對的人</p> : (
+        <ul>
+          {unmatched.map(p => (
+            <li key={p.id} style={{ marginBottom: 8 }}>
+              {p.discord_account}
+              <button onClick={() => linkToPending(p.id, p.discord_account)} style={{ marginLeft: 10 }}>指到預約</button>
+              <button onClick={() => admitDirect(p.id)} style={{ marginLeft: 6 }}>直接收押</button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <h3 style={{ marginTop: 24 }}>預約名單(待登入認領)</h3>
       {pending.length === 0 ? <p style={{ color: '#888' }}>目前沒有預約</p> : (
