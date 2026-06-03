@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import MessageBanner from './MessageBanner'
 
 // 優先序設定:1高 2中 3低
 const PRIORITY = {
@@ -191,7 +192,7 @@ export default function ManuscriptManager({ userId }) {
         </div>
       )}
 
-      {msg && <p style={{ color: '#2a7' }}>{msg}</p>}
+      <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
       {/* 稿件列表 */}
       {manuscripts.length === 0 ? (

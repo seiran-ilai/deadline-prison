@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import MessageBanner from '../MessageBanner'
 import OverviewTab from './OverviewTab'
 import SessionTab from './SessionTab'
 import IntakeTab from './IntakeTab'
@@ -13,11 +14,13 @@ export default function WardenPanel({ myRole }) {
   const [sessions, setSessions] = useState([])
   const [currentSession, setCurrentSession] = useState('')
   const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(true)           // 共用資料載入中
   const [wtab, setWtab] = useState('overview')           // 主控台子頁籤
   const [editingMember, setEditingMember] = useState(null) // 編輯中的犯人資料(modal)
 
   // 共用資料:預約 / 全部 profiles / open 場次
   async function load() {
+    setLoading(true)
     const { data: pend } = await supabase.from('pending_inmates').select('*').order('created_at')
     const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, discord_account, avatar_url, role')
     const { data: sess } = await supabase.from('sessions').select('*').eq('status', 'open').order('created_at', { ascending: false })
@@ -26,6 +29,7 @@ export default function WardenPanel({ myRole }) {
     setInmates((all ?? []).filter(p => p.inmate_no != null))
     setSessions(sess ?? [])
     if (sess && sess.length && !currentSession) setCurrentSession(sess[0].id)
+    setLoading(false)
   }
   useEffect(() => { load() }, [])
 
@@ -42,8 +46,9 @@ export default function WardenPanel({ myRole }) {
   }
 
   const subTabStyle = (k) => ({
-    padding: '6px 14px', border: '1px solid #bbb', borderRadius: 4, cursor: 'pointer',
-    fontWeight: wtab === k ? 700 : 400, background: wtab === k ? '#eef4ff' : '#fafafa', color: '#333',
+    padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
+    fontWeight: wtab === k ? 700 : 400, background: wtab === k ? '#eef4ff' : '#fafafa',
+    border: wtab === k ? '1px solid #5a8fd0' : '1px solid #bbb', color: '#333',
   })
 
   return (
@@ -53,7 +58,7 @@ export default function WardenPanel({ myRole }) {
         <button onClick={() => setWtab('session')} style={subTabStyle('session')}>本場</button>
         <button onClick={() => setWtab('intake')} style={subTabStyle('intake')}>預約與收押</button>
       </div>
-      {msg && <p style={{ color: '#2a7' }}>{msg}</p>}
+      <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
       {wtab === 'session' && (
         <SessionTab
@@ -65,7 +70,7 @@ export default function WardenPanel({ myRole }) {
         <IntakeTab pending={pending} unmatched={unmatched} setMsg={setMsg} reloadShared={load} />
       )}
       {wtab === 'overview' && (
-        <OverviewTab inmates={inmates} isWarden={isWarden} onEditMember={openEditMember} />
+        <OverviewTab inmates={inmates} loading={loading} isWarden={isWarden} onEditMember={openEditMember} />
       )}
 
       {isWarden && editingMember && (

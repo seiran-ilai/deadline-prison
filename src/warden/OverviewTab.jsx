@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
 import { ROLE_LABEL, OVERVIEW_STATUS_STYLE, memberStatusLabel } from './constants'
 
-export default function OverviewTab({ inmates, isWarden, onEditMember }) {
+export default function OverviewTab({ inmates, loading, isWarden, onEditMember }) {
   const [visitCount, setVisitCount] = useState({})       // member_id -> 光臨次數
   const [memberSession, setMemberSession] = useState({}) // member_id -> 目前所在 open 場次
   const [expandedMember, setExpandedMember] = useState(null) // 展開中的 member_id
@@ -46,7 +46,8 @@ export default function OverviewTab({ inmates, isWarden, onEditMember }) {
   return (
     <div>
       <h3>犯人總覽</h3>
-      {inmates.length === 0 ? <p style={{ color: '#888' }}>還沒有人在押</p> : inmates.map(p => {
+      {loading ? <p style={{ color: '#888' }}>載入中…</p>
+        : inmates.length === 0 ? <p style={{ color: '#888' }}>還沒有人在押</p> : inmates.map(p => {
         const status = memberStatusLabel(memberSession[p.id])
         const ss = OVERVIEW_STATUS_STYLE[status] ?? { bg: '#eee', color: '#888' }
         const isOpen = expandedMember === p.id

@@ -6,6 +6,7 @@ import { ROLE_LABEL } from './constants'
 
 export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared }) {
   const [roster, setRoster] = useState([])
+  const [rosterLoading, setRosterLoading] = useState(false)
   const [sessionTitle, setSessionTitle] = useState('')
   const [pickInmate, setPickInmate] = useState('')
   const [pickRole, setPickRole] = useState('inmate')       // 報到時選的本場身分
@@ -20,9 +21,10 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
 
   async function loadRoster(sid) {
     if (!sid) { setRoster([]); return }
+    setRosterLoading(true)
     const { data: si } = await supabase.from('session_inmates')
       .select('id, state, member_id, role_in_session').eq('session_id', sid)
-    if (!si || si.length === 0) { setRoster([]); return }
+    if (!si || si.length === 0) { setRoster([]); setRosterLoading(false); return }
     const ids = si.map(r => r.member_id)
     const { data: profs } = await supabase.from('profiles')
       .select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', ids)
@@ -30,7 +32,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       ...r,
       profile: (profs ?? []).find(p => p.id === r.member_id)
     }))
-    setRoster(merged)
+    setRoster(merged); setRosterLoading(false)
   }
   useEffect(() => { loadRoster(currentSession) }, [currentSession])
 
@@ -156,14 +158,15 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
 
   async function toggleGoalStep(step) {
     const next = !step.done
-    // 1) 樂觀更新:先改本地 state,進度條立即重算
-    setGoalSteps(prev => {
+    const setDone = (val) => setGoalSteps(prev => {
       const arr = prev[step.manuscript_id] ?? []
-      return { ...prev, [step.manuscript_id]: arr.map(s => s.id === step.id ? { ...s, done: next } : s) }
+      return { ...prev, [step.manuscript_id]: arr.map(s => s.id === step.id ? { ...s, done: val } : s) }
     })
-    // 2) 背景寫 DB,不重載整頁
+    // 1) 樂觀更新:先改本地 state,進度條立即重算
+    setDone(next)
+    // 2) 背景寫 DB;失敗則回滾畫面並提示(避免畫面與 DB 不一致)
     const { error } = await supabase.from('manuscript_steps').update({ done: next }).eq('id', step.id)
-    if (error) console.error('[SessionTab] 子項目寫入失敗', step.id, error)
+    if (error) { setDone(step.done); setMsg('子項目更新失敗,已還原:' + error.message) }
   }
 
   function toggleGoalExpand(goalId) {
@@ -185,13 +188,11 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     const picked = inmates.find(p => p.id === pickInmate)
     const canBeGuard = picked && (picked.role === 'guard' || picked.role === 'warden')
     const roleInSession = (pickRole === 'guard' && canBeGuard) ? 'guard' : 'inmate'
-    const { error } = await supabase.rpc('check_in_inmate', { p_session: currentSession, p_member: pickInmate })
+    // 一次原子寫入:報到 + 本場身分都在 RPC 內完成
+    const { error } = await supabase.rpc('check_in_inmate', {
+      p_session: currentSession, p_member: pickInmate, p_role_in_session: roleInSession,
+    })
     if (error) { setMsg('報到失敗:' + error.message); return }
-    // RPC 預設寫入 inmate,這裡覆寫本場身分
-    const { error: e2 } = await supabase.from('session_inmates')
-      .update({ role_in_session: roleInSession })
-      .eq('session_id', currentSession).eq('member_id', pickInmate)
-    if (e2) { setMsg('本場身分寫入失敗:' + e2.message); return }
     setMsg(roleInSession === 'guard' ? '已報到(本場獄卒)' : '已報到(本場犯人)')
     setPickInmate(''); setPickRole('inmate'); loadRoster(currentSession)
   }
@@ -279,7 +280,8 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       )}
 
       <h3 style={{ marginTop: 20 }}>本場名單</h3>
-      {roster.length === 0 ? <p style={{ color: '#888' }}>本場還沒有人</p> : (() => {
+      {rosterLoading ? <p style={{ color: '#888' }}>載入中…</p>
+        : roster.length === 0 ? <p style={{ color: '#888' }}>本場還沒有人</p> : (() => {
         const inmateRoster = roster.filter(r => r.role_in_session !== 'guard')
         const guardRoster = roster.filter(r => r.role_in_session === 'guard')
         return (<>

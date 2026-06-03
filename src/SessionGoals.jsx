@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
 import { presenceLabel } from './pomodoro'
+import MessageBanner from './MessageBanner'
 
 const PRESENCE_STYLE = {
   '服刑中': { bg: '#d9534f', color: '#fff' },
@@ -174,14 +175,15 @@ export default function SessionGoals({ userId }) {
 
   async function toggleStep(step) {
     const next = !step.done
-    // 1) 樂觀更新:先改本地 state,畫面與進度條立即反映
-    setStepsByMs(prev => {
+    const setDone = (val) => setStepsByMs(prev => {
       const arr = prev[step.manuscript_id] ?? []
-      return { ...prev, [step.manuscript_id]: arr.map(s => s.id === step.id ? { ...s, done: next } : s) }
+      return { ...prev, [step.manuscript_id]: arr.map(s => s.id === step.id ? { ...s, done: val } : s) }
     })
-    // 2) 背景寫 DB,不重載整頁
+    // 1) 樂觀更新:先改本地 state,畫面與進度條立即反映
+    setDone(next)
+    // 2) 背景寫 DB;失敗則回滾畫面並提示(避免畫面與 DB 不一致)
     const { error } = await supabase.from('manuscript_steps').update({ done: next }).eq('id', step.id)
-    if (error) console.error('[SessionGoals] 子項目寫入失敗', step.id, error)
+    if (error) { setDone(step.done); setMsg('子項目更新失敗,已還原:' + error.message) }
   }
 
   function toggleExpand(manuscriptId) {
@@ -215,7 +217,7 @@ export default function SessionGoals({ userId }) {
         <span style={{ marginLeft: 8, color: '#666', fontSize: 13 }}>狀態:{myInmate.state}</span>
       </div>
 
-      {msg && <p style={{ color: '#2a7' }}>{msg}</p>}
+      <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
       <div style={{ ...card, background: '#fff7ec' }}>
         <strong>專屬獄卒</strong>

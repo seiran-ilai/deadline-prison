@@ -49,6 +49,13 @@ function App() {
   }
 
   const isStaff = profile.role === 'guard' || profile.role === 'warden'
+  const tabBtnStyle = (k) => ({
+    padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
+    fontWeight: tab === k ? 700 : 400,
+    background: tab === k ? '#eef4ff' : '#fafafa',
+    border: tab === k ? '1px solid #5a8fd0' : '1px solid #bbb',
+    color: '#333',
+  })
   return (
     <div style={{ fontFamily: 'sans-serif', maxWidth: 700, margin: '0 auto', padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -56,10 +63,10 @@ function App() {
         <button onClick={signOut}>登出</button>
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button onClick={() => setTab('session')} style={{ fontWeight: tab === 'session' ? 700 : 400 }}>本場服刑</button>
-        <button onClick={() => setTab('timer')} style={{ fontWeight: tab === 'timer' ? 700 : 400 }}>服刑計時</button>
-        <button onClick={() => setTab('me')} style={{ fontWeight: tab === 'me' ? 700 : 400 }}>我的稿件</button>
-        {isStaff && <button onClick={() => setTab('warden')} style={{ fontWeight: tab === 'warden' ? 700 : 400 }}>典獄長主控台</button>}
+        <button onClick={() => setTab('session')} style={tabBtnStyle('session')}>本場服刑</button>
+        <button onClick={() => setTab('timer')} style={tabBtnStyle('timer')}>服刑計時</button>
+        <button onClick={() => setTab('me')} style={tabBtnStyle('me')}>我的稿件</button>
+        {isStaff && <button onClick={() => setTab('warden')} style={tabBtnStyle('warden')}>典獄長主控台</button>}
       </div>
       {tab === 'session' && <SessionGoals userId={user.id} />}
       {tab === 'timer' && <SessionTimer userId={user.id} />}
