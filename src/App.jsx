@@ -124,6 +124,13 @@ function WardenPanel() {
     if (error) { setMsg('收押失敗:' + error.message); return }
     setMsg('已收押'); load()
   }
+  async function removePending(id) {
+    if (!window.confirm('確定移除這筆預約?')) return
+    const { error } = await supabase.from('pending_inmates').delete().eq('id', id)
+    if (error) { setMsg('移除失敗:' + error.message); return }
+    setPending(prev => prev.filter(p => p.id !== id))
+    setMsg('已移除預約')
+  }
   async function linkToPending(userId) {
     if (pending.length === 0) { setMsg('沒有預約資料可指定'); return }
     const list = pending.map((p, i) => `${i + 1}. ${p.game_name}（${p.discord_account}）`).join('\n')
@@ -187,7 +194,10 @@ function WardenPanel() {
 
       <h3 style={{ marginTop: 24 }}>預約名單</h3>
       {pending.length === 0 ? <p style={{ color: '#888' }}>目前沒有預約</p> : (
-        <ul>{pending.map(p => <li key={p.id}>{p.game_name}（{p.discord_account}）</li>)}</ul>
+        <ul>{pending.map(p => (
+          <li key={p.id} style={{ marginBottom: 8 }}>{p.game_name}（{p.discord_account}）
+            <button onClick={() => removePending(p.id)} style={{ marginLeft: 10 }}>移除</button>
+          </li>))}</ul>
       )}
 
       <h3 style={{ marginTop: 24 }}>在押名單(全部)</h3>
