@@ -40,8 +40,45 @@ export function ProgressBar({ done, total }) {
   )
 }
 
+// 依 due_date 與今天比較,算出死線標記(RP 用語)。
+// pct = 完成度(0~1);完成度 100% 時不顯示逾期/緊迫警示,只低調顯示日期。
+function deadlineInfo(dueDate, pct) {
+  if (!dueDate) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate + 'T00:00:00'); due.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((due - today) / 86400000)
+  const complete = pct >= 1
+  if (diffDays < 0) {
+    if (complete) return { text: `截止日:${dueDate}`, tone: 'muted' }
+    return { text: `死線已破 · 逾期 ${-diffDays} 天`, tone: 'danger' }
+  }
+  if (diffDays <= 3) {
+    if (complete) return { text: `截止日:${dueDate}`, tone: 'muted' }
+    return { text: diffDays === 0 ? '死線今天' : `死線還剩 ${diffDays} 天`, tone: 'warn' }
+  }
+  return { text: `還剩 ${diffDays} 天`, tone: 'muted' }   // 一般(> 3 天):低調
+}
+
+const DEADLINE_TONE = {
+  danger: { bg: '#d9534f', color: '#fff' },
+  warn: { bg: '#e08e0b', color: '#fff' },
+  muted: { bg: '#f0f0f0', color: '#777' },
+}
+
+function DeadlineBadge({ dueDate, pct }) {
+  const info = deadlineInfo(dueDate, pct)
+  if (!info) return null
+  const t = DEADLINE_TONE[info.tone]
+  return (
+    <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: t.bg, color: t.color }}>
+      {info.text}
+    </span>
+  )
+}
+
 export default function ManuscriptManager({ userId }) {
   const [view, setView] = useState('active')      // 'active' | 'archived'
+  const [sortBy, setSortBy] = useState('due')     // 'due'(截止日) | 'progress'(完成度) | 'priority'(優先級)
   const [manuscripts, setManuscripts] = useState([])
   const [stepsByMs, setStepsByMs] = useState({})  // { manuscript_id: [step, ...] }
   const [expanded, setExpanded] = useState([])    // 展開中的稿件 id
@@ -146,18 +183,44 @@ export default function ManuscriptManager({ userId }) {
   const input = { padding: '6px 8px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222', colorScheme: 'light' }
   const btn = { padding: '6px 12px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
 
+  // 完成度(0~1):done / total,無子項目為 0(避免除以零)
+  const progressOf = (m) => {
+    const steps = stepsByMs[m.id] ?? []
+    return steps.length ? steps.filter(s => s.done).length / steps.length : 0
+  }
+
+  // 排序(前端;各選項用固定預設方向)
+  const sorted = [...manuscripts].sort((a, b) => {
+    if (sortBy === 'priority') return (a.priority ?? 9) - (b.priority ?? 9)   // 高(1)→ 低(3)
+    if (sortBy === 'progress') return progressOf(a) - progressOf(b)           // 低 → 高(未完成優先)
+    // 截止日:有 due_date 者依日期近→遠(逾期最前);無 due_date 排最後
+    const ad = a.due_date, bd = b.due_date
+    if (ad && bd) return ad < bd ? -1 : ad > bd ? 1 : 0
+    if (ad) return -1
+    if (bd) return 1
+    return 0
+  })
+
   return (
     <div style={{ color: '#222' }}>
-      {/* 檢視切換 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      {/* 檢視切換 + 排序 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={() => setView('active')}
           style={{ ...btn, fontWeight: view === 'active' ? 700 : 400, background: view === 'active' ? '#eef4ff' : '#fafafa' }}>
           進行中
         </button>
         <button onClick={() => setView('archived')}
           style={{ ...btn, fontWeight: view === 'archived' ? 700 : 400, background: view === 'archived' ? '#eef4ff' : '#fafafa' }}>
-          封存
+          已封存
         </button>
+        <span style={{ flex: 1 }} />
+        <label style={{ fontSize: 13, color: '#666' }}>排序
+          <select style={{ ...input, marginLeft: 4 }} value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <option value="due">截止日</option>
+            <option value="progress">完成度</option>
+            <option value="priority">優先級</option>
+          </select>
+        </label>
       </div>
 
       {/* 新增稿件(僅進行中檢視顯示) */}
@@ -197,9 +260,10 @@ export default function ManuscriptManager({ userId }) {
       {/* 稿件列表 */}
       {manuscripts.length === 0 ? (
         <p style={{ color: '#888' }}>{view === 'active' ? '還沒有進行中的稿件' : '沒有封存的稿件'}</p>
-      ) : manuscripts.map(m => {
+      ) : sorted.map(m => {
         const steps = stepsByMs[m.id] ?? []
         const done = steps.filter(s => s.done).length
+        const pct = steps.length ? done / steps.length : 0
         const isOpen = expanded.includes(m.id)
         const vis = VISIBILITY[m.visibility] ?? VISIBILITY.public
         return (
@@ -208,6 +272,7 @@ export default function ManuscriptManager({ userId }) {
               <PriorityTag priority={m.priority} />
               <strong style={{ fontSize: 16 }}>{m.title}</strong>
               <span title={vis.label}>{vis.icon}</span>
+              <DeadlineBadge dueDate={m.due_date} pct={pct} />
               <span style={{ flex: 1 }} />
               <button style={btn} onClick={() => toggleExpand(m.id)}>{isOpen ? '收合' : '展開子項目'}</button>
               <button style={btn} onClick={() => setEditing({ ...m, due_date: m.due_date ?? '', target_date: m.target_date ?? '' })}>編輯</button>
