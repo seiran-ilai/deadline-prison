@@ -1,0 +1,513 @@
+<!--
+  死線監獄 形象官網 — 視覺原型（單檔 HTML）
+  ────────────────────────────────────────────
+  ▸ 要改內容，只動下面 <script id="data"> 裡的兩個陣列：
+      STAFF    獄方名冊（監獄人員）
+      SESSIONS 服刑梯次（趕稿場次）
+  ▸ 場次依日期自動分流：未來=報名中 / 額滿=停止收監 / 過期=已結束（淡化）
+  ▸「入監服刑」目前是 Discord 登入 stub；上線時改接 /api/booking（見交接規格）
+  ▸ 視覺方向：工業拘留所 — 水泥灰、鋼欄杆、警示黃黑、收容編號鋼印
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>死線監獄 ｜ DEADLINE PRISON</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Saira+Stencil+One&family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --concrete-0:#0c0d0f; --concrete-1:#131519; --concrete-2:#1b1e23;
+  --concrete-3:#23272e; --panel:#191c21;
+  --steel:#3a4049; --steel-2:#565d68;
+  --text:#dadbdd; --dim:#878d96; --faint:#5a606a;
+  --hazard:#f5c518; --hazard-deep:#caa00f;
+  --alarm:#d8412f;
+  --line:rgba(255,255,255,.07);
+  --bar:rgba(255,255,255,.045);
+  --stamp:'Saira Stencil One',sans-serif;
+  --cond:'Bebas Neue',sans-serif;
+  --mono:'Space Mono',monospace;
+  --cjk:'Noto Sans TC',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--concrete-0); color:var(--text);
+  font-family:var(--mono),var(--cjk); line-height:1.7;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+/* 水泥噪點 + 垂直鋼欄杆,鋪滿整站 */
+body::before{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+  opacity:.045; mix-blend-mode:overlay;
+}
+body::after{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0 78px,var(--bar) 78px 80px);
+}
+.wrap{position:relative; z-index:1}
+::selection{background:var(--hazard); color:#000}
+a{color:inherit; text-decoration:none}
+
+/* ───── 警示黃黑斜紋 ───── */
+.hazard{
+  height:14px;
+  background:repeating-linear-gradient(45deg,var(--hazard) 0 22px,#0a0a0a 22px 44px);
+}
+.hazard.thin{height:8px}
+
+/* ───── 導覽列 ───── */
+nav{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; gap:28px;
+  padding:0 28px; height:62px;
+  background:rgba(12,13,15,.82); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+nav .brand{
+  font-family:var(--stamp); font-size:20px; letter-spacing:.5px;
+  color:var(--text); white-space:nowrap;
+}
+nav .brand b{color:var(--hazard); font-weight:400}
+nav .links{display:flex; gap:22px; margin-left:auto; align-items:center}
+nav .links a{
+  font-family:var(--cond); font-size:19px; letter-spacing:1.5px;
+  color:var(--dim); transition:color .2s; position:relative; padding:4px 0;
+}
+nav .links a:hover,nav .links a.active{color:var(--text)}
+nav .links a.active::after{
+  content:""; position:absolute; left:0; right:0; bottom:-2px; height:2px; background:var(--hazard);
+}
+.btn-serve{
+  font-family:var(--cond); font-size:18px; letter-spacing:2px;
+  background:var(--hazard); color:#0a0a0a; padding:8px 18px;
+  border:none; cursor:pointer; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  transition:transform .12s, background .2s;
+}
+.btn-serve:hover{background:#fff; transform:translateY(-1px)}
+nav .nav-toggle{display:none}
+
+/* ───── 通用區塊 ───── */
+section{padding:96px 28px; max-width:1120px; margin:0 auto; position:relative}
+.eyebrow{
+  font-family:var(--cond); font-size:17px; letter-spacing:4px; color:var(--hazard);
+  display:flex; align-items:center; gap:12px; margin-bottom:14px;
+}
+.eyebrow .blk{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:2px}
+h2.title{
+  font-family:var(--cjk); font-weight:900; font-size:clamp(34px,5vw,58px);
+  line-height:1.05; letter-spacing:2px; margin-bottom:8px;
+}
+.subline{color:var(--dim); font-size:14px; max-width:52ch; margin-bottom:40px}
+
+/* 進場動畫 */
+.reveal{opacity:0; transform:translateY(26px); transition:opacity .7s ease, transform .7s ease}
+.reveal.in{opacity:1; transform:none}
+
+/* ═══════════ 首頁 / HERO ═══════════ */
+.hero{
+  min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+  padding:120px 28px 80px; max-width:1180px; margin:0 auto; position:relative;
+}
+/* 緩慢掃過的探照燈 */
+.hero::before{
+  content:""; position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background:radial-gradient(640px 420px at var(--sx,30%) 35%,rgba(245,197,24,.10),transparent 70%);
+  animation:sweep 14s ease-in-out infinite alternate;
+}
+@keyframes sweep{from{--sx:22%}to{--sx:74%}}
+.intake{
+  font-family:var(--mono); font-size:12px; letter-spacing:3px; color:var(--hazard);
+  border:1px solid var(--hazard-deep); display:inline-flex; gap:10px; align-items:center;
+  padding:7px 14px; margin-bottom:30px; width:fit-content;
+}
+.intake .dot{width:7px; height:7px; border-radius:50%; background:var(--alarm); animation:blink 1.3s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+.hero h1{
+  font-family:var(--cjk); font-weight:900;
+  font-size:clamp(64px,15vw,180px); line-height:.92; letter-spacing:4px;
+  text-shadow:0 0 60px rgba(0,0,0,.6);
+}
+.hero h1 .glow{color:var(--hazard)}
+.hero .ensign{
+  font-family:var(--stamp); font-size:clamp(20px,4vw,40px); color:var(--steel-2);
+  letter-spacing:6px; margin:6px 0 30px;
+}
+.hero .ensign .no{color:var(--text); border-bottom:3px solid var(--hazard); padding-bottom:2px}
+.hero .tag{font-size:clamp(15px,2vw,19px); color:var(--text); max-width:44ch; margin-bottom:14px}
+.hero .tag b{color:var(--hazard); font-weight:700}
+.hero .crime{
+  font-family:var(--mono); font-size:13px; color:var(--dim); letter-spacing:1px;
+  margin-bottom:40px; display:flex; flex-wrap:wrap; gap:6px 26px;
+}
+.hero .crime span b{color:var(--text)}
+.hero-cta{display:flex; gap:16px; flex-wrap:wrap; align-items:center}
+.cta-main{
+  font-family:var(--cond); font-size:24px; letter-spacing:3px;
+  background:var(--hazard); color:#0a0a0a; border:none; cursor:pointer;
+  padding:15px 36px; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+  transition:transform .12s, background .2s;
+}
+.cta-main:hover{background:#fff; transform:translate(-1px,-1px) scale(1.02)}
+.cta-ghost{
+  font-family:var(--cond); font-size:21px; letter-spacing:3px; color:var(--dim);
+  border:1px solid var(--steel); padding:14px 26px; cursor:pointer; background:transparent;
+  transition:color .2s,border-color .2s;
+}
+.cta-ghost:hover{color:var(--text); border-color:var(--steel-2)}
+.scroll-hint{
+  position:absolute; bottom:26px; left:28px; font-family:var(--mono); font-size:11px;
+  letter-spacing:3px; color:var(--faint); animation:nudge 2s ease-in-out infinite;
+}
+@keyframes nudge{50%{transform:translateY(6px); color:var(--dim)}}
+
+/* ═══════════ 監獄介紹 / 服刑須知 ═══════════ */
+.rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line)}
+.rule{
+  background:var(--panel); padding:30px 26px; position:relative; min-height:188px;
+  transition:background .25s;
+}
+.rule:hover{background:var(--concrete-3)}
+.rule .rn{font-family:var(--stamp); font-size:30px; color:var(--steel); margin-bottom:14px}
+.rule h3{font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:10px}
+.rule p{font-size:13.5px; color:var(--dim); line-height:1.75}
+.rule .pin{position:absolute; top:18px; right:18px; width:9px; height:9px; border-radius:50%;
+  background:var(--hazard); box-shadow:0 0 0 3px rgba(245,197,24,.12)}
+/* 番茄鐘節奏條 */
+.rhythm{margin-top:42px; border:1px solid var(--line); background:var(--panel); padding:26px}
+.rhythm .lbl{font-family:var(--cond); letter-spacing:3px; color:var(--hazard); font-size:18px; margin-bottom:16px}
+.bars{display:flex; height:34px; gap:3px; overflow:hidden}
+.bars i{display:block; height:100%}
+.bars .focus{background:var(--hazard); flex:25}
+.bars .rest{background:var(--steel); flex:5}
+.bars .long{background:var(--alarm); flex:15}
+.rhythm .legend{display:flex; gap:22px; margin-top:14px; flex-wrap:wrap; font-family:var(--mono); font-size:12px; color:var(--dim)}
+.rhythm .legend span{display:flex; align-items:center; gap:8px}
+.rhythm .legend i{width:12px; height:12px; display:inline-block}
+
+/* ═══════════ 監獄人員 / 獄方名冊 ═══════════ */
+.roster{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px}
+.card{
+  background:var(--panel); border:1px solid var(--line); position:relative; overflow:hidden;
+  transition:transform .18s, border-color .25s;
+}
+.card:hover{transform:translateY(-4px); border-color:var(--steel-2)}
+.card .mug{
+  height:200px; position:relative; display:flex; align-items:center; justify-content:center;
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 24px),
+    var(--concrete-2);
+  border-bottom:1px solid var(--line);
+}
+.card .mug .initial{font-family:var(--stamp); font-size:74px; color:var(--steel)}
+.card .mug .height{position:absolute; left:0; top:0; bottom:0; width:26px;
+  background:repeating-linear-gradient(0deg,var(--faint) 0 1px,transparent 1px 20px);
+  border-right:1px solid var(--line)}
+.card .mug img{width:100%; height:100%; object-fit:cover}
+.card .plate{
+  position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+  font-family:var(--mono); font-size:11px; letter-spacing:2px; color:#0a0a0a;
+  background:var(--hazard); padding:3px 12px; white-space:nowrap;
+}
+.card .body{padding:18px 18px 22px}
+.card .role{font-family:var(--cond); font-size:17px; letter-spacing:2px; color:var(--hazard); margin-bottom:4px}
+.card h4{font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:10px}
+.card .bio{font-size:13px; color:var(--dim); line-height:1.7}
+
+/* ═══════════ 趕稿場次 / 服刑梯次 ═══════════ */
+.sessions{display:flex; flex-direction:column; gap:14px}
+.sess{
+  display:grid; grid-template-columns:118px 1fr auto; align-items:center; gap:24px;
+  background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--steel);
+  padding:22px 26px; transition:border-color .25s, background .25s;
+}
+.sess:hover{background:var(--concrete-3)}
+.sess.open{border-left-color:var(--hazard)}
+.sess.full{border-left-color:var(--alarm)}
+.sess.ended{opacity:.42; border-left-color:var(--faint)}
+.sess .when{font-family:var(--mono)}
+.sess .when .d{font-size:26px; font-weight:700; color:var(--text); line-height:1}
+.sess .when .m{font-size:12px; color:var(--dim); letter-spacing:2px; margin-top:4px}
+.sess .meta .batch{font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--faint); margin-bottom:6px}
+.sess .meta h4{font-family:var(--cjk); font-weight:700; font-size:21px; letter-spacing:1px; margin-bottom:8px}
+.sess .meta .cap{font-family:var(--mono); font-size:12.5px; color:var(--dim); display:flex; align-items:center; gap:12px}
+.sess .meta .cap .gauge{width:120px; height:6px; background:var(--concrete-0); border:1px solid var(--line); position:relative}
+.sess .meta .cap .gauge i{position:absolute; inset:0 auto 0 0; background:var(--hazard)}
+.sess.full .gauge i{background:var(--alarm)}
+.sess .act{text-align:right}
+.tag-status{font-family:var(--cond); font-size:15px; letter-spacing:2px; padding:4px 10px; display:inline-block; margin-bottom:10px}
+.tag-status.open{color:var(--hazard); border:1px solid var(--hazard-deep)}
+.tag-status.full{color:var(--alarm); border:1px solid var(--alarm)}
+.tag-status.ended{color:var(--faint); border:1px solid var(--faint)}
+.btn-book{
+  font-family:var(--cond); font-size:19px; letter-spacing:2px; display:block; width:148px;
+  background:var(--hazard); color:#0a0a0a; border:none; cursor:pointer; padding:11px 0;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  transition:transform .12s, background .2s;
+}
+.btn-book:hover{background:#fff; transform:translateY(-1px)}
+.btn-book:disabled{background:var(--concrete-3); color:var(--faint); cursor:not-allowed; transform:none}
+
+/* ═══════════ 頁尾 ═══════════ */
+footer{padding:60px 28px 40px; max-width:1120px; margin:0 auto; border-top:1px solid var(--line)}
+footer .f-brand{font-family:var(--stamp); font-size:30px; letter-spacing:2px}
+footer .f-brand b{color:var(--hazard); font-weight:400}
+footer .f-sub{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:2px; margin-top:8px}
+
+/* ═══════════ 入監服刑 Modal ═══════════ */
+.modal-bg{
+  position:fixed; inset:0; z-index:100; background:rgba(6,7,8,.84); backdrop-filter:blur(4px);
+  display:none; align-items:center; justify-content:center; padding:24px;
+}
+.modal-bg.show{display:flex}
+.modal{
+  background:var(--panel); border:1px solid var(--steel); max-width:430px; width:100%;
+  position:relative; animation:pop .22s ease;
+}
+@keyframes pop{from{opacity:0; transform:scale(.95) translateY(10px)}}
+.modal .m-haz{height:8px; background:repeating-linear-gradient(45deg,var(--hazard) 0 16px,#0a0a0a 16px 32px)}
+.modal .m-body{padding:30px 30px 34px}
+.modal .m-eyebrow{font-family:var(--cond); letter-spacing:3px; color:var(--hazard); font-size:17px}
+.modal h3{font-family:var(--cjk); font-weight:900; font-size:26px; letter-spacing:1px; margin:4px 0 18px}
+.modal .m-row{font-family:var(--mono); font-size:13px; color:var(--dim); display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--line)}
+.modal .m-row b{color:var(--text)}
+.modal .m-note{font-size:13px; color:var(--dim); margin:18px 0 22px; line-height:1.7}
+.modal .m-dc{
+  width:100%; font-family:var(--cjk); font-weight:700; font-size:16px; letter-spacing:1px;
+  background:#5865F2; color:#fff; border:none; cursor:pointer; padding:14px; display:flex;
+  align-items:center; justify-content:center; gap:10px; transition:filter .2s;
+}
+.modal .m-dc:hover{filter:brightness(1.1)}
+.modal .m-stub{font-family:var(--mono); font-size:11px; color:var(--faint); text-align:center; margin-top:14px; letter-spacing:1px}
+.modal .m-close{position:absolute; top:14px; right:16px; background:none; border:none; color:var(--dim);
+  font-family:var(--mono); font-size:22px; cursor:pointer; line-height:1}
+.modal .m-close:hover{color:var(--hazard)}
+
+@media(max-width:720px){
+  nav .links{display:none}
+  .sess{grid-template-columns:78px 1fr; gap:16px}
+  .sess .act{grid-column:1/-1; text-align:left}
+  .btn-book{width:100%}
+  section{padding:72px 22px}
+  .hero{padding:90px 22px 70px}
+}
+</style>
+
+<div class="wrap">
+
+  <!-- ───── 導覽列 ───── -->
+  <nav>
+    <a href="#top" class="brand">死線<b>監獄</b></a>
+    <div class="links">
+      <a href="#about">監獄介紹</a>
+      <a href="#staff">監獄人員</a>
+      <a href="#sessions">趕稿場次</a>
+      <button class="btn-serve" onclick="document.getElementById('sessions').scrollIntoView()">入監服刑</button>
+    </div>
+  </nav>
+  <div class="hazard thin"></div>
+
+  <!-- ═══════════ 首頁 ═══════════ -->
+  <header class="hero" id="top">
+    <div class="intake"><span class="dot"></span>收容中 · INTAKE OPEN · 24H</div>
+    <h1>死線<span class="glow">監獄</span></h1>
+    <div class="ensign">DEADLINE PRISON · NO.<span class="no">0614</span></div>
+    <p class="tag">把自己關進來，<b>服完這一頁死線</b>。<br>沒有逃獄，只有交稿。</p>
+    <div class="crime">
+      <span>罪名：<b>慣性拖稿</b></span>
+      <span>刑期：<b>一個番茄鐘起</b></span>
+      <span>保釋：<b>不受理</b></span>
+    </div>
+    <div class="hero-cta">
+      <button class="cta-main" onclick="document.getElementById('sessions').scrollIntoView()">入監服刑 ▸</button>
+      <button class="cta-ghost" onclick="document.getElementById('about').scrollIntoView()">服刑須知</button>
+    </div>
+    <div class="scroll-hint">▼ 向下了解服刑流程</div>
+  </header>
+
+  <div class="hazard"></div>
+
+  <!-- ═══════════ 監獄介紹 ═══════════ -->
+  <section id="about">
+    <div class="eyebrow reveal">服刑須知 <span class="blk">// BLOCK 01</span></div>
+    <h2 class="title reveal">這裡關的，<br>是趕不完稿的人</h2>
+    <p class="subline reveal">死線監獄是一間以「番茄鐘」執行的趕稿收容所。入監即上鎖，鈴響才放風，全程同步直播犯人服刑進度——你不是一個人在趕，是一群人一起服刑。</p>
+
+    <div class="rules reveal">
+      <div class="rule"><span class="pin"></span><div class="rn">01</div><h3>入監上鎖</h3><p>選定梯次、以 Discord 登入入監。報到後鎖門，專注鈴響起，眾人同步服刑。</p></div>
+      <div class="rule"><span class="pin"></span><div class="rn">02</div><h3>放風有時</h3><p>專注 25 分鐘、放風 5 分鐘為一輪；每四輪一次長休 15 分鐘。鈴聲統一，不得擅自離場。</p></div>
+      <div class="rule"><span class="pin"></span><div class="rn">03</div><h3>全程直播</h3><p>典獄長控台同步大螢幕計時，犯人進度公開可見。被看著，就趕得動。</p></div>
+      <div class="rule"><span class="pin"></span><div class="rn">04</div><h3>刑滿釋放</h3><p>梯次結束即收尾放人。帶著趕完的稿離開——或自首下一場。</p></div>
+    </div>
+
+    <div class="rhythm reveal">
+      <div class="lbl">服刑節奏 · POMODORO CYCLE</div>
+      <div class="bars">
+        <i class="focus"></i><i class="rest"></i>
+        <i class="focus"></i><i class="rest"></i>
+        <i class="focus"></i><i class="rest"></i>
+        <i class="focus"></i><i class="long"></i>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--hazard)"></i>專注 25 分</span>
+        <span><i style="background:var(--steel)"></i>放風 5 分</span>
+        <span><i style="background:var(--alarm)"></i>長休 15 分（每 4 輪）</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="hazard"></div>
+
+  <!-- ═══════════ 監獄人員 ═══════════ -->
+  <section id="staff">
+    <div class="eyebrow reveal">獄方名冊 <span class="blk">// BLOCK 02</span></div>
+    <h2 class="title reveal">監獄人員</h2>
+    <p class="subline reveal">看守這座監獄、確保沒人逃稿的人。</p>
+    <div class="roster reveal" id="rosterGrid"><!-- JS 注入 --></div>
+  </section>
+
+  <div class="hazard"></div>
+
+  <!-- ═══════════ 趕稿場次 ═══════════ -->
+  <section id="sessions">
+    <div class="eyebrow reveal">服刑梯次 <span class="blk">// BLOCK 03</span></div>
+    <h2 class="title reveal">近期趕稿場次</h2>
+    <p class="subline reveal">選一個梯次自首入監。額滿停止收監，過期梯次已結案。</p>
+    <div class="sessions reveal" id="sessList"><!-- JS 注入 --></div>
+  </section>
+
+  <div class="hazard"></div>
+
+  <!-- ═══════════ 頁尾 ═══════════ -->
+  <footer>
+    <div class="f-brand">死線<b>監獄</b></div>
+    <div class="f-sub">DEADLINE PRISON · 趕稿收容所 · since 2026</div>
+  </footer>
+</div>
+
+<!-- ═══════════ 入監服刑 Modal ═══════════ -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="m-haz"></div>
+    <button class="m-close" onclick="closeModal()">✕</button>
+    <div class="m-body">
+      <div class="m-eyebrow">入監服刑 · INTAKE</div>
+      <h3 id="mTitle">梯次名稱</h3>
+      <div class="m-row"><span>梯次編號</span><b id="mBatch">—</b></div>
+      <div class="m-row"><span>服刑日期</span><b id="mDate">—</b></div>
+      <div class="m-row"><span>收容情況</span><b id="mCap">—</b></div>
+      <p class="m-note">入監採 <b style="color:var(--text)">Discord 登入</b>，登入後自動帶入你的 DC 身分作為服刑名冊紀錄，無需另填聯絡方式。</p>
+      <button class="m-dc" onclick="fakeLogin()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.3.5a18 18 0 0 1 4.3 1.4 16.6 16.6 0 0 0-14.9 0A18 18 0 0 1 8.9 3.5L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9 .1 13.4.3 17.8A20 20 0 0 0 6.4 21l.5-1.8a13 13 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4a13 13 0 0 1-2 1L17 21a20 20 0 0 0 6-3.2c.3-5.1-.5-9.4-2.7-13.4ZM8.4 15.3c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Zm7.2 0c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Z"/></svg>
+        以 Discord 登入入監
+      </button>
+      <div class="m-stub">＊ 原型示意：上線後此鈕觸發 Discord OAuth → /api/booking</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     資料區：要改內容只動這裡
+     ═══════════════════════════════════════════ -->
+<script id="data">
+// ── 獄方名冊（監獄人員）──
+// img 留空字串就顯示鋼印大寫字母；要放照片填圖片網址即可
+const STAFF = [
+  { role:"典獄長", name:"——",  no:"W-001", img:"", bio:"掌管全獄、開關場次與計時。逃稿者的最終裁決者。" },
+  { role:"獄卒",   name:"——",  no:"G-001", img:"", bio:"巡場、報到、維持秩序。鈴響時最不通融的人。" },
+  { role:"獄卒",   name:"——",  no:"G-002", img:"", bio:"直播控台與大螢幕看守，全程記錄犯人服刑進度。" },
+];
+
+// ── 服刑梯次（趕稿場次）──
+// date 用 YYYY-MM-DD；booked 已預約人數、capacity 上限（0 或不填 = 不限）
+const SESSIONS = [
+  { batch:"BATCH-0614", title:"開幕首梯 · 連夜趕稿",   date:"2026-06-14", booked:6,  capacity:12 },
+  { batch:"BATCH-0621", title:"週末長刑 · 八輪馬拉松", date:"2026-06-21", booked:12, capacity:12 },
+  { batch:"BATCH-0628", title:"深夜短刑 · 四輪速戰",   date:"2026-06-28", booked:3,  capacity:10 },
+  { batch:"BATCH-0531", title:"試營運梯次",            date:"2026-05-31", booked:8,  capacity:8  },
+];
+</script>
+
+<!-- ═══════════ 邏輯（一般不用動）═══════════ -->
+<script>
+const $ = s => document.querySelector(s);
+const today = new Date(); today.setHours(0,0,0,0);
+
+/* ── 渲染獄方名冊 ── */
+$('#rosterGrid').innerHTML = STAFF.map(p => `
+  <div class="card">
+    <div class="mug">
+      <div class="height"></div>
+      ${p.img ? `<img src="${p.img}" alt="${p.role}">` : `<div class="initial">${(p.role[0]||'?')}</div>`}
+      <div class="plate">${p.no}</div>
+    </div>
+    <div class="body">
+      <div class="role">${p.role}</div>
+      <h4>${p.name}</h4>
+      <p class="bio">${p.bio}</p>
+    </div>
+  </div>`).join('');
+
+/* ── 渲染服刑梯次（依日期自動分流）── */
+$('#sessList').innerHTML = SESSIONS
+  .slice().sort((a,b)=> new Date(a.date)-new Date(b.date))
+  .map((s,i) => {
+    const d = new Date(s.date+'T00:00:00');
+    const cap = s.capacity || 0;
+    const full = cap>0 && s.booked>=cap;
+    const past = d < today;
+    let cls='open', tag='報名中', tagCls='open';
+    if(past){ cls='ended'; tag='已結束'; tagCls='ended'; }
+    else if(full){ cls='full'; tag='停止收監'; tagCls='full'; }
+    const pct = cap>0 ? Math.min(100, Math.round(s.booked/cap*100)) : 0;
+    const capTxt = cap>0 ? `已收監 ${s.booked} / ${cap}` : `已收監 ${s.booked} ／ 不限`;
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}`;
+    let btn;
+    if(past)      btn = `<button class="btn-book" disabled>已結案</button>`;
+    else if(full) btn = `<button class="btn-book" disabled>已額滿</button>`;
+    else          btn = `<button class="btn-book" onclick='openModal(${i})'>入監服刑</button>`;
+    return `
+    <div class="sess ${cls}">
+      <div class="when"><div class="d">${dd}</div><div class="m">${mm}</div></div>
+      <div class="meta">
+        <div class="batch">${s.batch}</div>
+        <h4>${s.title}</h4>
+        <div class="cap">${capTxt}${cap>0?`<span class="gauge"><i style="width:${pct}%"></i></span>`:''}</div>
+      </div>
+      <div class="act"><span class="tag-status ${tagCls}">${tag}</span>${btn}</div>
+    </div>`;
+  }).join('');
+
+/* ── 入監服刑 Modal ── */
+const upcoming = SESSIONS.slice().sort((a,b)=> new Date(a.date)-new Date(b.date));
+function openModal(i){
+  const s = upcoming[i]; if(!s) return;
+  const d = new Date(s.date+'T00:00:00');
+  const cap = s.capacity || 0;
+  $('#mTitle').textContent = s.title;
+  $('#mBatch').textContent = s.batch;
+  $('#mDate').textContent  = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+  $('#mCap').textContent   = cap>0 ? `${s.booked} / ${cap}` : `${s.booked} ／ 不限`;
+  $('#modal').classList.add('show');
+}
+function closeModal(){ $('#modal').classList.remove('show'); }
+function fakeLogin(){ alert('原型示意：上線後此處觸發 Discord OAuth，登入後送出至 /api/booking 完成入監。'); }
+$('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+/* ── 進場動畫 ── */
+const io = new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} }),{threshold:.15});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+/* ── 導覽列 active 狀態 ── */
+const navIO = new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){
+    document.querySelectorAll('nav .links a').forEach(a=>
+      a.classList.toggle('active', a.getAttribute('href')==='#'+e.target.id));
+  }
+}),{rootMargin:'-50% 0px -50% 0px'});
+['about','staff','sessions'].forEach(id=>{ const el=document.getElementById(id); if(el) navIO.observe(el); });
+</script>

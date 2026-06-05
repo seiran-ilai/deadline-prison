@@ -1,0 +1,192 @@
+/* 死線監獄形象官網視覺(工業拘留所)。全部 scoped 在 .dp-site 底下,不汙染主控台/犯人頁。 */
+:root{
+  --concrete-0:#0c0d0f; --concrete-1:#131519; --concrete-2:#1b1e23;
+  --concrete-3:#23272e; --panel:#191c21;
+  --steel:#3a4049; --steel-2:#565d68;
+  --text:#dadbdd; --dim:#878d96; --faint:#5a606a;
+  --hazard:#f5c518; --hazard-deep:#caa00f;
+  --alarm:#d8412f;
+  --line:rgba(255,255,255,.07);
+  --bar:rgba(255,255,255,.045);
+  --stamp:'Saira Stencil One',sans-serif;
+  --cond:'Bebas Neue',sans-serif;
+  --mono:'Space Mono',monospace;
+  --cjk:'Noto Sans TC',sans-serif;
+}
+/* 形象站需滿版:中和 index.css 對 #root 的 1126px 置中、邊框、置中對齊(只在本站套用) */
+#root:has(.dp-site){width:100%; max-width:none; margin:0; border:0; text-align:left}
+.dp-site, .dp-site *{box-sizing:border-box}
+.dp-site *{margin:0; padding:0}
+/* 擋掉 index.css 全域 h1/h2 顏色,改由 .dp-site 自己決定 */
+.dp-site h1, .dp-site h2, .dp-site h3, .dp-site h4{color:inherit}
+.dp-site{
+  background:var(--concrete-0); color:var(--text);
+  font-family:var(--mono),var(--cjk); line-height:1.7;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  min-height:100vh; position:relative; scroll-behavior:smooth;
+}
+/* 水泥噪點 + 垂直鋼欄杆 */
+.dp-site::before{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+  opacity:.045; mix-blend-mode:overlay;
+}
+.dp-site::after{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0 78px,var(--bar) 78px 80px);
+}
+.dp-site .wrap{position:relative; z-index:1}
+.dp-site ::selection{background:var(--hazard); color:#000}
+.dp-site a{color:inherit; text-decoration:none}
+
+/* 警示黃黑斜紋 */
+.dp-site .hazard{height:14px; background:repeating-linear-gradient(45deg,var(--hazard) 0 22px,#0a0a0a 22px 44px)}
+.dp-site .hazard.thin{height:8px}
+
+/* 導覽列 */
+.dp-site nav{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; gap:28px;
+  padding:0 28px; height:62px;
+  background:rgba(12,13,15,.82); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.dp-site nav .brand{font-family:var(--stamp); font-size:20px; letter-spacing:.5px; color:var(--text); white-space:nowrap}
+.dp-site nav .brand b{color:var(--hazard); font-weight:400}
+.dp-site nav .links{display:flex; gap:22px; margin-left:auto; align-items:center}
+.dp-site nav .links a{font-family:var(--cond); font-size:19px; letter-spacing:1.5px; color:var(--dim); transition:color .2s; position:relative; padding:4px 0; cursor:pointer}
+.dp-site nav .links a:hover,.dp-site nav .links a.active{color:var(--text)}
+.dp-site nav .links a.active::after{content:""; position:absolute; left:0; right:0; bottom:-2px; height:2px; background:var(--hazard)}
+.dp-site .btn-serve{
+  font-family:var(--cond); font-size:18px; letter-spacing:2px;
+  background:var(--hazard); color:#0a0a0a; padding:8px 18px;
+  border:none; cursor:pointer; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  transition:transform .12s, background .2s;
+}
+.dp-site .btn-serve:hover{background:#fff; transform:translateY(-1px)}
+
+/* 通用區塊 */
+.dp-site section{padding:96px 28px; max-width:1120px; margin:0 auto; position:relative}
+.dp-site .eyebrow{font-family:var(--cond); font-size:17px; letter-spacing:4px; color:var(--hazard); display:flex; align-items:center; gap:12px; margin-bottom:14px}
+.dp-site .eyebrow .blk{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:2px}
+.dp-site h2.title{font-family:var(--cjk); font-weight:900; font-size:clamp(34px,5vw,58px); line-height:1.05; letter-spacing:2px; margin-bottom:8px}
+.dp-site .subline{color:var(--dim); font-size:14px; max-width:52ch; margin-bottom:40px}
+
+/* 進場動畫 */
+.dp-site .reveal{opacity:0; transform:translateY(26px); transition:opacity .7s ease, transform .7s ease}
+.dp-site .reveal.in{opacity:1; transform:none}
+
+/* HERO */
+.dp-site .hero{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:120px 28px 80px; max-width:1180px; margin:0 auto; position:relative}
+.dp-site .hero::before{content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; background:radial-gradient(640px 420px at var(--sx,30%) 35%,rgba(245,197,24,.10),transparent 70%); animation:dp-sweep 14s ease-in-out infinite alternate}
+@keyframes dp-sweep{from{--sx:22%}to{--sx:74%}}
+.dp-site .intake{font-family:var(--mono); font-size:12px; letter-spacing:3px; color:var(--hazard); border:1px solid var(--hazard-deep); display:inline-flex; gap:10px; align-items:center; padding:7px 14px; margin-bottom:30px; width:fit-content}
+.dp-site .intake .dot{width:7px; height:7px; border-radius:50%; background:var(--alarm); animation:dp-blink 1.3s steps(2) infinite}
+@keyframes dp-blink{50%{opacity:.25}}
+.dp-site .hero h1{font-family:var(--cjk); font-weight:900; font-size:clamp(64px,15vw,180px); line-height:.92; letter-spacing:4px; text-shadow:0 0 60px rgba(0,0,0,.6)}
+.dp-site .hero h1 .glow{color:var(--hazard)}
+.dp-site .hero .ensign{font-family:var(--stamp); font-size:clamp(20px,4vw,40px); color:var(--steel-2); letter-spacing:6px; margin:6px 0 30px}
+.dp-site .hero .ensign .no{color:var(--text); border-bottom:3px solid var(--hazard); padding-bottom:2px}
+.dp-site .hero .tag{font-size:clamp(15px,2vw,19px); color:var(--text); max-width:44ch; margin-bottom:14px}
+.dp-site .hero .tag b{color:var(--hazard); font-weight:700}
+.dp-site .hero .crime{font-family:var(--mono); font-size:13px; color:var(--dim); letter-spacing:1px; margin-bottom:40px; display:flex; flex-wrap:wrap; gap:6px 26px}
+.dp-site .hero .crime span b{color:var(--text)}
+.dp-site .hero-cta{display:flex; gap:16px; flex-wrap:wrap; align-items:center}
+.dp-site .cta-main{font-family:var(--cond); font-size:24px; letter-spacing:3px; background:var(--hazard); color:#0a0a0a; border:none; cursor:pointer; padding:15px 36px; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); transition:transform .12s, background .2s}
+.dp-site .cta-main:hover{background:#fff; transform:translate(-1px,-1px) scale(1.02)}
+.dp-site .cta-ghost{font-family:var(--cond); font-size:21px; letter-spacing:3px; color:var(--dim); border:1px solid var(--steel); padding:14px 26px; cursor:pointer; background:transparent; transition:color .2s,border-color .2s}
+.dp-site .cta-ghost:hover{color:var(--text); border-color:var(--steel-2)}
+.dp-site .scroll-hint{position:absolute; bottom:26px; left:28px; font-family:var(--mono); font-size:11px; letter-spacing:3px; color:var(--faint); animation:dp-nudge 2s ease-in-out infinite}
+@keyframes dp-nudge{50%{transform:translateY(6px); color:var(--dim)}}
+
+/* 監獄介紹 */
+.dp-site .rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line)}
+.dp-site .rule{background:var(--panel); padding:30px 26px; position:relative; min-height:188px; transition:background .25s}
+.dp-site .rule:hover{background:var(--concrete-3)}
+.dp-site .rule .rn{font-family:var(--stamp); font-size:30px; color:var(--steel); margin-bottom:14px}
+.dp-site .rule h3{font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:10px}
+.dp-site .rule p{font-size:13.5px; color:var(--dim); line-height:1.75}
+.dp-site .rule .pin{position:absolute; top:18px; right:18px; width:9px; height:9px; border-radius:50%; background:var(--hazard); box-shadow:0 0 0 3px rgba(245,197,24,.12)}
+.dp-site .rhythm{margin-top:42px; border:1px solid var(--line); background:var(--panel); padding:26px}
+.dp-site .rhythm .lbl{font-family:var(--cond); letter-spacing:3px; color:var(--hazard); font-size:18px; margin-bottom:16px}
+.dp-site .bars{display:flex; height:34px; gap:3px; overflow:hidden}
+.dp-site .bars i{display:block; height:100%}
+.dp-site .bars .focus{background:var(--hazard); flex:25}
+.dp-site .bars .rest{background:var(--steel); flex:5}
+.dp-site .bars .long{background:var(--alarm); flex:15}
+.dp-site .rhythm .legend{display:flex; gap:22px; margin-top:14px; flex-wrap:wrap; font-family:var(--mono); font-size:12px; color:var(--dim)}
+.dp-site .rhythm .legend span{display:flex; align-items:center; gap:8px}
+.dp-site .rhythm .legend i{width:12px; height:12px; display:inline-block}
+
+/* 監獄人員 */
+.dp-site .roster{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px}
+.dp-site .card{background:var(--panel); border:1px solid var(--line); position:relative; overflow:hidden; transition:transform .18s, border-color .25s}
+.dp-site .card:hover{transform:translateY(-4px); border-color:var(--steel-2)}
+.dp-site .card .mug{height:200px; position:relative; display:flex; align-items:center; justify-content:center; background:repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 24px),var(--concrete-2); border-bottom:1px solid var(--line)}
+.dp-site .card .mug .initial{font-family:var(--stamp); font-size:74px; color:var(--steel)}
+.dp-site .card .mug .height{position:absolute; left:0; top:0; bottom:0; width:26px; background:repeating-linear-gradient(0deg,var(--faint) 0 1px,transparent 1px 20px); border-right:1px solid var(--line)}
+.dp-site .card .mug img{width:100%; height:100%; object-fit:cover}
+.dp-site .card .plate{position:absolute; bottom:10px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:11px; letter-spacing:2px; color:#0a0a0a; background:var(--hazard); padding:3px 12px; white-space:nowrap}
+.dp-site .card .body{padding:18px 18px 22px}
+.dp-site .card .role{font-family:var(--cond); font-size:17px; letter-spacing:2px; color:var(--hazard); margin-bottom:4px}
+.dp-site .card h4{font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:10px}
+.dp-site .card .bio{font-size:13px; color:var(--dim); line-height:1.7}
+
+/* 趕稿場次 */
+.dp-site .sessions{display:flex; flex-direction:column; gap:14px}
+.dp-site .sess{display:grid; grid-template-columns:118px 1fr auto; align-items:center; gap:24px; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--steel); padding:22px 26px; transition:border-color .25s, background .25s}
+.dp-site .sess:hover{background:var(--concrete-3)}
+.dp-site .sess.open{border-left-color:var(--hazard)}
+.dp-site .sess.full{border-left-color:var(--alarm)}
+.dp-site .sess.ended{opacity:.42; border-left-color:var(--faint)}
+.dp-site .sess .when{font-family:var(--mono)}
+.dp-site .sess .when .d{font-size:26px; font-weight:700; color:var(--text); line-height:1}
+.dp-site .sess .when .m{font-size:12px; color:var(--dim); letter-spacing:2px; margin-top:4px}
+.dp-site .sess .meta .batch{font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--faint); margin-bottom:6px}
+.dp-site .sess .meta h4{font-family:var(--cjk); font-weight:700; font-size:21px; letter-spacing:1px; margin-bottom:8px}
+.dp-site .sess .meta .cap{font-family:var(--mono); font-size:12.5px; color:var(--dim); display:flex; align-items:center; gap:12px}
+.dp-site .sess .meta .cap .gauge{width:120px; height:6px; background:var(--concrete-0); border:1px solid var(--line); position:relative}
+.dp-site .sess .meta .cap .gauge i{position:absolute; inset:0 auto 0 0; background:var(--hazard)}
+.dp-site .sess.full .gauge i{background:var(--alarm)}
+.dp-site .sess .act{text-align:right}
+.dp-site .tag-status{font-family:var(--cond); font-size:15px; letter-spacing:2px; padding:4px 10px; display:inline-block; margin-bottom:10px}
+.dp-site .tag-status.open{color:var(--hazard); border:1px solid var(--hazard-deep)}
+.dp-site .tag-status.full{color:var(--alarm); border:1px solid var(--alarm)}
+.dp-site .tag-status.ended{color:var(--faint); border:1px solid var(--faint)}
+.dp-site .btn-book{font-family:var(--cond); font-size:19px; letter-spacing:2px; display:block; width:148px; background:var(--hazard); color:#0a0a0a; border:none; cursor:pointer; padding:11px 0; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); transition:transform .12s, background .2s}
+.dp-site .btn-book:hover{background:#fff; transform:translateY(-1px)}
+.dp-site .btn-book:disabled{background:var(--concrete-3); color:var(--faint); cursor:not-allowed; transform:none}
+
+/* 頁尾 */
+.dp-site footer{padding:60px 28px 40px; max-width:1120px; margin:0 auto; border-top:1px solid var(--line)}
+.dp-site footer .f-brand{font-family:var(--stamp); font-size:30px; letter-spacing:2px}
+.dp-site footer .f-brand b{color:var(--hazard); font-weight:400}
+.dp-site footer .f-sub{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:2px; margin-top:8px}
+
+/* 入監服刑 Modal */
+.dp-modal-bg{position:fixed; inset:0; z-index:100; background:rgba(6,7,8,.84); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:24px}
+.dp-modal{background:var(--panel); border:1px solid var(--steel); max-width:430px; width:100%; position:relative; animation:dp-pop .22s ease; color:var(--text); font-family:var(--mono),var(--cjk)}
+@keyframes dp-pop{from{opacity:0; transform:scale(.95) translateY(10px)}}
+.dp-modal .m-haz{height:8px; background:repeating-linear-gradient(45deg,var(--hazard) 0 16px,#0a0a0a 16px 32px)}
+.dp-modal .m-body{padding:30px 30px 34px}
+.dp-modal .m-eyebrow{font-family:var(--cond); letter-spacing:3px; color:var(--hazard); font-size:17px}
+.dp-modal h3{font-family:var(--cjk); font-weight:900; font-size:26px; letter-spacing:1px; margin:4px 0 18px}
+.dp-modal .m-row{font-family:var(--mono); font-size:13px; color:var(--dim); display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--line)}
+.dp-modal .m-row b{color:var(--text)}
+.dp-modal .m-note{font-size:13px; color:var(--dim); margin:18px 0 22px; line-height:1.7}
+.dp-modal .m-dc{width:100%; font-family:var(--cjk); font-weight:700; font-size:16px; letter-spacing:1px; background:#5865F2; color:#fff; border:none; cursor:pointer; padding:14px; display:flex; align-items:center; justify-content:center; gap:10px; transition:filter .2s}
+.dp-modal .m-dc:hover{filter:brightness(1.1)}
+.dp-modal .m-dc:disabled{filter:grayscale(.4) brightness(.8); cursor:wait}
+.dp-modal .m-confirm{background:var(--hazard); color:#0a0a0a}
+.dp-modal .m-ghost{background:transparent; border:1px solid var(--steel); color:var(--dim)}
+.dp-modal .m-close{position:absolute; top:14px; right:16px; background:none; border:none; color:var(--dim); font-family:var(--mono); font-size:22px; cursor:pointer; line-height:1}
+.dp-modal .m-close:hover{color:var(--hazard)}
+
+@media(max-width:720px){
+  .dp-site nav .links{display:none}
+  .dp-site .sess{grid-template-columns:78px 1fr; gap:16px}
+  .dp-site .sess .act{grid-column:1/-1; text-align:left}
+  .dp-site .btn-book{width:100%}
+  .dp-site section{padding:72px 22px}
+  .dp-site .hero{padding:90px 22px 70px}
+}
