@@ -36,7 +36,7 @@ export default function SessionStatus({ userId }) {
     let mineRow = null, sess = null
     if (si && si.length) {
       const { data: open } = await supabase.from('sessions')
-        .select('id, title, timer_started_at, total_rounds')
+        .select('id, title, timer_started_at, timer_ended_at, total_rounds')
         .in('id', si.map(r => r.session_id)).eq('status', 'open')
       if (open && open.length) { sess = open[0]; mineRow = si.find(r => r.session_id === sess.id) }
     }
@@ -94,7 +94,7 @@ export default function SessionStatus({ userId }) {
 
   // 階段4:番茄鐘已開始 → 顯示倒數
   const elapsed = Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000)
-  const st = pomodoroState(elapsed, session.total_rounds ?? 8)
+  const st = pomodoroState(elapsed, session.total_rounds ?? 8, session.timer_ended_at)
   if (st.ended) {
     return (
       <div style={card}>

@@ -32,7 +32,7 @@ export default function BroadcastScreen({ sessionId }) {
   // 場次 + 名單(每 10 秒輪詢,接收計時開始/晚進場)
   async function loadData() {
     const { data: sess } = await supabase.from('sessions')
-      .select('title, timer_started_at, total_rounds').eq('id', sessionId).single()
+      .select('title, timer_started_at, timer_ended_at, total_rounds').eq('id', sessionId).single()
     if (!sess) { setNotFound(true); return }
     setSession(sess)
     const { data: si } = await supabase.from('session_inmates')
@@ -72,7 +72,7 @@ export default function BroadcastScreen({ sessionId }) {
     timerBlock = <div style={{ fontSize: 48, color: '#aaa' }}>尚未開始服刑</div>
   } else {
     const elapsed = Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000)
-    const st = pomodoroState(elapsed, session.total_rounds ?? 8)
+    const st = pomodoroState(elapsed, session.total_rounds ?? 8, session.timer_ended_at)
     if (st.ended) {
       timerBlock = <div style={{ fontSize: 64, fontWeight: 800 }}>🔓 本場服刑結束</div>
     } else {

@@ -13,8 +13,9 @@ export const PHASE_LABEL = {
 }
 
 // 同囚 presence 用的狀態文字
-export function presenceLabel(timerStartedAt, totalRounds) {
+export function presenceLabel(timerStartedAt, totalRounds, timerEndedAt) {
   if (!timerStartedAt) return '等待中'
+  if (timerEndedAt) return '服刑完畢'
   const elapsed = Math.floor((Date.now() - new Date(timerStartedAt).getTime()) / 1000)
   const st = pomodoroState(elapsed, totalRounds)
   if (st.ended) return '服刑完畢'
@@ -23,8 +24,10 @@ export function presenceLabel(timerStartedAt, totalRounds) {
 
 // 給定已過秒數與總輪數,推算當下狀態
 // 回傳 { phase: 'focus'|'break'|'longbreak'|'ended', round, remainingSeconds, ended }
-export function pomodoroState(elapsedSeconds, totalRounds) {
+// timerEndedAt 有值 = 典獄長提早結束 → 直接收尾(優先於自然計算)
+export function pomodoroState(elapsedSeconds, totalRounds, timerEndedAt = null) {
   const N = Math.max(1, totalRounds ?? 8)
+  if (timerEndedAt) return { phase: 'ended', round: N, remainingSeconds: 0, ended: true }
   let t = Math.max(0, Math.floor(elapsedSeconds))
   for (let i = 1; i <= N; i++) {
     // 專注段

@@ -44,7 +44,7 @@ export default function GuardWork({ userId }) {
     let mine = null, sess = null
     if (si && si.length) {
       const { data: open } = await supabase.from('sessions')
-        .select('id, title, status, timer_started_at, total_rounds')
+        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
         .in('id', si.map(r => r.session_id)).eq('status', 'open')
       if (open && open.length) { sess = open[0]; mine = si.find(r => r.session_id === sess.id) }
     }
@@ -127,7 +127,7 @@ export default function GuardWork({ userId }) {
   const card = { border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 12, background: '#fff', color: '#222' }
   const presence = (r) => {
     if (r.role_in_session === 'guard') return null
-    return presenceLabel(session?.timer_started_at, session?.total_rounds ?? 8)
+    return presenceLabel(session?.timer_started_at, session?.total_rounds ?? 8, session?.timer_ended_at)
   }
 
   return (

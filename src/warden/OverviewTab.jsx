@@ -13,7 +13,7 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember }
   async function loadOverview() {
     const { data: allSi } = await supabase.from('session_inmates').select('member_id, session_id')
     const { data: openSess } = await supabase.from('sessions')
-      .select('id, timer_started_at, total_rounds').eq('status', 'open')
+      .select('id, timer_started_at, timer_ended_at, total_rounds').eq('status', 'open')
     const openById = {}; for (const s of openSess ?? []) openById[s.id] = s
     const counts = {}, memSess = {}
     for (const r of allSi ?? []) {

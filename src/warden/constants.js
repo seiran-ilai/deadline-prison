@@ -16,6 +16,6 @@ export function memberStatusLabel(sess) {
   if (!sess) return '不在場'
   if (!sess.timer_started_at) return '在場待命'
   const elapsed = Math.floor((Date.now() - new Date(sess.timer_started_at).getTime()) / 1000)
-  const st = pomodoroState(elapsed, sess.total_rounds ?? 8)
+  const st = pomodoroState(elapsed, sess.total_rounds ?? 8, sess.timer_ended_at)
   return st.ended ? '已結束' : PHASE_LABEL[st.phase]
 }

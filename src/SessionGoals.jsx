@@ -54,7 +54,7 @@ export default function SessionGoals({ userId }) {
     let mine = null, sess = null
     if (si && si.length) {
       const { data: openSess } = await supabase.from('sessions')
-        .select('id, title, status, timer_started_at, total_rounds')
+        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
         .in('id', si.map(r => r.session_id)).eq('status', 'open')
       if (openSess && openSess.length) {
         sess = openSess[0]
@@ -62,7 +62,7 @@ export default function SessionGoals({ userId }) {
       }
     }
     setSession(sess); setMyInmate(mine)
-    setSessionTimer(sess ? { timer_started_at: sess.timer_started_at, total_rounds: sess.total_rounds } : null)
+    setSessionTimer(sess ? { timer_started_at: sess.timer_started_at, timer_ended_at: sess.timer_ended_at, total_rounds: sess.total_rounds } : null)
     if (!mine) { setGoals([]); setActives([]); setStepsByMs({}); setLoading(false); return }
 
     // 2) 我的稿件(全部,供解析標題;active 供挑選)
@@ -97,8 +97,8 @@ export default function SessionGoals({ userId }) {
   async function loadCellmates(sessionId, myMemberId) {
     // 0) 刷新本場番茄鐘狀態(讓 presence 在典獄長開始/重置後 10 秒內反映)
     const { data: sess } = await supabase.from('sessions')
-      .select('timer_started_at, total_rounds').eq('id', sessionId).single()
-    if (sess) setSessionTimer({ timer_started_at: sess.timer_started_at, total_rounds: sess.total_rounds })
+      .select('timer_started_at, timer_ended_at, total_rounds').eq('id', sessionId).single()
+    if (sess) setSessionTimer({ timer_started_at: sess.timer_started_at, timer_ended_at: sess.timer_ended_at, total_rounds: sess.total_rounds })
     // 1) 同場其他人(排除自己)
     const { data: si } = await supabase.from('session_inmates')
       .select('id, member_id, state, role_in_session').eq('session_id', sessionId).neq('member_id', myMemberId)
@@ -321,7 +321,7 @@ export default function SessionGoals({ userId }) {
       {cellmates.length === 0 ? (
         <p style={{ color: '#888' }}>本場目前只有你一個人,或還沒有其他人報到</p>
       ) : cellmates.map(c => {
-        const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8)
+        const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8, sessionTimer?.timer_ended_at)
         const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
         return (
         <div key={c.siId} style={card}>
