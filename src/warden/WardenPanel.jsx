@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import MessageBanner from '../MessageBanner'
 import OverviewTab from './OverviewTab'
 import SessionTab from './SessionTab'
+import SessionsOverviewTab from './SessionsOverviewTab'
 import IntakeTab from './IntakeTab'
 import EditMemberModal from './EditMemberModal'
 
@@ -55,7 +56,8 @@ export default function WardenPanel({ myRole }) {
     <div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button onClick={() => setWtab('overview')} style={subTabStyle('overview')}>總覽</button>
-        <button onClick={() => setWtab('session')} style={subTabStyle('session')}>本場</button>
+        {isWarden && <button onClick={() => setWtab('sessions')} style={subTabStyle('sessions')}>場次總覽</button>}
+        <button onClick={() => setWtab('session')} style={subTabStyle('session')}>進行中場次</button>
         <button onClick={() => setWtab('intake')} style={subTabStyle('intake')}>預約與收押</button>
       </div>
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
@@ -65,6 +67,9 @@ export default function WardenPanel({ myRole }) {
           currentSession={currentSession} setCurrentSession={setCurrentSession}
           sessions={sessions} inmates={inmates} isWarden={isWarden}
           setMsg={setMsg} reloadShared={load} />
+      )}
+      {wtab === 'sessions' && isWarden && (
+        <SessionsOverviewTab setMsg={setMsg} reloadShared={load} />
       )}
       {wtab === 'intake' && (
         <IntakeTab pending={pending} unmatched={unmatched} setMsg={setMsg} reloadShared={load} />
