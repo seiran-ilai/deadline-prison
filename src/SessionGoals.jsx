@@ -223,18 +223,12 @@ export default function SessionGoals({ userId }) {
       {/* 1) 服刑計時 / 狀態階段 */}
       <SessionStatus userId={userId} />
 
-      <div style={{ ...card, background: '#eef4ff' }}>
-        <strong>本場服刑:{session.title}</strong>
-        <span style={{ marginLeft: 8, color: '#666', fontSize: 13 }}>狀態:{myInmate.state}</span>
-      </div>
-
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
-      <div style={{ ...card, background: '#fff7ec' }}>
-        <strong>專屬獄卒</strong>
-        {myGuards.length === 0 ? (
-          <p style={{ color: '#888', margin: '8px 0 0' }}>本場由全體獄卒看管</p>
-        ) : (
+      {/* 專屬獄卒:只有被指派時才顯示;沒指派則整個框不渲染 */}
+      {myGuards.length > 0 && (
+        <div style={{ ...card, background: '#fff7ec' }}>
+          <strong>專屬獄卒</strong>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             {myGuards.map(g => (
               <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -249,8 +243,8 @@ export default function SessionGoals({ userId }) {
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <h3>本場目標</h3>
       {goals.length === 0 ? (
