@@ -8,8 +8,8 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   const [roster, setRoster] = useState([])
   const [rosterLoading, setRosterLoading] = useState(false)
   const [sessionTitle, setSessionTitle] = useState('')
-  const [pickInmate, setPickInmate] = useState('')
-  const [pickRole, setPickRole] = useState('inmate')       // 報到時選的本場身分
+  const [search, setSearch] = useState('')                 // 候選清單搜尋(名字/編號)
+  const [selected, setSelected] = useState(new Set())      // 勾選批次加入的 member_id
   const [goalsByInmate, setGoalsByInmate] = useState({}) // session_inmate_id -> [{id, manuscript_id, title}]
   const [msByMember, setMsByMember] = useState({})       // member_id -> [active manuscripts]
   const [goalSteps, setGoalSteps] = useState({})         // manuscript_id -> [steps]
@@ -153,25 +153,63 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     setMsg('已開場:' + sessionTitle); setSessionTitle(''); setCurrentSession(data.id); reloadShared()
   }
 
-  async function checkIn() {
-    if (!currentSession || !pickInmate) { setMsg('請選場次和犯人'); return }
-    // 只有 guard/warden 資格的人能被報到成本場獄卒;其餘一律本場犯人
-    const picked = inmates.find(p => p.id === pickInmate)
-    const canBeGuard = picked && (picked.role === 'guard' || picked.role === 'warden')
-    const roleInSession = (pickRole === 'guard' && canBeGuard) ? 'guard' : 'inmate'
-    // 一次原子寫入:報到 + 本場身分都在 RPC 內完成
+  // 報到成獄卒前,該人全域 role 必須是 guard / warden
+  const canBeGuard = (p) => p?.role === 'guard' || p?.role === 'warden'
+
+  function toggleOne(id) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  // 一鍵加入(沿用 check_in_inmate;非獄卒資格者不會出現「+ 本場獄卒」鈕)
+  async function addOne(p, roleInSession) {
     const { error } = await supabase.rpc('check_in_inmate', {
-      p_session: currentSession, p_member: pickInmate, p_role_in_session: roleInSession,
+      p_session: currentSession, p_member: p.id, p_role_in_session: roleInSession,
     })
-    if (error) { setMsg('報到失敗:' + error.message); return }
-    setMsg(roleInSession === 'guard' ? '已報到(本場獄卒)' : '已報到(本場犯人)')
-    setPickInmate(''); setPickRole('inmate'); loadRoster(currentSession)
+    if (error) { setMsg('加入失敗:' + error.message); return }
+    setMsg(roleInSession === 'guard' ? '已加入(本場獄卒)' : '已加入(本場犯人)')
+    setSelected(prev => { const n = new Set(prev); n.delete(p.id); return n })
+    loadRoster(currentSession)
+  }
+
+  // 批次加入:犯人全加;獄卒只加全域 guard/warden,其餘跳過並提示
+  async function addBatch(roleInSession) {
+    const chosen = candidates.filter(p => selected.has(p.id))
+    if (!chosen.length) return
+    const toAdd = roleInSession === 'guard' ? chosen.filter(canBeGuard) : chosen
+    const skipped = chosen.length - toAdd.length
+    let ok = 0, failed = 0
+    for (const p of toAdd) {
+      const { error } = await supabase.rpc('check_in_inmate', {
+        p_session: currentSession, p_member: p.id, p_role_in_session: roleInSession,
+      })
+      if (error) failed++; else ok++
+    }
+    let m = `已加入 ${ok} 人為本場${roleInSession === 'guard' ? '獄卒' : '犯人'}`
+    if (skipped) m += `;${skipped} 人因全域身分不符,未加為獄卒`
+    if (failed) m += `;${failed} 人加入失敗`
+    setMsg(m)
+    setSelected(new Set()); loadRoster(currentSession)
   }
 
   const rosterIds = roster.map(r => r.member_id)
   const availableInmates = inmates.filter(p => !rosterIds.includes(p.id))
-  const pickedProfile = inmates.find(p => p.id === pickInmate)
-  const pickedCanBeGuard = pickedProfile && (pickedProfile.role === 'guard' || pickedProfile.role === 'warden')
+  // 候選清單 = 已配號且未在本場的人,再依搜尋(名字/編號)前端 filter
+  const q = search.trim().toLowerCase()
+  const candidates = availableInmates.filter(p => {
+    if (!q) return true
+    const name = (p.game_name ?? p.display_name ?? '').toLowerCase()
+    return name.includes(q) || String(p.inmate_no ?? '').includes(q) || String(p.inmate_no ?? '').padStart(4, '0').includes(q)
+  })
+  const selectedInView = candidates.filter(p => selected.has(p.id))
+  const allSelected = candidates.length > 0 && candidates.every(p => selected.has(p.id))
+  function toggleAll() {
+    setSelected(prev => {
+      const n = new Set(prev)
+      if (candidates.every(p => prev.has(p.id))) candidates.forEach(p => n.delete(p.id))
+      else candidates.forEach(p => n.add(p.id))
+      return n
+    })
+  }
   const currentSessionObj = sessions.find(s => s.id === currentSession)
 
   return (
@@ -199,25 +237,46 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
           ))}
         </div>
       )}
-      {currentSession && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          報到:
-          <select value={pickInmate} onChange={e => { setPickInmate(e.target.value); setPickRole('inmate') }}>
-            <option value="">— 選人 —</option>
-            {availableInmates.map(p => <option key={p.id} value={p.id}>
-              No.{String(p.inmate_no).padStart(4, '0')} {p.game_name ?? p.display_name}{(p.role === 'guard' || p.role === 'warden') ? `（${ROLE_LABEL[p.role]}）` : ''}
-            </option>)}
-          </select>
-          本場身分:
-          <select value={pickedCanBeGuard ? pickRole : 'inmate'} disabled={!pickedCanBeGuard}
-            onChange={e => setPickRole(e.target.value)}>
-            <option value="inmate">本場犯人</option>
-            {pickedCanBeGuard && <option value="guard">本場獄卒</option>}
-          </select>
-          <button onClick={checkIn}>報到進本場</button>
-          {pickInmate && !pickedCanBeGuard && <span style={{ color: '#aaa', fontSize: 12 }}>(此人非獄卒資格,只能當本場犯人)</span>}
+      {currentSession && (() => {
+        const btnSm = { padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
+        return (
+        <div style={{ marginBottom: 12 }}>
+          <h4 style={{ margin: '8px 0', color: '#555' }}>加入本場(候選清單)</h4>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+            <input placeholder="搜尋名字 / 編號" value={search} onChange={e => setSearch(e.target.value)}
+              style={{ padding: '4px 8px', border: '1px solid #ccc', borderRadius: 4 }} />
+            {candidates.length > 0 && (
+              <button style={btnSm} onClick={toggleAll}>{allSelected ? '取消全選' : '全選'}</button>
+            )}
+          </div>
+
+          {selectedInView.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, padding: '6px 10px', background: '#eef4ff', borderRadius: 6 }}>
+              <span style={{ fontSize: 13 }}>已選 {selectedInView.length} 人 →</span>
+              <button style={btnSm} onClick={() => addBatch('inmate')}>加入為本場犯人</button>
+              <button style={btnSm} onClick={() => addBatch('guard')}>加入為本場獄卒</button>
+            </div>
+          )}
+
+          {candidates.length === 0 ? (
+            <p style={{ color: '#888' }}>沒有可加入的人(已配號的人都在本場了,或搜尋無結果)</p>
+          ) : candidates.map(p => {
+            const guardOk = canBeGuard(p)
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 8px', borderBottom: '1px solid #eee' }}>
+                <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleOne(p.id)} />
+                <strong>No.{String(p.inmate_no).padStart(4, '0')}</strong>
+                <span>{p.game_name ?? p.display_name}</span>
+                {guardOk && <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#eef', color: '#558' }}>{ROLE_LABEL[p.role]}</span>}
+                <span style={{ flex: 1 }} />
+                <button style={btnSm} onClick={() => addOne(p, 'inmate')}>+ 本場犯人</button>
+                {guardOk && <button style={btnSm} onClick={() => addOne(p, 'guard')}>+ 本場獄卒</button>}
+              </div>
+            )
+          })}
         </div>
-      )}
+        )
+      })()}
 
       {/* 番茄鐘控台:吃一個 session 的獨立元件。日後同時控多場時直接 map 成每場一張卡。
           key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
