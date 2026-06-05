@@ -141,11 +141,7 @@ export default function GuardWork({ userId }) {
         </div>
       ) : (
         <>
-          <div style={{ ...card, background: '#fff7ec' }}>
-            <strong>獄卒作業:{session.title}</strong>
-            <span style={{ marginLeft: 8, color: '#666', fontSize: 13 }}>本場獄卒</span>
-          </div>
-
+          {/* 場次資訊已由上方狀態卡涵蓋,移除重複的場次編號橫幅 */}
           {msg && <div style={{ ...card, background: '#fdecec', color: '#c0392b' }}>{msg}</div>}
 
           {/* 2) 監管犯人名單 + 3) 他們的目標清單(可代勾) */}

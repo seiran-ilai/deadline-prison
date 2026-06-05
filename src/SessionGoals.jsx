@@ -206,12 +206,10 @@ export default function SessionGoals({ userId }) {
   )
 
   if (!myInmate) {
+    // 未報到/未配對的狀態已由上方狀態卡(SessionStatus)涵蓋,不再顯示重複且可能矛盾的訊息框
     return (
       <div style={{ color: '#222' }}>
         <SessionStatus userId={userId} />
-        <div style={{ ...card, textAlign: 'center', color: '#666' }}>
-          你目前不在任何服刑場次中,請等典獄長報到
-        </div>
       </div>
     )
   }
