@@ -9,15 +9,17 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [loading, setLoading] = useState(true)
   const [newTitle, setNewTitle] = useState('')
   const [newDate, setNewDate] = useState('')
+  const [newCap, setNewCap] = useState('')          // 人數上限(空 = 不限)
   const [editId, setEditId] = useState(null)       // 編輯中的場次 id
   const [editTitle, setEditTitle] = useState('')
   const [editDate, setEditDate] = useState('')
+  const [editCap, setEditCap] = useState('')
 
   // 載入所有場次 + 各場人數(分開查再 JS 合併,不用巢狀 select)
   async function load() {
     setLoading(true)
     const { data: sess } = await supabase.from('sessions')
-      .select('id, title, session_date, status, opened_by, created_at')
+      .select('id, title, session_date, status, opened_by, capacity, created_at')
     const { data: si } = await supabase.from('session_inmates').select('session_id')
     const cnt = {}
     for (const r of si ?? []) cnt[r.session_id] = (cnt[r.session_id] ?? 0) + 1
@@ -29,25 +31,29 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   }
   useEffect(() => { load() }, [])
 
+  // 把上限輸入轉成 int 或 null(空白 / 非正整數 → null = 不限)
+  const capValue = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : null }
+
   async function openNew() {
     if (!newTitle) { setMsg('請填場次名'); return }
     const payload = { title: newTitle }
     if (newDate) payload.session_date = newDate
+    payload.capacity = capValue(newCap)
     const { error } = await supabase.from('sessions').insert(payload)
     if (error) { setMsg('開場失敗:' + error.message); return }
-    setMsg('已開場:' + newTitle); setNewTitle(''); setNewDate('')
+    setMsg('已開場:' + newTitle); setNewTitle(''); setNewDate(''); setNewCap('')
     load(); reloadShared()
   }
 
   function startEdit(s) {
-    setEditId(s.id); setEditTitle(s.title ?? ''); setEditDate(s.session_date ?? '')
+    setEditId(s.id); setEditTitle(s.title ?? ''); setEditDate(s.session_date ?? ''); setEditCap(s.capacity ?? '')
   }
-  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate('') }
+  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate(''); setEditCap('') }
 
   async function saveEdit(id) {
     if (!editTitle) { setMsg('場次名不能空白'); return }
     const { error } = await supabase.from('sessions')
-      .update({ title: editTitle, session_date: editDate || null }).eq('id', id)
+      .update({ title: editTitle, session_date: editDate || null, capacity: capValue(editCap) }).eq('id', id)
     if (error) { setMsg('編輯失敗:' + error.message); return }
     setMsg('已更新場次'); cancelEdit(); load(); reloadShared()
   }
@@ -79,6 +85,8 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
         <input placeholder="場次名(如 6/14 晚場)" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
         <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
           style={{ padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
+        <input type="number" min="1" placeholder="人數上限(空=不限)" value={newCap} onChange={e => setNewCap(e.target.value)}
+          style={{ width: 140, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
         <button onClick={openNew}>開新場次</button>
       </div>
 
@@ -91,6 +99,8 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                   <input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                   <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
                     style={{ padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
+                  <input type="number" min="1" placeholder="上限(空=不限)" value={editCap} onChange={e => setEditCap(e.target.value)}
+                    style={{ width: 120, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
                   <button style={btn} onClick={() => saveEdit(s.id)}>儲存</button>
                   <button style={btn} onClick={cancelEdit}>取消</button>
                 </div>
@@ -100,6 +110,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                   <span style={{ color: '#888', fontSize: 13 }}>{s.session_date ?? '未設定日期'}</span>
                   <span style={tag(s.status === 'open' ? '#2a8' : '#888')}>{s.status === 'open' ? '進行中' : '已結束'}</span>
                   <span style={{ color: '#666', fontSize: 13 }}>報到 {counts[s.id] ?? 0} 人</span>
+                  <span style={{ color: '#666', fontSize: 13 }}>上限 {s.capacity ?? '不限'}</span>
                   <span style={{ flex: 1 }} />
                   <button style={btn} onClick={() => startEdit(s)}>編輯</button>
                   <button style={btn} onClick={() => toggleStatus(s)}>{s.status === 'open' ? '關閉場次' : '重新開啟'}</button>

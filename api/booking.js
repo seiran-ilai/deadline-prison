@@ -1,0 +1,66 @@
+import { createClient } from '@supabase/supabase-js'
+
+// /api/booking — POST：驗證登入(以伺服器端 token 為準)→ 寫 bookings → 送 Discord 通知。
+// 身分不信任前端自報;一律用 Authorization 帶來的 JWT 經 getUser 驗證。
+// 環境變數(Vercel 後台設定,勿進 repo):
+//   SUPABASE_URL / SUPABASE_ANON_KEY（或沿用 VITE_ 前綴的同名變數）
+//   DISCORD_BOOKING_WEBHOOK_URL
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
+const WEBHOOK = process.env.DISCORD_BOOKING_WEBHOOK_URL
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
+  try {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    if (!token) return res.status(401).json({ error: 'not_authenticated' })
+    const { session_id, note } = req.body || {}
+    if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
+
+    // 以使用者 JWT 建立 client → insert 走 RLS(user_id = auth.uid())
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: { user }, error: uErr } = await supabase.auth.getUser(token)
+    if (uErr || !user) return res.status(401).json({ error: 'not_authenticated' })
+
+    const meta = user.user_metadata || {}
+    const dc_id = meta.provider_id || meta.sub || user.id
+    const dc_name = meta.full_name || meta.name || meta.global_name
+      || meta.custom_claims?.global_name || meta.user_name || '(unknown)'
+
+    // 場次存在 + 未額滿(用 SECURITY DEFINER 計數,避免 RLS 看不到別人預約)
+    const { data: pub } = await supabase.rpc('public_sessions')
+    const sess = (pub || []).find(s => s.id === session_id)
+    if (!sess) return res.status(404).json({ error: 'session_not_found' })
+    if (sess.capacity != null && sess.booked >= sess.capacity) return res.status(409).json({ error: 'full' })
+
+    // insert(DB 唯一鍵兜底重複)
+    const { error: insErr } = await supabase.from('bookings').insert({
+      session_id, user_id: user.id, dc_id, dc_name, note: note || null,
+    })
+    if (insErr) {
+      if (insErr.code === '23505') return res.status(409).json({ error: 'already_booked' })
+      return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
+    }
+
+    // 送 Discord 通知(URL 取自 env;失敗不擋預約)
+    if (WEBHOOK) {
+      const n = (sess.booked ?? 0) + 1
+      const cap = sess.capacity != null ? `/${sess.capacity}` : ''
+      const date = sess.session_date ? `（${sess.session_date}）` : ''
+      try {
+        await fetch(WEBHOOK, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了【${sess.title}】${date}目前 ${n}${cap}` }),
+        })
+      } catch { /* 通知失敗不影響預約 */ }
+    }
+
+    return res.status(200).json({ ok: true, booked: (sess.booked ?? 0) + 1, capacity: sess.capacity })
+  } catch (e) {
+    return res.status(500).json({ error: 'server_error', detail: String(e?.message || e) })
+  }
+}

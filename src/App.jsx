@@ -76,7 +76,8 @@ function App() {
     setTab(profile.role === 'warden' ? 'warden' : 'session')
   }, [profile?.role])
 
-  async function signIn() { await supabase.auth.signInWithOAuth({ provider: 'discord' }) }
+  // 登入後導回目前的監所系統頁(/app 或 /warden),而非公開首頁
+  async function signIn() { await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo: window.location.href } }) }
   async function signOut() { await supabase.auth.signOut() }
 
   // ⚠️ 測試專用：用 Email/密碼登入測試帳號（真實登入＝真實 RLS 權限）

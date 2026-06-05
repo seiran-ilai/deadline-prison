@@ -4,6 +4,7 @@ import MessageBanner from '../MessageBanner'
 import OverviewTab from './OverviewTab'
 import SessionTab from './SessionTab'
 import SessionsOverviewTab from './SessionsOverviewTab'
+import BookingsTab from './BookingsTab'
 import EditMemberModal from './EditMemberModal'
 
 export default function WardenPanel({ myRole }) {
@@ -57,6 +58,7 @@ export default function WardenPanel({ myRole }) {
         <button onClick={() => setWtab('overview')} style={subTabStyle('overview')}>名單總覽</button>
         {isWarden && <button onClick={() => setWtab('sessions')} style={subTabStyle('sessions')}>場次總覽</button>}
         <button onClick={() => setWtab('session')} style={subTabStyle('session')}>進行中場次</button>
+        {isWarden && <button onClick={() => setWtab('bookings')} style={subTabStyle('bookings')}>預約總覽</button>}
       </div>
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
@@ -73,6 +75,9 @@ export default function WardenPanel({ myRole }) {
         <OverviewTab inmates={inmates} unmatched={unmatched} pending={pending}
           loading={loading} isWarden={isWarden} onEditMember={openEditMember}
           setMsg={setMsg} reloadShared={load} />
+      )}
+      {wtab === 'bookings' && isWarden && (
+        <BookingsTab setMsg={setMsg} />
       )}
 
       {isWarden && editingMember && (
