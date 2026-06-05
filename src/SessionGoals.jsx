@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
 import { presenceLabel } from './pomodoro'
 import MessageBanner from './MessageBanner'
+import SessionStatus from './SessionStatus'
 
 const PRESENCE_STYLE = {
   '服刑中': { bg: '#d9534f', color: '#fff' },
@@ -98,9 +99,9 @@ export default function SessionGoals({ userId }) {
     const { data: sess } = await supabase.from('sessions')
       .select('timer_started_at, total_rounds').eq('id', sessionId).single()
     if (sess) setSessionTimer({ timer_started_at: sess.timer_started_at, total_rounds: sess.total_rounds })
-    // 1) 同場其他犯人(排除自己)
+    // 1) 同場其他人(排除自己)
     const { data: si } = await supabase.from('session_inmates')
-      .select('id, member_id, state').eq('session_id', sessionId).neq('member_id', myMemberId)
+      .select('id, member_id, state, role_in_session').eq('session_id', sessionId).neq('member_id', myMemberId)
     if (!si || si.length === 0) { setCellmates([]); setGuards([]); return }
     const memberIds = si.map(r => r.member_id)
     const siIds = si.map(r => r.id)
@@ -125,15 +126,16 @@ export default function SessionGoals({ userId }) {
     const merged = si.map(r => ({
       siId: r.id,
       state: r.state,
+      roleInSession: r.role_in_session,
       profile: profById[r.member_id],
       works: (goalsByInmate[r.id] ?? []).map(g => {
         const m = msById[g.manuscript_id]
         return { goalId: g.id, title: m?.title, secret: !m }
       }),
     }))
-    const isStaffRole = role => role === 'guard' || role === 'warden'
-    setGuards(merged.filter(m => isStaffRole(m.profile?.role)))
-    setCellmates(merged.filter(m => !isStaffRole(m.profile?.role)))
+    // 依「本場身分」切分:本場獄卒一覽 vs 本場犯人一覽(兩層身分,非全域 role)
+    setGuards(merged.filter(m => m.roleInSession === 'guard'))
+    setCellmates(merged.filter(m => m.roleInSession !== 'guard'))
   }
 
   // 我的專屬獄卒(分開查 inmate_guards → profiles 合併)
@@ -196,12 +198,20 @@ export default function SessionGoals({ userId }) {
   const input = { padding: '6px 8px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222', colorScheme: 'light' }
   const btn = { padding: '6px 12px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
 
-  if (loading) return <p style={{ color: '#888' }}>讀取本場狀態中…</p>
+  if (loading) return (
+    <div style={{ color: '#222' }}>
+      <SessionStatus userId={userId} />
+      <p style={{ color: '#888' }}>讀取本場狀態中…</p>
+    </div>
+  )
 
   if (!myInmate) {
     return (
-      <div style={{ ...card, textAlign: 'center', color: '#666' }}>
-        你目前不在任何服刑場次中,請等典獄長報到
+      <div style={{ color: '#222' }}>
+        <SessionStatus userId={userId} />
+        <div style={{ ...card, textAlign: 'center', color: '#666' }}>
+          你目前不在任何服刑場次中,請等典獄長報到
+        </div>
       </div>
     )
   }
@@ -212,6 +222,9 @@ export default function SessionGoals({ userId }) {
 
   return (
     <div style={{ color: '#222' }}>
+      {/* 1) 服刑計時 / 狀態階段 */}
+      <SessionStatus userId={userId} />
+
       <div style={{ ...card, background: '#eef4ff' }}>
         <strong>本場服刑:{session.title}</strong>
         <span style={{ marginLeft: 8, color: '#666', fontSize: 13 }}>狀態:{myInmate.state}</span>
