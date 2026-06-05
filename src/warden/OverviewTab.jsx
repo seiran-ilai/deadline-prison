@@ -3,11 +3,16 @@ import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
 import { ROLE_LABEL, OVERVIEW_STATUS_STYLE, memberStatusLabel } from './constants'
 
-export default function OverviewTab({ inmates, loading, isWarden, onEditMember }) {
+// 名單總覽:一份清單、三種狀態 —
+//   已配號(profiles 有 inmate_no)、未配對(profiles 無 inmate_no)、預約中(pending_inmates)。
+// 新增預約表單也搬到這裡(取代原「預約與收押」分頁)。
+export default function OverviewTab({ inmates, unmatched = [], pending = [], loading, isWarden, onEditMember, setMsg, reloadShared }) {
   const [visitCount, setVisitCount] = useState({})       // member_id -> 光臨次數
   const [memberSession, setMemberSession] = useState({}) // member_id -> 目前所在 open 場次
   const [expandedMember, setExpandedMember] = useState(null) // 展開中的 member_id
   const [memberWorks, setMemberWorks] = useState({})     // member_id -> [稿件+進度]
+  const [showForm, setShowForm] = useState(false)        // 新增預約表單開關
+  const [form, setForm] = useState({ game_name: '', discord_account: '', avatar_url: '' })
 
   // 總覽:光臨次數 + 目前狀態(分開查再合併)
   async function loadOverview() {
@@ -43,47 +48,132 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember }
     setMemberWorks(prev => ({ ...prev, [memberId]: works }))
   }
 
+  // ── 預約 / 配號動作(沿用原「預約與收押」邏輯,不重寫) ──
+  async function addPending() {
+    if (!form.game_name || !form.discord_account) { setMsg('遊戲暱稱和 Discord 帳號必填'); return }
+    const { error } = await supabase.from('pending_inmates').insert({
+      game_name: form.game_name, discord_account: form.discord_account, avatar_url: form.avatar_url || null })
+    if (error) { setMsg('新增失敗:' + error.message); return }
+    setMsg('已加入預約名單'); setForm({ game_name: '', discord_account: '', avatar_url: '' }); setShowForm(false); reloadShared()
+  }
+
+  async function admitDirect(userId) {
+    const name = prompt('請輸入遊戲暱稱:'); if (!name) return
+    const { error } = await supabase.rpc('admit_unmatched', { target_id: userId, p_game_name: name })
+    if (error) { setMsg('收押失敗:' + error.message); return }
+    setMsg('已收押'); reloadShared()
+  }
+
+  async function linkToPending(userId) {
+    if (pending.length === 0) { setMsg('沒有預約資料可指定'); return }
+    const list = pending.map((p, i) => `${i + 1}. ${p.game_name}（${p.discord_account}）`).join('\n')
+    const idx = parseInt(prompt('指到哪筆預約?輸入編號:\n' + list)) - 1
+    if (isNaN(idx) || !pending[idx]) return
+    const { error } = await supabase.rpc('link_to_pending', { target_id: userId, pending_id: pending[idx].id })
+    if (error) { setMsg('指定失敗:' + error.message); return }
+    setMsg('已指定並收押'); reloadShared()
+  }
+
+  async function deletePending(id) {
+    if (!window.confirm('確定刪除這筆預約?')) return
+    const { error } = await supabase.from('pending_inmates').delete().eq('id', id)
+    if (error) { setMsg('刪除預約失敗:' + error.message); return }
+    setMsg('已刪除預約'); reloadShared()
+  }
+
+  const btn = { padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
+  const tag = (bg, color) => ({ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: bg, color })
+  const rowCard = { border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 8, background: '#fff', color: '#222' }
+
   return (
     <div>
-      <h3>犯人總覽</h3>
-      {loading ? <p style={{ color: '#888' }}>載入中…</p>
-        : inmates.length === 0 ? <p style={{ color: '#888' }}>還沒有人在押</p> : inmates.map(p => {
-        const status = memberStatusLabel(memberSession[p.id])
-        const ss = OVERVIEW_STATUS_STYLE[status] ?? { bg: '#eee', color: '#888' }
-        const isOpen = expandedMember === p.id
-        const works = memberWorks[p.id]
-        return (
-          <div key={p.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 8, background: '#fff', color: '#222' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', cursor: 'pointer' }} onClick={() => toggleMember(p.id)}>
-              <strong>No.{String(p.inmate_no).padStart(4, '0')}</strong>
-              <span>{p.game_name ?? p.display_name}</span>
-              <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#eef', color: '#558' }}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
-              <span style={{ color: '#888', fontSize: 13 }}>光臨 {visitCount[p.id] ?? 0} 次</span>
-              <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: ss.bg, color: ss.color }}>{status}</span>
-              {isWarden && (
-                <button style={{ padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }}
-                  onClick={e => { e.stopPropagation(); onEditMember(p) }}>編輯</button>
-              )}
-              <span style={{ color: '#888' }}>{isOpen ? '▲' : '▼'}</span>
-            </div>
-            {isOpen && (
-              <div style={{ marginTop: 10, borderTop: '1px dashed #ddd', paddingTop: 10 }}>
-                {!works ? <p style={{ color: '#999', margin: 0 }}>讀取稿件中…</p>
-                  : works.length === 0 ? <p style={{ color: '#999', margin: 0 }}>這位沒有稿件</p>
-                    : works.map(w => (
-                      <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
-                        <span style={{ flex: '0 0 160px', fontSize: 14 }}>
-                          {w.title}{w.status === 'archived' && <span style={{ color: '#aaa' }}>(封存)</span>}
-                        </span>
-                        <div style={{ flex: 1 }}><ProgressBar done={w.done} total={w.total} /></div>
-                      </div>
-                    ))}
-              </div>
-            )}
+      <h3>名單總覽</h3>
+
+      {/* 新增預約(搬自原「預約與收押」) */}
+      <div style={{ marginBottom: 12 }}>
+        <button style={{ ...btn, background: '#eef4ff' }} onClick={() => setShowForm(v => !v)}>
+          {showForm ? '收起' : '＋ 新增預約'}
+        </button>
+        {showForm && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
+            <input placeholder="遊戲暱稱" value={form.game_name} onChange={e => setForm({ ...form, game_name: e.target.value })} />
+            <input placeholder="Discord 使用者名稱" value={form.discord_account} onChange={e => setForm({ ...form, discord_account: e.target.value })} />
+            <input placeholder="頭貼網址(選填)" value={form.avatar_url} onChange={e => setForm({ ...form, avatar_url: e.target.value })} />
+            <button style={btn} onClick={addPending}>加入預約</button>
           </div>
-        )
-      })}
+        )}
+      </div>
+
+      {loading ? <p style={{ color: '#888' }}>載入中…</p> : (() => {
+        const hasAny = inmates.length || unmatched.length || pending.length
+        if (!hasAny) return <p style={{ color: '#888' }}>名單還沒有任何人</p>
+        return (<>
+          {/* 1) 未配對置頂(要處理) */}
+          {unmatched.map(p => (
+            <div key={'u-' + p.id} style={rowCard}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={tag('#fbe9d0', '#a05a00')}>未配對 · 查無預約</span>
+                <strong>{p.discord_account ?? p.display_name ?? '(未知)'}</strong>
+                <span style={{ flex: 1 }} />
+                <button style={btn} onClick={() => linkToPending(p.id)}>指到預約</button>
+                <button style={btn} onClick={() => admitDirect(p.id)}>直接收押</button>
+              </div>
+            </div>
+          ))}
+
+          {/* 2) 已配號 profiles(沿用原總覽:狀態 / 光臨 / 展開稿件 / 編輯) */}
+          {inmates.map(p => {
+            const status = memberStatusLabel(memberSession[p.id])
+            const ss = OVERVIEW_STATUS_STYLE[status] ?? { bg: '#eee', color: '#888' }
+            const isOpen = expandedMember === p.id
+            const works = memberWorks[p.id]
+            return (
+              <div key={p.id} style={rowCard}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', cursor: 'pointer' }} onClick={() => toggleMember(p.id)}>
+                  <strong>No.{String(p.inmate_no).padStart(4, '0')}</strong>
+                  <span>{p.game_name ?? p.display_name}</span>
+                  <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#eef', color: '#558' }}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
+                  <span style={{ color: '#888', fontSize: 13 }}>光臨 {visitCount[p.id] ?? 0} 次</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: ss.bg, color: ss.color }}>{status}</span>
+                  {isWarden && (
+                    <button style={btn}
+                      onClick={e => { e.stopPropagation(); onEditMember(p) }}>編輯</button>
+                  )}
+                  <span style={{ color: '#888' }}>{isOpen ? '▲' : '▼'}</span>
+                </div>
+                {isOpen && (
+                  <div style={{ marginTop: 10, borderTop: '1px dashed #ddd', paddingTop: 10 }}>
+                    {!works ? <p style={{ color: '#999', margin: 0 }}>讀取稿件中…</p>
+                      : works.length === 0 ? <p style={{ color: '#999', margin: 0 }}>這位沒有稿件</p>
+                        : works.map(w => (
+                          <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
+                            <span style={{ flex: '0 0 160px', fontSize: 14 }}>
+                              {w.title}{w.status === 'archived' && <span style={{ color: '#aaa' }}>(封存)</span>}
+                            </span>
+                            <div style={{ flex: 1 }}><ProgressBar done={w.done} total={w.total} /></div>
+                          </div>
+                        ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* 3) 預約中(尚未登入) */}
+          {pending.map(p => (
+            <div key={'p-' + p.id} style={rowCard}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={tag('#eee', '#777')}>預約中 · 未登入</span>
+                <strong>{p.game_name}</strong>
+                <span style={{ color: '#888', fontSize: 13 }}>Discord:{p.discord_account}</span>
+                <span style={{ flex: 1 }} />
+                <button style={{ ...btn, color: '#c00' }} onClick={() => deletePending(p.id)}>刪除</button>
+              </div>
+            </div>
+          ))}
+        </>)
+      })()}
     </div>
   )
 }
