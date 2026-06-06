@@ -8,7 +8,7 @@ import './styles/admin.css'
 
 // 本次服刑分頁:內容依「本場身分 role_in_session」決定(犯人頁 / 獄卒頁),
 // 與全域 role 無關 —— 典獄長/獄卒被報到成本場犯人時也會看到犯人頁。
-function SessionView({ userId }) {
+function SessionView({ userId, onGoToManuscripts }) {
   const [roleInSession, setRoleInSession] = useState(undefined) // undefined=載入中, null=未報到, 'inmate'|'guard'
   useEffect(() => {
     let alive = true
@@ -25,7 +25,7 @@ function SessionView({ userId }) {
     return () => { alive = false }
   }, [userId])
   if (roleInSession === undefined) return <p style={{ color: '#888' }}>讀取本場身分中…</p>
-  return roleInSession === 'guard' ? <GuardWork userId={userId} /> : <SessionGoals userId={userId} />
+  return roleInSession === 'guard' ? <GuardWork userId={userId} /> : <SessionGoals userId={userId} onGoToManuscripts={onGoToManuscripts} />
 }
 
 // ⚠️ 測試專用：開發測試帳號（只在 import.meta.env.DEV 時使用）
@@ -154,7 +154,7 @@ function App() {
         ))}
       </div>
       <div className="page">
-        {activeTab === 'session' && <SessionView userId={user.id} />}
+        {activeTab === 'session' && <SessionView userId={user.id} onGoToManuscripts={() => setTab('me')} />}
         {activeTab === 'me' && (
           <div>
             <p className="muted" style={{ marginBottom: 4 }}>📍 我的稿件 · 遊戲暱稱:{profile.game_name ?? '(未設定)'}</p>

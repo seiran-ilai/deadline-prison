@@ -31,14 +31,15 @@ function Avatar({ profile }) {
   )
 }
 
-export default function SessionGoals({ userId }) {
+export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)   // 我目前所在的 open 場次
   const [myInmate, setMyInmate] = useState(null)  // 我在本場的 session_inmates 記錄
   const [goals, setGoals] = useState([])          // session_goals 列(含解析後的稿件資料)
   const [actives, setActives] = useState([])      // 我所有 active 稿件
   const [stepsByMs, setStepsByMs] = useState({})  // manuscript_id -> [steps]
-  const [pick, setPick] = useState('')            // 挑選下拉選中的 manuscript_id
+  const [pick, setPick] = useState('')            // 挑選下拉選中的 manuscript_id(沿用;modal 直接帶 id)
+  const [goalModalOpen, setGoalModalOpen] = useState(false) // 「新增本場目標」modal 開關
   const [expanded, setExpanded] = useState([])    // 展開中的目標(manuscript_id)
   const [cellmates, setCellmates] = useState([])  // 本場同囚(其他犯人)
   const [guards, setGuards] = useState([])        // 本場獄卒(role=guard/warden)
@@ -46,8 +47,8 @@ export default function SessionGoals({ userId }) {
   const [sessionTimer, setSessionTimer] = useState(null)  // 本場番茄鐘 {timer_started_at, total_rounds}
   const [msg, setMsg] = useState('')
 
-  async function load() {
-    setLoading(true)
+  async function load(silent) {
+    if (!silent) setLoading(true)   // silent=true:modal 連續挑稿時的背景刷新,不閃整頁 loading(資料流不變)
     // 1) 找我有沒有報到進某個 open 場次(分開查,避開巢狀關聯 RLS 坑)
     const { data: si } = await supabase.from('session_inmates')
       .select('id, session_id, state').eq('member_id', userId)
@@ -161,12 +162,13 @@ export default function SessionGoals({ userId }) {
     return () => clearInterval(timer)
   }, [session?.id, userId, myInmate?.id])
 
-  async function addGoal() {
-    if (!pick) return
+  async function addGoal(manuscriptId) {
+    const mid = manuscriptId ?? pick   // modal 直接帶稿件 id;沿用原下拉時讀 pick
+    if (!mid) return
     const { error } = await supabase.from('session_goals')
-      .insert({ session_inmate_id: myInmate.id, manuscript_id: pick })
+      .insert({ session_inmate_id: myInmate.id, manuscript_id: mid })
     if (error) { setMsg('加入失敗:' + error.message); return }
-    setPick(''); setMsg('已加入本場'); load()
+    setPick(''); setMsg('已加入本場'); load(true)  // 背景刷新,modal 保持開著可連續挑
   }
 
   async function removeGoal(goalId) {
@@ -244,7 +246,7 @@ export default function SessionGoals({ userId }) {
 
       <h3>本場目標</h3>
       {goals.length === 0 ? (
-        <p className="empty">還沒挑本場目標,從下面加入要推進的稿件</p>
+        <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
       ) : goals.map(g => {
         const steps = stepsByMs[g.manuscript_id] ?? []
         const done = steps.filter(s => s.done).length
@@ -276,36 +278,28 @@ export default function SessionGoals({ userId }) {
           </div>
         )
       })}
-
-      <h3>挑選新目標</h3>
-      {available.length === 0 ? (
-        <p className="empty">沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
-      ) : (
-        <div className="toolbar">
-          <select className="sel" value={pick} onChange={e => setPick(e.target.value)}>
-            <option value="">— 選一本稿件 —</option>
-            {available.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-          </select>
-          <button className="btn-pri" onClick={addGoal}>加入本場</button>
-        </div>
-      )}
+      <div className="toolbar" style={{ marginTop: goals.length ? 12 : 4 }}>
+        <button className="btn-pri" onClick={() => setGoalModalOpen(true)}>＋ 新增本場目標</button>
+      </div>
 
       <h3>本場獄卒</h3>
       {guards.length === 0 ? (
         <p className="empty">本場目前沒有獄卒在場</p>
-      ) : guards.map(gd => (
-        <div key={gd.siId} className="panel accent-guard" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar profile={gd.profile} />
-          <div>
-            <strong>{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</strong>
-            <span className="role-tag guard" style={{ marginLeft: 6 }}>
-              {gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}
-            </span>
-          </div>
-          <span className="spacer" />
-          <span style={{ color: 'var(--hazard)', fontSize: 13 }}>👁 陪伴你的獄卒</span>
+      ) : (
+        <div className="guard-grid">
+          {guards.map(gd => (
+            <div key={gd.siId} className="guard-cell">
+              <div className="g-av">
+                {gd.profile?.avatar_url
+                  ? <img src={gd.profile.avatar_url} alt="" />
+                  : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
+              </div>
+              <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</div>
+              <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
 
       <h3>本場同囚</h3>
       {cellmates.length === 0 ? (
@@ -336,6 +330,36 @@ export default function SessionGoals({ userId }) {
         </div>
         )
       })}
+
+      {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用既有 addGoal,可連續挑多筆。
+          available 即時依 goals/actives 重算(挑進來的稿自動從清單移除)。 */}
+      {goalModalOpen && (
+        <div className="admin-modal-bg" onClick={() => setGoalModalOpen(false)}>
+          <div className="admin-modal goal-modal" onClick={e => e.stopPropagation()}>
+            <div className="goal-modal-head">
+              <h3>新增本場目標</h3>
+              <button className="goal-modal-x" onClick={() => setGoalModalOpen(false)}>✕</button>
+            </div>
+            {available.length === 0 ? (
+              <div className="goal-modal-empty">
+                <p className="warn">沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
+                {onGoToManuscripts && (
+                  <button className="btn-pri" onClick={() => { setGoalModalOpen(false); onGoToManuscripts() }}>前往我的稿件</button>
+                )}
+              </div>
+            ) : (
+              <div className="goal-pick-list">
+                {available.map(m => (
+                  <button key={m.id} className="goal-pick" onClick={() => addGoal(m.id)}>
+                    <span className="goal-pick-title">{m.title}</span>
+                    <span className="goal-pick-add">＋ 加入</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
