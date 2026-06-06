@@ -4,6 +4,7 @@ import { ProgressBar } from './ManuscriptManager'
 import { presenceLabel } from './pomodoro'
 import MessageBanner from './MessageBanner'
 import SessionStatus from './SessionStatus'
+import { computeProgress } from './progress'
 
 const PRESENCE_STYLE = {
   '服刑中': { bg: '#d9534f', color: '#fff' },
@@ -68,7 +69,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
 
     // 2) 我的稿件(全部,供解析標題;active 供挑選)
     const { data: ms } = await supabase.from('manuscripts')
-      .select('id, title, priority, status').eq('member_id', userId).order('priority').order('created_at')
+      .select('id, title, priority, status, is_done').eq('member_id', userId).order('priority').order('created_at')
     const msById = {}; for (const m of ms ?? []) msById[m.id] = m
     setActives((ms ?? []).filter(m => m.status === 'active'))
 
@@ -249,7 +250,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
       ) : goals.map(g => {
         const steps = stepsByMs[g.manuscript_id] ?? []
-        const done = steps.filter(s => s.done).length
+        const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
         const p = PRIORITY[g.manuscript?.priority] ?? PRIORITY[2]
         const isOpen = expanded.includes(g.manuscript_id)
         return (
@@ -261,7 +262,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
               <button className="btn-sm" onClick={() => toggleExpand(g.manuscript_id)}>{isOpen ? '收合' : '展開子項目'}</button>
               <button className="btn-sm" onClick={() => removeGoal(g.id)}>取消</button>
             </div>
-            <div style={{ marginTop: 10 }}><ProgressBar done={done} total={steps.length} /></div>
+            <div style={{ marginTop: 10 }}><ProgressBar progress={prog} /></div>
 
             {isOpen && (
               <div className="substeps" style={{ marginTop: 12 }}>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
+import { computeProgress } from '../progress'
 import { ROLE_LABEL } from './constants'
 import SessionTimerControl from './SessionTimerControl'
 
@@ -44,7 +45,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     const { data: goals } = await supabase.from('session_goals')
       .select('id, session_inmate_id, manuscript_id').in('session_inmate_id', inmateIds)
     const { data: ms } = await supabase.from('manuscripts')
-      .select('id, member_id, title, status').in('member_id', memberIds)
+      .select('id, member_id, title, status, is_done').in('member_id', memberIds)
     const msById = {}; for (const m of ms ?? []) msById[m.id] = m
     const goalMsIds = (goals ?? []).map(g => g.manuscript_id)
     let steps = []
@@ -56,7 +57,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     }
     const gByInmate = {}
     for (const g of goals ?? [])
-      (gByInmate[g.session_inmate_id] ??= []).push({ ...g, title: msById[g.manuscript_id]?.title ?? '(未知稿件)' })
+      (gByInmate[g.session_inmate_id] ??= []).push({ ...g, title: msById[g.manuscript_id]?.title ?? '(未知稿件)', is_done: msById[g.manuscript_id]?.is_done })
     const mByMember = {}
     for (const m of (ms ?? []).filter(x => x.status === 'active'))
       (mByMember[m.member_id] ??= []).push(m)
@@ -312,13 +313,13 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {goals.length === 0 ? <span className="v">尚未挑選</span> : goals.map(g => {
                           const steps = goalSteps[g.manuscript_id] ?? []
-                          const done = steps.filter(s => s.done).length
+                          const prog = computeProgress({ steps, isDone: g.is_done })
                           const isOpen = goalExpanded.includes(g.id)
                           return (
                             <div key={g.id}>
                               <div className="detail-row">
                                 <span style={{ flex: '0 0 130px', fontSize: 14 }}>{g.title}</span>
-                                <div style={{ flex: 1, minWidth: 120 }}><ProgressBar done={done} total={steps.length} /></div>
+                                <div style={{ flex: 1, minWidth: 120 }}><ProgressBar progress={prog} /></div>
                                 <button className="btn-sm" onClick={() => toggleGoalExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
                                 <button className="btn-sm btn-danger" onClick={() => removeInmateGoal(g.id)}>移除</button>
                               </div>

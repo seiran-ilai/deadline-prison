@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
 import { ROLE_LABEL, OVERVIEW_STATUS_STYLE, memberStatusLabel } from './constants'
+import { computeProgress } from '../progress'
 
 // 名單總覽:一份清單、三種狀態 —
 //   已配號(profiles 有 inmate_no)、未配對(profiles 無 inmate_no)、預約中(pending_inmates)。
@@ -35,7 +36,7 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
     setExpandedMember(memberId)
     if (memberWorks[memberId]) return
     const { data: ms } = await supabase.from('manuscripts')
-      .select('id, title, status, visibility').eq('member_id', memberId).order('priority').order('created_at')
+      .select('id, title, status, visibility, is_done').eq('member_id', memberId).order('priority').order('created_at')
     const msIds = (ms ?? []).map(m => m.id)
     let steps = []
     if (msIds.length) {
@@ -146,7 +147,7 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
                             <span style={{ flex: '0 0 160px', fontSize: 14 }}>
                               {w.title}{w.status === 'archived' && <span className="faint">(封存)</span>}
                             </span>
-                            <div style={{ flex: 1, minWidth: 140 }}><ProgressBar done={w.done} total={w.total} /></div>
+                            <div style={{ flex: 1, minWidth: 140 }}><ProgressBar progress={computeProgress({ done: w.done, total: w.total, isDone: w.is_done })} /></div>
                           </div>
                         ))}
                   </div>
