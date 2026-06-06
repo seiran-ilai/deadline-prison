@@ -64,6 +64,22 @@
   transition:transform .12s, background .2s;
 }
 .dp-site .btn-serve:hover{background:#fff; transform:translateY(-1px)}
+/* 導覽列額外入口:監獄系統 / Discord */
+.dp-site nav .nav-entries{display:flex; align-items:center; gap:14px}
+.dp-site .nav-access{
+  font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--dim);
+  border:1px solid var(--dim); padding:7px 12px; cursor:pointer; white-space:nowrap;
+  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+  transition:color .2s, background .2s, border-color .2s;
+}
+.dp-site .nav-access:hover{background:var(--hazard); color:#0a0a0a; border-color:var(--hazard)}
+.dp-site .nav-dc{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:34px; height:34px; color:var(--dim); border:1px solid var(--steel);
+  transition:color .2s, border-color .2s;
+}
+.dp-site .nav-dc:hover{color:var(--hazard); border-color:var(--hazard)}
+.dp-site .nav-dc svg{display:block}
 
 /* 通用區塊 */
 .dp-site section{padding:96px 28px; max-width:1120px; margin:0 auto; position:relative}
@@ -71,6 +87,8 @@
 .dp-site .eyebrow .blk{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:2px}
 .dp-site h2.title{font-family:var(--cjk); font-weight:900; font-size:clamp(34px,5vw,58px); line-height:1.05; letter-spacing:2px; margin-bottom:8px}
 .dp-site .subline{color:var(--dim); font-size:14px; max-width:52ch; margin-bottom:40px}
+.dp-site .place{font-family:var(--mono); font-size:13px; color:var(--dim); letter-spacing:1px; margin:-24px 0 40px}
+.dp-site .place b{color:var(--text); font-weight:700}
 
 /* 進場動畫 */
 .dp-site .reveal{opacity:0; transform:translateY(26px); transition:opacity .7s ease, transform .7s ease}
@@ -162,6 +180,9 @@
 .dp-site footer .f-brand{font-family:var(--stamp); font-size:30px; letter-spacing:2px}
 .dp-site footer .f-brand b{color:var(--hazard); font-weight:400}
 .dp-site footer .f-sub{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:2px; margin-top:8px}
+.dp-site footer .f-addr{font-family:var(--mono); font-size:12px; color:var(--dim); letter-spacing:1px; margin-top:10px}
+.dp-site footer .sys-entry{display:inline-block; margin-top:18px; font-family:var(--mono); font-size:13px; letter-spacing:2px; color:var(--dim); text-decoration:none; background:transparent; border:1px solid var(--steel); padding:9px 18px; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); transition:color .2s, background .2s, border-color .2s}
+.dp-site footer .sys-entry:hover{background:var(--hazard); color:#0a0a0a; border-color:var(--hazard)}
 
 /* 入監服刑 Modal */
 .dp-modal-bg{position:fixed; inset:0; z-index:100; background:rgba(6,7,8,.84); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:24px}
@@ -184,6 +205,8 @@
 
 @media(max-width:720px){
   .dp-site nav .links{display:none}
+  .dp-site nav .nav-entries{margin-left:auto}
+  .dp-site .place{margin:-12px 0 36px}
   .dp-site .sess{grid-template-columns:78px 1fr; gap:16px}
   .dp-site .sess .act{grid-column:1/-1; text-align:left}
   .dp-site .btn-book{width:100%}

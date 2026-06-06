@@ -148,6 +148,14 @@ export default function PrisonSite() {
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
             <button className="btn-serve" onClick={() => scrollTo('sessions')}>入監服刑</button>
           </div>
+          <div className="nav-entries">
+            <a className="nav-access" href="/app">ACCESS · 監獄系統</a>
+            <a className="nav-dc" href="https://discord.gg/tpRn7En9mk" target="_blank" rel="noopener noreferrer" aria-label="Discord">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.3.5a18 18 0 0 1 4.3 1.4 16.6 16.6 0 0 0-14.9 0A18 18 0 0 1 8.9 3.5L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9 .1 13.4.3 17.8A20 20 0 0 0 6.4 21l.5-1.8a13 13 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4a13 13 0 0 1-2 1L17 21a20 20 0 0 0 6-3.2c.3-5.1-.5-9.4-2.7-13.4ZM8.4 15.3c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Zm7.2 0c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Z" />
+              </svg>
+            </a>
+          </div>
         </nav>
         <div className="hazard thin" />
 
@@ -155,7 +163,7 @@ export default function PrisonSite() {
         <header className="hero" id="top">
           <div className="intake"><span className="dot" />收容中 · INTAKE OPEN · 24H</div>
           <h1>死線<span className="glow">監獄</span></h1>
-          <div className="ensign">DEADLINE PRISON · NO.<span className="no">0614</span></div>
+          <div className="ensign">DEADLINE PRISON · NO.<span className="no">0118</span></div>
           <p className="tag">把自己關進來,<b>服完這一頁死線</b>。<br />沒有逃獄,只有交稿。</p>
           <div className="crime">
             <span>罪名:<b>慣性拖稿</b></span>
@@ -176,6 +184,7 @@ export default function PrisonSite() {
           <div className="eyebrow reveal">服刑須知 <span className="blk">// BLOCK 01</span></div>
           <h2 className="title reveal">這裡關的,<br />是趕不完稿的人</h2>
           <p className="subline reveal">死線監獄是一間以「番茄鐘」執行的趕稿收容所。入監即上鎖,鈴響才放風,全程同步直播犯人服刑進度——你不是一個人在趕,是一群人一起服刑。</p>
+          <p className="place reveal">服刑地點:<b>巴哈姆特 - 薰衣草苗園 - 1區 - 18號</b></p>
           <div className="rules reveal">
             {RULES.map(([n, h, p]) => (
               <div className="rule" key={n}><span className="pin" /><div className="rn">{n}</div><h3>{h}</h3><p>{p}</p></div>
@@ -260,6 +269,8 @@ export default function PrisonSite() {
         <footer>
           <div className="f-brand">死線<b>監獄</b></div>
           <div className="f-sub">DEADLINE PRISON · 趕稿收容所 · since 2026</div>
+          <div className="f-addr">服刑地點:巴哈姆特 - 薰衣草苗園 - 1區 - 18號</div>
+          <a className="sys-entry" href="/app">🔒 監獄系統 ▸</a>
         </footer>
       </div>
 
