@@ -15,3 +15,12 @@ export function computeProgress({ steps, done, total, isDone = false } = {}) {
   // 無子項目:走稿件層級直接勾選
   return { done: isDone ? 1 : 0, total: 0, pct: isDone ? 1 : 0, hasSteps: false, complete: !!isDone }
 }
+
+// 同囚 / 犯人列狀態 chip 文字:只依「本場目標完成度」,完全脫離番茄鐘。
+//   doneGoals / totalGoals 皆為「目標(稿件)」層級的計數,每個目標是否完成請用 computeProgress 判定。
+//   邊界:沒挑任何目標(totalGoals=0)→「尚未挑稿」(沒有目標 ≠ 完成);
+//         有目標且全部完成 →「服刑完畢」;有目標但未全完成 →「服刑中」。
+export function goalStatusLabel(doneGoals, totalGoals) {
+  if (!totalGoals) return '尚未挑稿'
+  return doneGoals >= totalGoals ? '服刑完畢' : '服刑中'
+}

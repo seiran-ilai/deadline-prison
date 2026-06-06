@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
-import { presenceLabel } from './pomodoro'
 import MessageBanner from './MessageBanner'
 import SessionStatus from './SessionStatus'
-import { computeProgress } from './progress'
+import { computeProgress, goalStatusLabel } from './progress'
 import ProfileCard from './ProfileCard'
 
+// 同囚列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
 const PRESENCE_STYLE = {
-  '服刑中': { bg: '#d9534f', color: '#fff' },
-  '放風中': { bg: '#2a8', color: '#fff' },
-  '等待中': { bg: '#eee', color: '#888' },
-  '服刑完畢': { bg: '#666', color: '#fff' },
+  '服刑完畢': { bg: '#666', color: '#fff' },                       // 完成:深灰
+  '服刑中': { bg: '#d9534f', color: '#fff' },                      // 進行中:警示紅
+  '尚未挑稿': { bg: 'rgba(255,255,255,.08)', color: '#9298a2' },   // 沒挑目標:次要灰
 }
 
 const PRIORITY = {
@@ -35,7 +34,6 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [cellmates, setCellmates] = useState([])  // 本場同囚(其他犯人)
   const [guards, setGuards] = useState([])        // 本場獄卒(role=guard/warden)
   const [myGuards, setMyGuards] = useState([])    // 我的專屬獄卒(inmate_guards)
-  const [sessionTimer, setSessionTimer] = useState(null)  // 本場番茄鐘 {timer_started_at, total_rounds}
   const [myProfile, setMyProfile] = useState(null)        // 我自己的 profile(本場囚犯列「你」那筆顯示用)
   const [msg, setMsg] = useState('')
 
@@ -55,7 +53,6 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       }
     }
     setSession(sess); setMyInmate(mine)
-    setSessionTimer(sess ? { timer_started_at: sess.timer_started_at, timer_ended_at: sess.timer_ended_at, total_rounds: sess.total_rounds } : null)
     if (!mine) { setGoals([]); setActives([]); setStepsByMs({}); setLoading(false); return }
 
     // 我自己的 profile(顯示在「本場囚犯」列的「你」那筆;與身分卡同一來源)
@@ -93,10 +90,6 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
 
   // 本場同囚:分開查再合併(避開 RLS 巢狀查詢坑),不走會閃 loading 的 load()
   async function loadCellmates(sessionId, myMemberId) {
-    // 0) 刷新本場番茄鐘狀態(讓 presence 在典獄長開始/重置後 10 秒內反映)
-    const { data: sess } = await supabase.from('sessions')
-      .select('timer_started_at, timer_ended_at, total_rounds').eq('id', sessionId).single()
-    if (sess) setSessionTimer({ timer_started_at: sess.timer_started_at, timer_ended_at: sess.timer_ended_at, total_rounds: sess.total_rounds })
     // 1) 同場其他人(排除自己)
     const { data: si } = await supabase.from('session_inmates')
       .select('id, member_id, state, role_in_session').eq('session_id', sessionId).neq('member_id', myMemberId)
@@ -118,19 +111,34 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         .select('id, title, visibility').in('id', msIds)
       for (const m of ms ?? []) msById[m.id] = m
     }
-    // 5) 合併:同囚 → 本場目標稿(讀得到=public 顯示稿名,讀不到=保密作業)
+    // 4.5) 同囚每個目標的完成度聚合(done/total/is_done)。
+    //   steps 對同囚不可讀,改用 SECURITY DEFINER RPC 只取「數字」(不外洩子項目標題),
+    //   再用統一的 computeProgress 判定每個目標是否完成 → 狀態 chip 脫離番茄鐘。
+    const { data: prog } = await supabase.rpc('session_goal_progress', { p_session_inmate_ids: siIds })
+    const progByInmate = {}
+    for (const row of prog ?? []) (progByInmate[row.session_inmate_id] ??= []).push(row)
+
+    // 5) 合併:同囚 → 本場目標稿(讀得到=public 顯示稿名,讀不到=保密作業)+ 完成度狀態
     const goalsByInmate = {}
     for (const g of goals ?? []) (goalsByInmate[g.session_inmate_id] ??= []).push(g)
-    const merged = si.map(r => ({
-      siId: r.id,
-      state: r.state,
-      roleInSession: r.role_in_session,
-      profile: profById[r.member_id],
-      works: (goalsByInmate[r.id] ?? []).map(g => {
+    const merged = si.map(r => {
+      const works = (goalsByInmate[r.id] ?? []).map(g => {
         const m = msById[g.manuscript_id]
         return { goalId: g.id, title: m?.title, secret: !m }
-      }),
-    }))
+      })
+      // 該同囚自己的目標完成度:total 以「目標數」為準,done 由 RPC 聚合 + computeProgress 判定
+      const totalGoals = works.length
+      const doneGoals = (progByInmate[r.id] ?? [])
+        .filter(row => computeProgress({ done: row.done, total: row.total, isDone: row.is_done }).complete).length
+      return {
+        siId: r.id,
+        state: r.state,
+        roleInSession: r.role_in_session,
+        profile: profById[r.member_id],
+        works,
+        status: goalStatusLabel(doneGoals, totalGoals),
+      }
+    })
     // 依「本場身分」切分:本場獄卒一覽 vs 本場犯人一覽(兩層身分,非全域 role)
     setGuards(merged.filter(m => m.roleInSession === 'guard'))
     setCellmates(merged.filter(m => m.roleInSession !== 'guard'))
@@ -363,8 +371,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
           </div>
           {/* 其他同囚 */}
           {cellmates.map(c => {
-            const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8, sessionTimer?.timer_ended_at)
-            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
+            const status = c.status   // 依「該同囚本場目標完成度」判定,與番茄鐘無關
+            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['尚未挑稿']
             return (
               <div key={c.siId} className="inmate">
                 <div className="in-av">

@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
-import { computeProgress } from './progress'
-import { presenceLabel } from './pomodoro'
+import { computeProgress, goalStatusLabel } from './progress'
 import SessionStatus from './SessionStatus'
 import GuardMemosTab from './GuardMemosTab'
 import SessionMemoPanel from './SessionMemoPanel'
 import ProfileCard from './ProfileCard'
 
+// 犯人列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
 const PRESENCE_STYLE = {
-  '服刑中': { bg: '#d9534f', color: '#fff' },
-  '放風中': { bg: '#2a8', color: '#fff' },
-  '等待中': { bg: '#eee', color: '#888' },
-  '服刑完畢': { bg: '#666', color: '#fff' },
+  '服刑完畢': { bg: '#666', color: '#fff' },                       // 完成:深灰
+  '服刑中': { bg: '#d9534f', color: '#fff' },                      // 進行中:警示紅
+  '尚未挑稿': { bg: 'rgba(255,255,255,.08)', color: '#9298a2' },   // 沒挑目標:次要灰
 }
 
 // 獄卒作業頁:狀態階段 → 監管犯人名單(+目標代勾) → 本場獄卒一覽 → 本場犯人一覽
@@ -55,7 +54,6 @@ export default function GuardWork({ userId }) {
     const merged = (roster ?? []).map(r => ({ ...r, profile: profById[r.member_id] }))
     const inmateRows = merged.filter(r => r.role_in_session !== 'guard')
     setAllGuards(merged.filter(r => r.role_in_session === 'guard'))
-    setAllInmates(inmateRows)
 
     // 3) 指派給我的犯人:inmate_guards(guard_id=我)∩ 本場犯人
     const inmateRowIds = inmateRows.map(r => r.id)
@@ -67,12 +65,13 @@ export default function GuardWork({ userId }) {
       assignedRows = inmateRows.filter(r => assignedIds.has(r.id))
     }
 
-    // 4) 我監管犯人的本場目標 + 稿件標題 + 子項目(算進度,供代勾)
-    const assignedIds = assignedRows.map(r => r.id)
+    // 4) 本場「全部犯人」的本場目標 + 稿件 + 子項目。
+    //   staff 可讀全部,故狀態 chip(服刑完畢/服刑中/尚未挑稿)對「我看守的」與「其他囚犯」一致;
+    //   我看守的另外用 stepsByMs 支援代勾。
     let goalsByInmate = {}, grouped = {}
-    if (assignedIds.length) {
+    if (inmateRowIds.length) {
       const { data: goals } = await supabase.from('session_goals')
-        .select('id, session_inmate_id, manuscript_id').in('session_inmate_id', assignedIds)
+        .select('id, session_inmate_id, manuscript_id').in('session_inmate_id', inmateRowIds)
       const msIds = [...new Set((goals ?? []).map(g => g.manuscript_id))]
       const msById = {}
       if (msIds.length) {
@@ -87,7 +86,9 @@ export default function GuardWork({ userId }) {
       for (const g of goals ?? [])
         (goalsByInmate[g.session_inmate_id] ??= []).push({ ...g, manuscript: msById[g.manuscript_id] })
     }
-    setMyInmates(assignedRows.map(r => ({ ...r, goals: goalsByInmate[r.id] ?? [] })))
+    const withGoals = (r) => ({ ...r, goals: goalsByInmate[r.id] ?? [] })
+    setAllInmates(inmateRows.map(withGoals))
+    setMyInmates(assignedRows.map(withGoals))
     setStepsByMs(grouped)
     setLoading(false)
   }
@@ -116,9 +117,13 @@ export default function GuardWork({ userId }) {
     setExpanded(prev => prev.includes(goalId) ? prev.filter(x => x !== goalId) : [...prev, goalId])
   }
 
+  // 狀態 chip:只依「該犯人本場目標完成度」(脫離番茄鐘);帶該犯人自己的 goals。
   const presence = (r) => {
     if (r.role_in_session === 'guard') return null
-    return presenceLabel(session?.timer_started_at, session?.total_rounds ?? 8, session?.timer_ended_at)
+    const goals = r.goals ?? []
+    const done = goals.filter(g =>
+      computeProgress({ steps: stepsByMs[g.manuscript_id] ?? [], isDone: g.manuscript?.is_done }).complete).length
+    return goalStatusLabel(done, goals.length)
   }
 
   return (
