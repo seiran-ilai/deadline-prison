@@ -260,8 +260,13 @@ export default function ManuscriptManager({ userId }) {
         return (
           <div key={m.id} className="panel">
             <div className="panel-head">
+              {/* 無子項目:大項本身就是可勾的 checkbox(勾=100%、取消=0%,寫 is_done) */}
+              {!prog.hasSteps && (
+                <input type="checkbox" className="ms-done-check" checked={!!m.is_done}
+                  onChange={() => toggleManuscriptDone(m)} title="標記整本完成" />
+              )}
               <PriorityTag priority={m.priority} />
-              <strong style={{ fontSize: 16 }}>{m.title}</strong>
+              <strong style={{ fontSize: 16 }} className={!prog.hasSteps && m.is_done ? 'done-text' : ''}>{m.title}</strong>
               <span title={vis.label}>{vis.icon}</span>
               <DeadlineBadge dueDate={m.due_date} pct={pct} />
               <span className="spacer" />
@@ -274,14 +279,6 @@ export default function ManuscriptManager({ userId }) {
             </div>
 
             <div style={{ margin: '10px 0' }}><ProgressBar progress={prog} /></div>
-
-            {/* 無子項目 → 可直接勾選整本完成;一旦有子項目即由子項目計算,隱藏此勾選 */}
-            {!prog.hasSteps && (
-              <label className="ms-done-toggle">
-                <input type="checkbox" checked={!!m.is_done} onChange={() => toggleManuscriptDone(m)} />
-                <span className={m.is_done ? 'done-text' : ''}>標記整本完成(此稿無子項目)</span>
-              </label>
-            )}
 
             <div className="faint" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               {m.due_date && <span>截止日:{m.due_date}</span>}

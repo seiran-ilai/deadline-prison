@@ -185,6 +185,16 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     if (error) { setDone(step.done); setMsg('子項目更新失敗,已還原:' + error.message) }
   }
 
+  // 無子項目稿件:大項本身就是完成勾選(寫 manuscripts.is_done;樂觀更新,與子項目同一條完成度邏輯)
+  async function toggleManuscriptDone(goal) {
+    const next = !goal.manuscript?.is_done
+    const setDone = (val) => setGoals(prev => prev.map(g =>
+      g.id === goal.id ? { ...g, manuscript: { ...g.manuscript, is_done: val } } : g))
+    setDone(next)
+    const { error } = await supabase.from('manuscripts').update({ is_done: next }).eq('id', goal.manuscript_id)
+    if (error) { setDone(!next); setMsg('更新失敗,已還原:' + error.message) }
+  }
+
   function toggleExpand(manuscriptId) {
     setExpanded(prev => prev.includes(manuscriptId)
       ? prev.filter(x => x !== manuscriptId)
@@ -268,19 +278,25 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
             return (
               <div key={g.id} className="panel">
                 <div className="panel-head">
+                  {/* 無子項目:大項本身就是可勾的 checkbox(勾=100%、取消=0%,寫 is_done) */}
+                  {!prog.hasSteps && g.manuscript && (
+                    <input type="checkbox" className="ms-done-check" checked={!!g.manuscript.is_done}
+                      onChange={() => toggleManuscriptDone(g)} title="標記整本完成" />
+                  )}
                   <span className="chip" style={{ background: p.bg }}>{p.label}</span>
-                  <strong>{g.manuscript?.title ?? '(稿件已不存在)'}</strong>
+                  <strong className={!prog.hasSteps && g.manuscript?.is_done ? 'done-text' : ''}>{g.manuscript?.title ?? '(稿件已不存在)'}</strong>
                   <span className="spacer" />
-                  <button className="btn-sm" onClick={() => toggleExpand(g.manuscript_id)}>{isOpen ? '收合' : '展開子項目'}</button>
+                  {/* 有子項目才需要展開;無子項目大項已可直接勾,不顯示展開 */}
+                  {prog.hasSteps && (
+                    <button className="btn-sm" onClick={() => toggleExpand(g.manuscript_id)}>{isOpen ? '收合' : '展開子項目'}</button>
+                  )}
                   <button className="btn-sm" onClick={() => removeGoal(g.id)}>取消</button>
                 </div>
                 <div style={{ marginTop: 10 }}><ProgressBar progress={prog} /></div>
 
-                {isOpen && (
+                {prog.hasSteps && isOpen && (
                   <div className="substeps" style={{ marginTop: 12 }}>
-                    {steps.length === 0 ? (
-                      <p className="empty">這本稿還沒有子項目(到「我的稿件」新增)</p>
-                    ) : steps.map(s => (
+                    {steps.map(s => (
                       <div key={s.id} className="step">
                         <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
                         <span className={s.done ? 'done-text' : ''}>{s.title}</span>
