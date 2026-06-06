@@ -72,49 +72,44 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     setMsg('已刪除場次'); load(); reloadShared()
   }
 
-  const btn = { padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
-  const btnDanger = { ...btn, color: '#c00' }
-  const tag = (bg) => ({ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: bg, color: '#fff' })
-
   return (
     <div>
       <h3>場次總覽</h3>
 
       {/* 開新場次(重用開場流程) */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input placeholder="場次名(如 6/14 晚場)" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
-        <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-          style={{ padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
-        <input type="number" min="1" placeholder="人數上限(空=不限)" value={newCap} onChange={e => setNewCap(e.target.value)}
-          style={{ width: 140, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
-        <button onClick={openNew}>開新場次</button>
+      <div className="toolbar">
+        <input className="inp" placeholder="場次名(如 6/14 晚場)" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+        <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
+        <input type="number" min="1" placeholder="人數上限(空=不限)" value={newCap} onChange={e => setNewCap(e.target.value)} style={{ width: 160 }} />
+        <button className="btn-pri" onClick={openNew}>開新場次</button>
       </div>
 
-      {loading ? <p style={{ color: '#888' }}>載入中…</p>
-        : sessions.length === 0 ? <p style={{ color: '#888' }}>還沒有任何場次</p>
+      {loading ? <p className="empty">載入中…</p>
+        : sessions.length === 0 ? <p className="empty">還沒有任何場次</p>
           : sessions.map(s => (
-            <div key={s.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 8, background: '#fff', color: '#222' }}>
+            <div key={s.id} className="row-card">
               {editId === s.id ? (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input value={editTitle} onChange={e => setEditTitle(e.target.value)} />
-                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
-                    style={{ padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
-                  <input type="number" min="1" placeholder="上限(空=不限)" value={editCap} onChange={e => setEditCap(e.target.value)}
-                    style={{ width: 120, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4 }} />
-                  <button style={btn} onClick={() => saveEdit(s.id)}>儲存</button>
-                  <button style={btn} onClick={cancelEdit}>取消</button>
+                <div className="row-head">
+                  <input className="inp" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
+                  <input type="number" min="1" placeholder="上限(空=不限)" value={editCap} onChange={e => setEditCap(e.target.value)} style={{ width: 130 }} />
+                  <button onClick={() => saveEdit(s.id)}>儲存</button>
+                  <button onClick={cancelEdit}>取消</button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="row-head">
                   <strong>{s.title}</strong>
-                  <span style={{ color: '#888', fontSize: 13 }}>{s.session_date ?? '未設定日期'}</span>
-                  <span style={tag(s.status === 'open' ? '#2a8' : '#888')}>{s.status === 'open' ? '進行中' : '已結束'}</span>
-                  <span style={{ color: '#666', fontSize: 13 }}>報到 {counts[s.id] ?? 0} 人</span>
-                  <span style={{ color: '#666', fontSize: 13 }}>上限 {s.capacity ?? '不限'}</span>
-                  <span style={{ flex: 1 }} />
-                  <button style={btn} onClick={() => startEdit(s)}>編輯</button>
-                  <button style={btn} onClick={() => toggleStatus(s)}>{s.status === 'open' ? '關閉場次' : '重新開啟'}</button>
-                  <button style={btnDanger} onClick={() => deleteSession(s)}>刪除</button>
+                  <span className="muted">{s.session_date ?? '未設定日期'}</span>
+                  <span className="tag tag-pill" style={s.status === 'open'
+                    ? { background: 'rgba(63,179,107,.15)', color: 'var(--ok)' }
+                    : { background: 'rgba(255,255,255,.08)', color: 'var(--dim)' }}>
+                    {s.status === 'open' ? '進行中' : '已結束'}</span>
+                  <span className="muted">報到 {counts[s.id] ?? 0} 人</span>
+                  <span className="muted">上限 {s.capacity ?? '不限'}</span>
+                  <span className="spacer" />
+                  <button className="btn-sm" onClick={() => startEdit(s)}>編輯</button>
+                  <button className="btn-sm" onClick={() => toggleStatus(s)}>{s.status === 'open' ? '關閉場次' : '重新開啟'}</button>
+                  <button className="btn-sm btn-danger" onClick={() => deleteSession(s)}>刪除</button>
                 </div>
               )}
             </div>

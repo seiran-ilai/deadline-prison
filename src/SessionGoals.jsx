@@ -25,20 +25,21 @@ function Avatar({ profile }) {
     return <img src={profile.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flex: '0 0 40px' }} />
   }
   return (
-    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#bbb', color: '#fff', flex: '0 0 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#3a4049', color: '#e4e5e7', flex: '0 0 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
       {initial}
     </div>
   )
 }
 
-export default function SessionGoals({ userId }) {
+export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)   // 我目前所在的 open 場次
   const [myInmate, setMyInmate] = useState(null)  // 我在本場的 session_inmates 記錄
   const [goals, setGoals] = useState([])          // session_goals 列(含解析後的稿件資料)
   const [actives, setActives] = useState([])      // 我所有 active 稿件
   const [stepsByMs, setStepsByMs] = useState({})  // manuscript_id -> [steps]
-  const [pick, setPick] = useState('')            // 挑選下拉選中的 manuscript_id
+  const [pick, setPick] = useState('')            // 挑選下拉選中的 manuscript_id(沿用;modal 直接帶 id)
+  const [goalModalOpen, setGoalModalOpen] = useState(false) // 「新增本場目標」modal 開關
   const [expanded, setExpanded] = useState([])    // 展開中的目標(manuscript_id)
   const [cellmates, setCellmates] = useState([])  // 本場同囚(其他犯人)
   const [guards, setGuards] = useState([])        // 本場獄卒(role=guard/warden)
@@ -46,8 +47,8 @@ export default function SessionGoals({ userId }) {
   const [sessionTimer, setSessionTimer] = useState(null)  // 本場番茄鐘 {timer_started_at, total_rounds}
   const [msg, setMsg] = useState('')
 
-  async function load() {
-    setLoading(true)
+  async function load(silent) {
+    if (!silent) setLoading(true)   // silent=true:modal 連續挑稿時的背景刷新,不閃整頁 loading(資料流不變)
     // 1) 找我有沒有報到進某個 open 場次(分開查,避開巢狀關聯 RLS 坑)
     const { data: si } = await supabase.from('session_inmates')
       .select('id, session_id, state').eq('member_id', userId)
@@ -161,12 +162,13 @@ export default function SessionGoals({ userId }) {
     return () => clearInterval(timer)
   }, [session?.id, userId, myInmate?.id])
 
-  async function addGoal() {
-    if (!pick) return
+  async function addGoal(manuscriptId) {
+    const mid = manuscriptId ?? pick   // modal 直接帶稿件 id;沿用原下拉時讀 pick
+    if (!mid) return
     const { error } = await supabase.from('session_goals')
-      .insert({ session_inmate_id: myInmate.id, manuscript_id: pick })
+      .insert({ session_inmate_id: myInmate.id, manuscript_id: mid })
     if (error) { setMsg('加入失敗:' + error.message); return }
-    setPick(''); setMsg('已加入本場'); load()
+    setPick(''); setMsg('已加入本場'); load(true)  // 背景刷新,modal 保持開著可連續挑
   }
 
   async function removeGoal(goalId) {
@@ -194,21 +196,17 @@ export default function SessionGoals({ userId }) {
       : [...prev, manuscriptId])
   }
 
-  const card = { border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 12, background: '#fff', color: '#222' }
-  const input = { padding: '6px 8px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222', colorScheme: 'light' }
-  const btn = { padding: '6px 12px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
-
   if (loading) return (
-    <div style={{ color: '#222' }}>
+    <div>
       <SessionStatus userId={userId} />
-      <p style={{ color: '#888' }}>讀取本場狀態中…</p>
+      <p className="empty">讀取本場狀態中…</p>
     </div>
   )
 
   if (!myInmate) {
     // 未報到/未配對的狀態已由上方狀態卡(SessionStatus)涵蓋,不再顯示重複且可能矛盾的訊息框
     return (
-      <div style={{ color: '#222' }}>
+      <div>
         <SessionStatus userId={userId} />
       </div>
     )
@@ -219,7 +217,7 @@ export default function SessionGoals({ userId }) {
   const available = actives.filter(m => !goalIds.includes(m.id))
 
   return (
-    <div style={{ color: '#222' }}>
+    <div>
       {/* 1) 服刑計時 / 狀態階段 */}
       <SessionStatus userId={userId} />
 
@@ -227,7 +225,7 @@ export default function SessionGoals({ userId }) {
 
       {/* 專屬獄卒:只有被指派時才顯示;沒指派則整個框不渲染 */}
       {myGuards.length > 0 && (
-        <div style={{ ...card, background: '#fff7ec' }}>
+        <div className="panel accent-guard">
           <strong>專屬獄卒</strong>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
             {myGuards.map(g => (
@@ -235,10 +233,10 @@ export default function SessionGoals({ userId }) {
                 <Avatar profile={g.profile} />
                 <div>
                   <strong>{g.profile?.game_name ?? g.profile?.display_name ?? '(未知)'}</strong>
-                  <span style={{ marginLeft: 6, fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#e08e0b', color: '#fff' }}>
+                  <span className="role-tag guard" style={{ marginLeft: 6 }}>
                     {g.profile?.role === 'warden' ? '典獄長' : '獄卒'}
                   </span>
-                  <div style={{ color: '#c60', fontSize: 12 }}>👁 正在看著你服刑</div>
+                  <div style={{ color: 'var(--hazard)', fontSize: 12 }}>👁 正在看著你服刑</div>
                 </div>
               </div>
             ))}
@@ -248,31 +246,31 @@ export default function SessionGoals({ userId }) {
 
       <h3>本場目標</h3>
       {goals.length === 0 ? (
-        <p style={{ color: '#888' }}>還沒挑本場目標,從下面加入要推進的稿件</p>
+        <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
       ) : goals.map(g => {
         const steps = stepsByMs[g.manuscript_id] ?? []
         const done = steps.filter(s => s.done).length
         const p = PRIORITY[g.manuscript?.priority] ?? PRIORITY[2]
         const isOpen = expanded.includes(g.manuscript_id)
         return (
-          <div key={g.id} style={card}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ background: p.bg, color: '#fff', fontSize: 12, padding: '1px 8px', borderRadius: 10 }}>{p.label}</span>
+          <div key={g.id} className="panel">
+            <div className="panel-head">
+              <span className="chip" style={{ background: p.bg }}>{p.label}</span>
               <strong>{g.manuscript?.title ?? '(稿件已不存在)'}</strong>
-              <span style={{ flex: 1 }} />
-              <button style={btn} onClick={() => toggleExpand(g.manuscript_id)}>{isOpen ? '收合' : '展開子項目'}</button>
-              <button style={btn} onClick={() => removeGoal(g.id)}>取消</button>
+              <span className="spacer" />
+              <button className="btn-sm" onClick={() => toggleExpand(g.manuscript_id)}>{isOpen ? '收合' : '展開子項目'}</button>
+              <button className="btn-sm" onClick={() => removeGoal(g.id)}>取消</button>
             </div>
             <div style={{ marginTop: 10 }}><ProgressBar done={done} total={steps.length} /></div>
 
             {isOpen && (
-              <div style={{ marginTop: 12, borderTop: '1px dashed #ddd', paddingTop: 12 }}>
+              <div className="substeps" style={{ marginTop: 12 }}>
                 {steps.length === 0 ? (
-                  <p style={{ color: '#999', margin: 0 }}>這本稿還沒有子項目(到「我的稿件」新增)</p>
+                  <p className="empty">這本稿還沒有子項目(到「我的稿件」新增)</p>
                 ) : steps.map(s => (
-                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div key={s.id} className="step">
                     <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
-                    <span style={{ textDecoration: s.done ? 'line-through' : 'none', color: s.done ? '#999' : '#222' }}>{s.title}</span>
+                    <span className={s.done ? 'done-text' : ''}>{s.title}</span>
                   </div>
                 ))}
               </div>
@@ -280,59 +278,51 @@ export default function SessionGoals({ userId }) {
           </div>
         )
       })}
+      <div className="toolbar" style={{ marginTop: goals.length ? 12 : 4 }}>
+        <button className="btn-pri" onClick={() => setGoalModalOpen(true)}>＋ 新增本場目標</button>
+      </div>
 
-      <h3 style={{ marginTop: 20 }}>挑選新目標</h3>
-      {available.length === 0 ? (
-        <p style={{ color: '#888' }}>沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
+      <h3>本場獄卒</h3>
+      {guards.length === 0 ? (
+        <p className="empty">本場目前沒有獄卒在場</p>
       ) : (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select style={input} value={pick} onChange={e => setPick(e.target.value)}>
-            <option value="">— 選一本稿件 —</option>
-            {available.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-          </select>
-          <button style={{ ...btn, background: '#eef4ff' }} onClick={addGoal}>加入本場</button>
+        <div className="guard-grid">
+          {guards.map(gd => (
+            <div key={gd.siId} className="guard-cell">
+              <div className="g-av">
+                {gd.profile?.avatar_url
+                  ? <img src={gd.profile.avatar_url} alt="" />
+                  : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
+              </div>
+              <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</div>
+              <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+            </div>
+          ))}
         </div>
       )}
 
-      <h3 style={{ marginTop: 24 }}>本場獄卒</h3>
-      {guards.length === 0 ? (
-        <p style={{ color: '#888' }}>本場目前沒有獄卒在場</p>
-      ) : guards.map(gd => (
-        <div key={gd.siId} style={{ ...card, display: 'flex', alignItems: 'center', gap: 10, background: '#fff7ec' }}>
-          <Avatar profile={gd.profile} />
-          <div>
-            <strong>{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</strong>
-            <span style={{ marginLeft: 6, fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#e08e0b', color: '#fff' }}>
-              {gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}
-            </span>
-          </div>
-          <span style={{ flex: 1 }} />
-          <span style={{ color: '#c60', fontSize: 13 }}>👁 陪伴你的獄卒</span>
-        </div>
-      ))}
-
-      <h3 style={{ marginTop: 24 }}>本場同囚</h3>
+      <h3>本場同囚</h3>
       {cellmates.length === 0 ? (
-        <p style={{ color: '#888' }}>本場目前只有你一個人,或還沒有其他人報到</p>
+        <p className="empty">本場目前只有你一個人,或還沒有其他人報到</p>
       ) : cellmates.map(c => {
         const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8, sessionTimer?.timer_ended_at)
         const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
         return (
-        <div key={c.siId} style={card}>
+        <div key={c.siId} className="panel">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Avatar profile={c.profile} />
             <div>
               <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
               <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
             </div>
-            <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: ps.bg, color: ps.color }}>{status}</span>
+            <span className="spacer" />
+            <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>
           </div>
           <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {c.works.length === 0 ? (
-              <span style={{ color: '#aaa', fontSize: 13 }}>本場還沒挑稿</span>
+              <span className="empty">本場還沒挑稿</span>
             ) : c.works.map(w => (
-              <span key={w.goalId} style={{ fontSize: 13, padding: '2px 10px', borderRadius: 12, background: w.secret ? '#eee' : '#eef4ff', color: w.secret ? '#888' : '#33558a' }}>
+              <span key={w.goalId} className="chip" style={{ background: w.secret ? 'rgba(255,255,255,.08)' : 'rgba(245,197,24,.15)', color: w.secret ? 'var(--dim)' : 'var(--hazard)' }}>
                 {w.secret ? '🔒 保密作業' : w.title}
               </span>
             ))}
@@ -340,6 +330,36 @@ export default function SessionGoals({ userId }) {
         </div>
         )
       })}
+
+      {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用既有 addGoal,可連續挑多筆。
+          available 即時依 goals/actives 重算(挑進來的稿自動從清單移除)。 */}
+      {goalModalOpen && (
+        <div className="admin-modal-bg" onClick={() => setGoalModalOpen(false)}>
+          <div className="admin-modal goal-modal" onClick={e => e.stopPropagation()}>
+            <div className="goal-modal-head">
+              <h3>新增本場目標</h3>
+              <button className="goal-modal-x" onClick={() => setGoalModalOpen(false)}>✕</button>
+            </div>
+            {available.length === 0 ? (
+              <div className="goal-modal-empty">
+                <p className="warn">沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
+                {onGoToManuscripts && (
+                  <button className="btn-pri" onClick={() => { setGoalModalOpen(false); onGoToManuscripts() }}>前往我的稿件</button>
+                )}
+              </div>
+            ) : (
+              <div className="goal-pick-list">
+                {available.map(m => (
+                  <button key={m.id} className="goal-pick" onClick={() => addGoal(m.id)}>
+                    <span className="goal-pick-title">{m.title}</span>
+                    <span className="goal-pick-add">＋ 加入</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

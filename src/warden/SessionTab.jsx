@@ -4,16 +4,16 @@ import { ProgressBar } from '../ManuscriptManager'
 import { ROLE_LABEL } from './constants'
 import SessionTimerControl from './SessionTimerControl'
 
-export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared }) {
+export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared, onGoToManuscripts }) {
   const [roster, setRoster] = useState([])
   const [rosterLoading, setRosterLoading] = useState(false)
-  const [sessionTitle, setSessionTitle] = useState('')
   const [search, setSearch] = useState('')                 // 候選清單搜尋(名字/編號)
   const [selected, setSelected] = useState(new Set())      // 勾選批次加入的 member_id
   const [goalsByInmate, setGoalsByInmate] = useState({}) // session_inmate_id -> [{id, manuscript_id, title}]
   const [msByMember, setMsByMember] = useState({})       // member_id -> [active manuscripts]
   const [goalSteps, setGoalSteps] = useState({})         // manuscript_id -> [steps]
   const [pickGoal, setPickGoal] = useState({})           // session_inmate_id -> 選中的 manuscript_id
+  const [goalModalInmate, setGoalModalInmate] = useState(null) // 開啟「新增本場目標」modal 的犯人 roster row(null=關閉)
   const [goalExpanded, setGoalExpanded] = useState([])   // 展開中的目標(session_goals.id)
   const [assignedByInmate, setAssignedByInmate] = useState({}) // session_inmate_id -> [{id, guard_id, profile}]
   const [pickAssign, setPickAssign] = useState({})         // session_inmate_id -> 要指派的 guard member_id
@@ -66,8 +66,8 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   }
   useEffect(() => { loadGoals(); loadAssignments() }, [roster])
 
-  async function addInmateGoal(sessionInmateId) {
-    const mid = pickGoal[sessionInmateId]
+  async function addInmateGoal(sessionInmateId, manuscriptId) {
+    const mid = manuscriptId ?? pickGoal[sessionInmateId]   // modal 直接帶稿件 id;沿用原下拉時讀 pickGoal
     if (!mid) return
     const { error } = await supabase.from('session_goals')
       .insert({ session_inmate_id: sessionInmateId, manuscript_id: mid })
@@ -146,13 +146,6 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       : [...prev, goalId])
   }
 
-  async function openSession() {
-    if (!sessionTitle) { setMsg('請填場次名'); return }
-    const { data, error } = await supabase.from('sessions').insert({ title: sessionTitle }).select().single()
-    if (error) { setMsg('開場失敗:' + error.message); return }
-    setMsg('已開場:' + sessionTitle); setSessionTitle(''); setCurrentSession(data.id); reloadShared()
-  }
-
   // 報到成獄卒前,該人全域 role 必須是 guard / warden
   const canBeGuard = (p) => p?.role === 'guard' || p?.role === 'warden'
 
@@ -214,182 +207,230 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
 
   return (
     <div>
-      <h3>場次管理</h3>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <input placeholder="場次名(如 6/14 晚場)" value={sessionTitle} onChange={e => setSessionTitle(e.target.value)} />
-        <button onClick={openSession}>開新場次</button>
-      </div>
-      <div style={{ marginBottom: 8 }}>
-        目前場次:
-        <select value={currentSession} onChange={e => setCurrentSession(e.target.value)} style={{ marginLeft: 6 }}>
-          <option value="">— 選擇場次 —</option>
-          {sessions.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
-        </select>
-      </div>
-      {sessions.length > 0 && (
-        <div style={{ marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ color: '#666', fontSize: 13 }}>直播大螢幕:</span>
-          {sessions.map(s => (
-            <button key={s.id} onClick={() => openBroadcast(s.id)}
-              style={{ padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }}>
-              📺 {s.title}
-            </button>
-          ))}
-        </div>
-      )}
-      {currentSession && (() => {
-        const btnSm = { padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
-        return (
-        <div style={{ marginBottom: 12 }}>
-          <h4 style={{ margin: '8px 0', color: '#555' }}>加入本場(候選清單)</h4>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-            <input placeholder="搜尋名字 / 編號" value={search} onChange={e => setSearch(e.target.value)}
-              style={{ padding: '4px 8px', border: '1px solid #ccc', borderRadius: 4 }} />
-            {candidates.length > 0 && (
-              <button style={btnSm} onClick={toggleAll}>{allSelected ? '取消全選' : '全選'}</button>
-            )}
+      {/* 場次控制條:目前場次 / 直播大螢幕 / 番茄鐘 / 開始服刑(開新場次移至「場次總覽」) */}
+      <div className="control">
+        <div className="seg">
+          <span className="lbl">目前場次</span>
+          <div className="row">
+            <select className="sel" value={currentSession} onChange={e => setCurrentSession(e.target.value)}>
+              <option value="">— 選擇場次 —</option>
+              {sessions.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
           </div>
-
-          {selectedInView.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8, padding: '6px 10px', background: '#eef4ff', borderRadius: 6 }}>
-              <span style={{ fontSize: 13 }}>已選 {selectedInView.length} 人 →</span>
-              <button style={btnSm} onClick={() => addBatch('inmate')}>加入為本場犯人</button>
-              <button style={btnSm} onClick={() => addBatch('guard')}>加入為本場獄卒</button>
-            </div>
-          )}
-
-          {candidates.length === 0 ? (
-            <p style={{ color: '#888' }}>沒有可加入的人(已配號的人都在本場了,或搜尋無結果)</p>
-          ) : candidates.map(p => {
-            const guardOk = canBeGuard(p)
-            return (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 8px', borderBottom: '1px solid #eee' }}>
-                <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleOne(p.id)} />
-                <strong>No.{String(p.inmate_no).padStart(4, '0')}</strong>
-                <span>{p.game_name ?? p.display_name}</span>
-                {guardOk && <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#eef', color: '#558' }}>{ROLE_LABEL[p.role]}</span>}
-                <span style={{ flex: 1 }} />
-                <button style={btnSm} onClick={() => addOne(p, 'inmate')}>+ 本場犯人</button>
-                {guardOk && <button style={btnSm} onClick={() => addOne(p, 'guard')}>+ 本場獄卒</button>}
-              </div>
-            )
-          })}
         </div>
-        )
-      })()}
+        <div className="seg">
+          <span className="lbl">直播大螢幕</span>
+          <div className="row broadcast-list">
+            {sessions.length === 0
+              ? <span className="muted">無開放場次</span>
+              : sessions.map(s => (
+                <button key={s.id} className="btn-sm" onClick={() => openBroadcast(s.id)}>📺 {s.title} ↗</button>
+              ))}
+          </div>
+        </div>
+        {/* 番茄鐘控台:吃一個 session 的獨立元件,渲染為控制條的番茄鐘 .seg + 開始服刑 .go。
+            key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
+        {currentSessionObj && (
+          <SessionTimerControl key={currentSessionObj.id} session={currentSessionObj}
+            setMsg={setMsg} reloadShared={reloadShared} />
+        )}
+      </div>
 
-      {/* 番茄鐘控台:吃一個 session 的獨立元件。日後同時控多場時直接 map 成每場一張卡。
-          key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
-      {currentSessionObj && (
-        <SessionTimerControl key={currentSessionObj.id} session={currentSessionObj}
-          setMsg={setMsg} reloadShared={reloadShared} />
-      )}
+      {/* 左右兩欄:左=加入本場候選清單,右=本場名單 */}
+      <div className="cols">
+        {/* 左:候選清單 */}
+        <div className="card-panel">
+          <div className="head"><h2>加入本場</h2><span className="count">候選清單</span></div>
+          <div className="body">
+            {!currentSession ? (
+              <p className="empty">請先在上方選擇目前場次</p>
+            ) : (<>
+              <div className="cand-tools">
+                <input className="inp" placeholder="搜尋名字 / 編號" value={search} onChange={e => setSearch(e.target.value)} />
+                {candidates.length > 0 && (
+                  <button onClick={toggleAll}>{allSelected ? '取消全選' : '全選'}</button>
+                )}
+              </div>
 
-      <h3 style={{ marginTop: 20 }}>本場名單</h3>
-      {rosterLoading ? <p style={{ color: '#888' }}>載入中…</p>
-        : roster.length === 0 ? <p style={{ color: '#888' }}>本場還沒有人</p> : (() => {
-        const inmateRoster = roster.filter(r => r.role_in_session !== 'guard')
-        const guardRoster = roster.filter(r => r.role_in_session === 'guard')
-        return (<>
-        <h4 style={{ margin: '8px 0', color: '#555' }}>本場犯人（{inmateRoster.length}）</h4>
-        {inmateRoster.length === 0 ? <p style={{ color: '#888' }}>本場沒有犯人</p> : inmateRoster.map(r => {
-        const goals = goalsByInmate[r.id] ?? []
-        const goalIds = goals.map(g => g.manuscript_id)
-        const available = (msByMember[r.member_id] ?? []).filter(m => !goalIds.includes(m.id))
-        return (
-          <div key={r.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 10, background: '#fff', color: '#222' }}>
-            <strong>No.{String(r.profile?.inmate_no).padStart(4, '0')} · {r.profile?.game_name ?? r.profile?.display_name}</strong>
-            <span style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>（{r.state}）</span>
-            <button style={{ marginLeft: 10, padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#c00', cursor: 'pointer' }}
-              onClick={() => removeFromSession(r.id)}>移出本場</button>
+              {selectedInView.length > 0 && (
+                <div className="cand-batch">
+                  <span>已選 {selectedInView.length} 人 →</span>
+                  <button className="btn-sm" onClick={() => addBatch('inmate')}>加入為本場犯人</button>
+                  <button className="btn-sm" onClick={() => addBatch('guard')}>加入為本場獄卒</button>
+                </div>
+              )}
 
-            <div style={{ marginTop: 8 }}>
-              <span style={{ fontSize: 13, color: '#666' }}>本場目標:</span>
-              {goals.length === 0 ? (
-                <span style={{ color: '#aaa', fontSize: 13, marginLeft: 6 }}>尚未挑選</span>
-              ) : goals.map(g => {
-                const steps = goalSteps[g.manuscript_id] ?? []
-                const done = steps.filter(s => s.done).length
-                const isOpen = goalExpanded.includes(g.id)
+              {candidates.length === 0 ? (
+                <p className="empty">沒有可加入的人(已配號的人都在本場了,或搜尋無結果)</p>
+              ) : candidates.map(p => {
+                const guardOk = canBeGuard(p)
                 return (
-                  <div key={g.id} style={{ margin: '6px 0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ flex: '0 0 140px', fontSize: 14 }}>{g.title}</span>
-                      <div style={{ flex: 1 }}><ProgressBar done={done} total={steps.length} /></div>
-                      <button style={{ padding: '2px 8px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }}
-                        onClick={() => toggleGoalExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
-                      <button style={{ padding: '2px 8px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#c00', cursor: 'pointer' }}
-                        onClick={() => removeInmateGoal(g.id)}>移除</button>
-                    </div>
-                    {isOpen && (
-                      <div style={{ margin: '6px 0 6px 12px', paddingLeft: 12, borderLeft: '2px solid #eee' }}>
-                        {steps.length === 0 ? (
-                          <p style={{ color: '#999', fontSize: 13, margin: 0 }}>這本稿還沒有子項目</p>
-                        ) : steps.map(s => (
-                          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <input type="checkbox" checked={s.done} onChange={() => toggleGoalStep(s)} />
-                            <span style={{ fontSize: 14, textDecoration: s.done ? 'line-through' : 'none', color: s.done ? '#999' : '#222' }}>{s.title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div key={p.id} className="cand">
+                    <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleOne(p.id)} />
+                    <span className="id">No.{String(p.inmate_no).padStart(4, '0')}</span>
+                    <span className="nm">{p.game_name ?? p.display_name}</span>
+                    {guardOk && <span className={`role-tag ${p.role}`}>{ROLE_LABEL[p.role]}</span>}
+                    <span className="acts">
+                      <button onClick={() => addOne(p, 'inmate')}>+犯人</button>
+                      {guardOk && <button onClick={() => addOne(p, 'guard')}>+獄卒</button>}
+                    </span>
                   </div>
                 )
               })}
-            </div>
+              <div className="note">勾選多人後可批次「加入本場」;單筆直接點右側 +犯人 / +獄卒。</div>
+            </>)}
+          </div>
+        </div>
 
-            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <select style={{ padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222' }}
-                value={pickGoal[r.id] ?? ''} onChange={e => setPickGoal({ ...pickGoal, [r.id]: e.target.value })}>
-                <option value="">— 加一本稿進本場 —</option>
-                {available.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-              </select>
-              <button style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#eef4ff', color: '#333', cursor: 'pointer' }}
-                onClick={() => addInmateGoal(r.id)}>加入</button>
-              {available.length === 0 && <span style={{ color: '#aaa', fontSize: 12 }}>(此人沒有可加的 active 稿件)</span>}
-            </div>
+        {/* 右:本場名單 */}
+        <div className="card-panel">
+          <div className="head"><h2>本場名單</h2></div>
+          <div className="body">
+            {rosterLoading ? <p className="empty">載入中…</p>
+              : roster.length === 0 ? <p className="empty">本場還沒有人</p> : (() => {
+              const inmateRoster = roster.filter(r => r.role_in_session !== 'guard')
+              const guardRoster = roster.filter(r => r.role_in_session === 'guard')
+              return (<>
+              <div className="group-lbl">本場犯人 ({inmateRoster.length})<span className="ln" /></div>
+              {inmateRoster.length === 0 ? <p className="empty">本場沒有犯人</p> : inmateRoster.map(r => {
+              const goals = goalsByInmate[r.id] ?? []
+              const avInit = r.profile?.inmate_no != null ? String(r.profile.inmate_no).padStart(2, '0').slice(-2) : (r.profile?.game_name ?? '?')[0]
+              return (
+                <div key={r.id} className="member">
+                  <div className="m-top">
+                    <div className="avatar">{avInit}</div>
+                    <div>
+                      <div className="m-id">No.{String(r.profile?.inmate_no).padStart(4, '0')}</div>
+                      <div className="m-nm">{r.profile?.game_name ?? r.profile?.display_name} <span className="faint">（{r.state}）</span></div>
+                    </div>
+                    <button className="btn-danger btn-sm spacer" onClick={() => removeFromSession(r.id)}>移出本場</button>
+                  </div>
+                  <div className="m-detail">
+                    {/* 本場目標 */}
+                    <div className="detail-row" style={{ alignItems: 'flex-start' }}>
+                      <span className="k">本場目標</span>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {goals.length === 0 ? <span className="v">尚未挑選</span> : goals.map(g => {
+                          const steps = goalSteps[g.manuscript_id] ?? []
+                          const done = steps.filter(s => s.done).length
+                          const isOpen = goalExpanded.includes(g.id)
+                          return (
+                            <div key={g.id}>
+                              <div className="detail-row">
+                                <span style={{ flex: '0 0 130px', fontSize: 14 }}>{g.title}</span>
+                                <div style={{ flex: 1, minWidth: 120 }}><ProgressBar done={done} total={steps.length} /></div>
+                                <button className="btn-sm" onClick={() => toggleGoalExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
+                                <button className="btn-sm btn-danger" onClick={() => removeInmateGoal(g.id)}>移除</button>
+                              </div>
+                              {isOpen && (
+                                <div className="substeps">
+                                  {steps.length === 0 ? (
+                                    <p className="empty">這本稿還沒有子項目</p>
+                                  ) : steps.map(s => (
+                                    <div key={s.id} className="step">
+                                      <input type="checkbox" checked={s.done} onChange={() => toggleGoalStep(s)} />
+                                      <span className={s.done ? 'done-text' : ''}>{s.title}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                        <div className="detail-row">
+                          <button className="btn-sm" onClick={() => setGoalModalInmate(r)}>+ 新增本場目標</button>
+                        </div>
+                      </div>
+                    </div>
 
-            {isWarden && (
-              <div style={{ marginTop: 8, borderTop: '1px dashed #eee', paddingTop: 8 }}>
-                <span style={{ fontSize: 13, color: '#666' }}>專屬獄卒:</span>
-                {(assignedByInmate[r.id] ?? []).length === 0
-                  ? <span style={{ color: '#aaa', fontSize: 13, marginLeft: 6 }}>未指派</span>
-                  : (assignedByInmate[r.id] ?? []).map(a => (
-                    <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 6, fontSize: 13, padding: '2px 8px', borderRadius: 12, background: '#fff7ec' }}>
-                      {a.profile?.role === 'warden' ? '典獄長' : '獄卒'}·{a.profile?.game_name ?? a.profile?.display_name ?? '?'}
-                      <button onClick={() => removeAssign(a.id)} style={{ border: 'none', background: 'none', color: '#c00', cursor: 'pointer', padding: 0 }}>✕</button>
-                    </span>
-                  ))}
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <select value={pickAssign[r.id] ?? ''} onChange={e => setPickAssign({ ...pickAssign, [r.id]: e.target.value })}
-                    style={{ padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222' }}>
-                    <option value="">— 指派專屬獄卒 —</option>
-                    {guardRoster.filter(g => !(assignedByInmate[r.id] ?? []).some(a => a.guard_id === g.member_id))
-                      .map(g => <option key={g.id} value={g.member_id}>{g.profile?.game_name ?? g.profile?.display_name}</option>)}
-                  </select>
-                  <button onClick={() => assignGuard(r.id)} style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#eef4ff', color: '#333', cursor: 'pointer' }}>指派</button>
-                  {guardRoster.length === 0 && <span style={{ color: '#aaa', fontSize: 12 }}>(本場尚無獄卒可指派)</span>}
+                    {isWarden && (
+                      <div className="detail-row" style={{ alignItems: 'flex-start' }}>
+                        <span className="k">專屬獄卒</span>
+                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {(assignedByInmate[r.id] ?? []).length === 0
+                              ? <span className="v">未指派</span>
+                              : (assignedByInmate[r.id] ?? []).map(a => (
+                                <span key={a.id} className="tag tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(63,179,107,.12)', color: 'var(--ok)' }}>
+                                  {a.profile?.role === 'warden' ? '典獄長' : '獄卒'}·{a.profile?.game_name ?? a.profile?.display_name ?? '?'}
+                                  <button onClick={() => removeAssign(a.id)} style={{ border: 'none', background: 'none', color: 'inherit', padding: 0, minHeight: 'auto' }}>✕</button>
+                                </span>
+                              ))}
+                          </div>
+                          <div className="detail-row">
+                            <select className="sel" value={pickAssign[r.id] ?? ''} onChange={e => setPickAssign({ ...pickAssign, [r.id]: e.target.value })}>
+                              <option value="">— 指派專屬獄卒 —</option>
+                              {guardRoster.filter(g => !(assignedByInmate[r.id] ?? []).some(a => a.guard_id === g.member_id))
+                                .map(g => <option key={g.id} value={g.member_id}>{g.profile?.game_name ?? g.profile?.display_name}</option>)}
+                            </select>
+                            <button className="btn-sm" onClick={() => assignGuard(r.id)}>指派</button>
+                            {guardRoster.length === 0 && <span className="faint">(本場尚無獄卒可指派)</span>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              )
+            })}
+
+              <div className="group-lbl">本場獄卒 ({guardRoster.length})<span className="ln" /></div>
+              {guardRoster.length === 0 ? <p className="empty">本場沒有獄卒</p> : (
+                <div className="guard-grid">
+                  {guardRoster.map(r => (
+                    <div key={r.id} className="guard-cell">
+                      <button className="g-x btn-danger" title="移出本場" onClick={() => removeFromSession(r.id)}>✕</button>
+                      <div className="g-av">
+                        {r.profile?.avatar_url
+                          ? <img src={r.profile.avatar_url} alt="" />
+                          : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
+                      </div>
+                      <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name}</div>
+                      <span className="role-tag guard">{r.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </>)
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用 addInmateGoal,可連續挑多筆。
+          可挑清單即時依 goalsByInmate/msByMember 重算(挑進來的稿自動從清單移除)。 */}
+      {goalModalInmate && (() => {
+        const r = goalModalInmate
+        const goalIds = (goalsByInmate[r.id] ?? []).map(g => g.manuscript_id)
+        const available = (msByMember[r.member_id] ?? []).filter(m => !goalIds.includes(m.id))
+        const name = r.profile?.game_name ?? r.profile?.display_name
+        return (
+          <div className="admin-modal-bg" onClick={() => setGoalModalInmate(null)}>
+            <div className="admin-modal goal-modal" onClick={e => e.stopPropagation()}>
+              <div className="goal-modal-head">
+                <h3>新增本場目標 · {name}</h3>
+                <button className="goal-modal-x" onClick={() => setGoalModalInmate(null)}>✕</button>
               </div>
-            )}
+              {available.length === 0 ? (
+                <div className="goal-modal-empty">
+                  <p className="warn">沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
+                  {onGoToManuscripts && (
+                    <button className="btn-pri" onClick={() => { setGoalModalInmate(null); onGoToManuscripts() }}>前往我的稿件</button>
+                  )}
+                </div>
+              ) : (
+                <div className="goal-pick-list">
+                  {available.map(m => (
+                    <button key={m.id} className="goal-pick" onClick={() => addInmateGoal(r.id, m.id)}>
+                      <span className="goal-pick-title">{m.title}</span>
+                      <span className="goal-pick-add">＋ 加入</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )
-      })}
-
-        <h4 style={{ margin: '16px 0 8px', color: '#555' }}>本場獄卒（{guardRoster.length}）</h4>
-        {guardRoster.length === 0 ? <p style={{ color: '#888' }}>本場沒有獄卒</p> : guardRoster.map(r => (
-          <div key={r.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 10, background: '#fff7ec', color: '#222', display: 'flex', alignItems: 'center', gap: 10 }}>
-            {r.profile?.avatar_url
-              ? <img src={r.profile.avatar_url} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
-              : <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#e08e0b', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{(r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}</div>}
-            <strong>{r.profile?.game_name ?? r.profile?.display_name}</strong>
-            <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#e08e0b', color: '#fff' }}>{r.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
-            <span style={{ flex: 1 }} />
-            <button style={{ padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#c00', cursor: 'pointer' }}
-              onClick={() => removeFromSession(r.id)}>移出本場</button>
-          </div>
-        ))}
-        </>)
       })()}
     </div>
   )

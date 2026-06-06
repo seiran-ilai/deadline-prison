@@ -25,39 +25,31 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
   }
 
   return (
-    <div onClick={() => setMember(null)}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-      <div onClick={e => e.stopPropagation()}
-        style={{ background: '#fff', color: '#222', borderRadius: 8, padding: 24, width: 360, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <strong style={{ fontSize: 16 }}>編輯犯人資料</strong>
+    <div className="admin-modal-bg" onClick={() => setMember(null)}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()}>
+        <h3>編輯犯人資料</h3>
         <label>遊戲暱稱
-          <input style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222' }}
-            value={member.game_name} onChange={e => setMember({ ...member, game_name: e.target.value })} />
+          <input value={member.game_name} onChange={e => setMember({ ...member, game_name: e.target.value })} />
         </label>
         <label>頭貼網址
-          <input style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222' }}
-            value={member.avatar_url} onChange={e => setMember({ ...member, avatar_url: e.target.value })} />
+          <input value={member.avatar_url} onChange={e => setMember({ ...member, avatar_url: e.target.value })} />
         </label>
         <label>Discord 帳號
-          <input style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222' }}
-            value={member.discord_account} onChange={e => setMember({ ...member, discord_account: e.target.value })} />
+          <input value={member.discord_account} onChange={e => setMember({ ...member, discord_account: e.target.value })} />
         </label>
         <label>身分 role
-          <select style={{ width: '100%', padding: '6px 8px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222' }}
-            value={member.role} onChange={e => setMember({ ...member, role: e.target.value })}>
+          <select value={member.role} onChange={e => setMember({ ...member, role: e.target.value })}>
             <option value="member">犯人</option>
             <option value="guard">獄卒</option>
             <option value="warden">典獄長</option>
           </select>
         </label>
         {member.role !== member._origRole && (
-          <p style={{ color: '#c60', fontSize: 13, margin: 0 }}>⚠️ 變更身分後,該使用者需重新登入才會生效</p>
+          <p className="warn">⚠️ 變更身分後,該使用者需重新登入才會生效</p>
         )}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-          <button style={{ padding: '6px 12px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }}
-            onClick={() => setMember(null)}>取消</button>
-          <button style={{ padding: '6px 12px', border: '1px solid #bbb', borderRadius: 4, background: '#eef4ff', color: '#333', cursor: 'pointer' }}
-            onClick={saveMember}>儲存</button>
+        <div className="modal-acts">
+          <button onClick={() => setMember(null)}>取消</button>
+          <button className="btn-pri" onClick={saveMember}>儲存</button>
         </div>
       </div>
     </div>

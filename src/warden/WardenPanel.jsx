@@ -7,7 +7,7 @@ import SessionsOverviewTab from './SessionsOverviewTab'
 import BookingsTab from './BookingsTab'
 import EditMemberModal from './EditMemberModal'
 
-export default function WardenPanel({ myRole }) {
+export default function WardenPanel({ myRole, onGoToManuscripts }) {
   const isWarden = myRole === 'warden'
   const [pending, setPending] = useState([])
   const [unmatched, setUnmatched] = useState([])
@@ -46,19 +46,13 @@ export default function WardenPanel({ myRole }) {
     })
   }
 
-  const subTabStyle = (k) => ({
-    padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
-    fontWeight: wtab === k ? 700 : 400, background: wtab === k ? '#eef4ff' : '#fafafa',
-    border: wtab === k ? '1px solid #5a8fd0' : '1px solid #bbb', color: '#333',
-  })
-
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button onClick={() => setWtab('overview')} style={subTabStyle('overview')}>名單總覽</button>
-        {isWarden && <button onClick={() => setWtab('sessions')} style={subTabStyle('sessions')}>場次總覽</button>}
-        <button onClick={() => setWtab('session')} style={subTabStyle('session')}>進行中場次</button>
-        {isWarden && <button onClick={() => setWtab('bookings')} style={subTabStyle('bookings')}>預約總覽</button>}
+      <div className="subtabs">
+        <button className={wtab === 'overview' ? 'on' : ''} onClick={() => setWtab('overview')}>名單總覽</button>
+        {isWarden && <button className={wtab === 'sessions' ? 'on' : ''} onClick={() => setWtab('sessions')}>場次總覽</button>}
+        <button className={wtab === 'session' ? 'on' : ''} onClick={() => setWtab('session')}>進行中場次</button>
+        {isWarden && <button className={wtab === 'bookings' ? 'on' : ''} onClick={() => setWtab('bookings')}>預約總覽</button>}
       </div>
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
@@ -66,7 +60,7 @@ export default function WardenPanel({ myRole }) {
         <SessionTab
           currentSession={currentSession} setCurrentSession={setCurrentSession}
           sessions={sessions} inmates={inmates} isWarden={isWarden}
-          setMsg={setMsg} reloadShared={load} />
+          setMsg={setMsg} reloadShared={load} onGoToManuscripts={onGoToManuscripts} />
       )}
       {wtab === 'sessions' && isWarden && (
         <SessionsOverviewTab setMsg={setMsg} reloadShared={load} />
