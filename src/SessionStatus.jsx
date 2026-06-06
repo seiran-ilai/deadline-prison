@@ -2,19 +2,19 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { pomodoroState, PHASE_LABEL, fmt } from './pomodoro'
 
-const PHASE_BG = {
-  focus: '#d9534f',     // 服刑中(專注)
-  break: '#2a8',        // 放風
-  longbreak: '#3a7bd0', // 長休息
-  ended: '#666',
+// 計時器階段徽章配色(底色淡、文字濃)
+const PHASE_BADGE = {
+  focus: { bg: 'rgba(245,197,24,.16)', color: 'var(--hazard)' },
+  break: { bg: 'rgba(63,179,107,.16)', color: 'var(--ok)' },
+  longbreak: { bg: 'rgba(58,123,208,.18)', color: '#7fb0ea' },
 }
 
-// 一句話狀態卡(用於倒數以外的所有階段)
-function StatusCard({ text, sub }) {
+// 等待 / 結束:同一個計時器框,只換內容(置中文字)
+function TimerWaiting({ text, sub }) {
   return (
-    <div className="status-card">
-      <p className="big">{text}</p>
-      {sub && <p className="small">{sub}</p>}
+    <div className="ses-timer waiting">
+      <div className="st-big">{text}</div>
+      {sub && <div className="st-sub">{sub}</div>}
     </div>
   )
 }
@@ -76,39 +76,42 @@ export default function SessionStatus({ userId }) {
     return () => clearInterval(t)
   }, [])
 
-  if (loading) return <p className="empty">讀取本場狀態中…</p>
+  if (loading) return <div className="ses-timer waiting"><div className="st-sub">讀取本場狀態中…</div></div>
   const { session, role, hasGuard, hasInmates } = data
 
   // 階段1:還沒報到進任何 open 場次 → 統一文字
-  if (!session) return <StatusCard text="等待身分核對" sub="尚未被報到進任何場次,請等典獄長報到" />
+  if (!session) return <TimerWaiting text="等待身分核對" sub="尚未被報到進任何場次,請等典獄長報到" />
 
   // 階段2/3:番茄鐘尚未開始,依本場身分顯示對應等待文字(依序判斷)
   if (!session.timer_started_at) {
     if (role === 'guard') {
-      return <StatusCard text={hasInmates ? '等待開始' : '監管犯人配對中'} sub={`本場:${session.title}`} />
+      return <TimerWaiting text={hasInmates ? '等待服刑開始' : '監管犯人配對中'} sub={`本場:${session.title}`} />
     }
-    return <StatusCard text={hasGuard ? '等待服刑開始' : '等待配對專屬獄卒'} sub={`本場:${session.title}`} />
+    return <TimerWaiting text={hasGuard ? '等待服刑開始' : '等待配對專屬獄卒'} sub={`本場:${session.title}`} />
   }
 
   // 階段4:番茄鐘已開始 → 顯示倒數
+  const N = session.total_rounds ?? 8
   const elapsed = Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000)
-  const st = pomodoroState(elapsed, session.total_rounds ?? 8, session.timer_ended_at)
+  const st = pomodoroState(elapsed, N, session.timer_ended_at)
   if (st.ended) {
-    return (
-      <div className="status-card">
-        <p className="big" style={{ fontSize: 28 }}>🔓 本場服刑結束</p>
-        <p className="small">本場:{session.title} · 共 {session.total_rounds ?? 8} 輪 已全部完成</p>
-      </div>
-    )
+    return <TimerWaiting text="🔓 本場服刑結束" sub={`本場:${session.title} · 共 ${N} 輪 已全部完成`} />
   }
+  const badge = PHASE_BADGE[st.phase] ?? PHASE_BADGE.focus
   return (
-    <div className="status-card">
-      <div className="small" style={{ marginTop: 0 }}>本場:{session.title}</div>
-      <div className="phase" style={{ background: PHASE_BG[st.phase] }}>
-        {PHASE_LABEL[st.phase]}
+    <div className={`ses-timer${st.phase === 'focus' ? ' focus' : ''}`}>
+      <div className="st-phase">
+        <span className="st-badge" style={{ background: badge.bg, color: badge.color }}>{PHASE_LABEL[st.phase]}</span>
+        <span className="st-round">第 {st.round} / {N} 輪</span>
       </div>
-      <div className="countdown">{fmt(st.remainingSeconds)}</div>
-      <div className="rounds">第 {st.round} 輪 / 共 {session.total_rounds ?? 8} 輪</div>
+      <div className="st-clock">{fmt(st.remainingSeconds)}</div>
+      <div className="st-dots">
+        {Array.from({ length: N }, (_, i) => {
+          const n = i + 1
+          const cls = n < st.round ? 'done' : n === st.round ? 'cur' : ''
+          return <i key={n} className={cls} />
+        })}
+      </div>
     </div>
   )
 }

@@ -3,10 +3,12 @@ import { supabase } from './supabaseClient'
 import { ROLE_LABEL } from './warden/constants'
 import ProfileEditModal from './ProfileEditModal'
 
-// 共用個人資料卡:左頭像、中暱稱+角色標籤、右「編輯」鈕。
-// 自取當前登入者的 profile(沿用 profiles 既有欄位:game_name / avatar_url / role),
+// 共用個人資料卡:自取當前登入者的 profile(沿用 profiles 既有欄位 game_name / avatar_url / role),
 // 點「編輯」開 ProfileEditModal(只編輯自己),儲存後即時更新。
-export default function ProfileCard({ userId }) {
+// variant:
+//   'row'(預設)— 橫向精簡卡(典獄長後台 / 一般用)
+//   'id'        — 服刑中畫面上排的直式身分卡(頭像在上、文字置中);可帶 label / footer
+export default function ProfileCard({ userId, variant = 'row', label, footer }) {
   const [profile, setProfile] = useState(null)
   const [editing, setEditing] = useState(false)
 
@@ -26,7 +28,38 @@ export default function ProfileCard({ userId }) {
   const roleClass = profile.role === 'warden' ? 'warden' : profile.role === 'guard' ? 'guard' : 'member'
   const init = name !== '(未命名)' ? name[0]
     : (profile.inmate_no != null ? String(profile.inmate_no).padStart(2, '0').slice(-2) : '?')
+  const roleLabel = ROLE_LABEL[profile.role] ?? profile.role
 
+  const modal = editing && (
+    <ProfileEditModal
+      userId={userId}
+      initial={profile}
+      onClose={() => setEditing(false)}
+      onSaved={(patch) => { setProfile(prev => ({ ...prev, ...patch })); setEditing(false) }}
+    />
+  )
+
+  // 直式身分卡(服刑中上排)
+  if (variant === 'id') {
+    const selfClass = profile.role === 'member' ? 'me' : 'guardself'
+    return (
+      <div className={`idcard ${selfClass}`}>
+        <div className="id-av">
+          {profile.avatar_url ? <img src={profile.avatar_url} alt="" /> : init}
+        </div>
+        {label && <div className="id-lbl">{label}</div>}
+        {profile.role === 'member' && profile.inmate_no != null && (
+          <div className="id-no">No.{String(profile.inmate_no).padStart(4, '0')}</div>
+        )}
+        <div className="id-nm">{name} <span className={`role-tag ${roleClass}`}>{roleLabel}</span></div>
+        {footer}
+        <button className="btn-sm id-edit" onClick={() => setEditing(true)}>編輯</button>
+        {modal}
+      </div>
+    )
+  }
+
+  // 橫向精簡卡(預設)
   return (
     <div className="card-panel profile-card">
       <div className="pc-av">
@@ -34,18 +67,10 @@ export default function ProfileCard({ userId }) {
       </div>
       <div className="pc-main">
         <div className="pc-name">{name}</div>
-        <span className={`role-tag ${roleClass}`}>{ROLE_LABEL[profile.role] ?? profile.role}</span>
+        <span className={`role-tag ${roleClass}`}>{roleLabel}</span>
       </div>
       <button className="btn-sm pc-edit" onClick={() => setEditing(true)}>編輯</button>
-
-      {editing && (
-        <ProfileEditModal
-          userId={userId}
-          initial={profile}
-          onClose={() => setEditing(false)}
-          onSaved={(patch) => { setProfile(prev => ({ ...prev, ...patch })); setEditing(false) }}
-        />
-      )}
+      {modal}
     </div>
   )
 }

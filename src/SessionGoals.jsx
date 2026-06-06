@@ -20,19 +20,6 @@ const PRIORITY = {
   3: { label: '低', bg: '#888' },
 }
 
-function Avatar({ profile }) {
-  const name = profile?.game_name ?? profile?.display_name ?? ''
-  const initial = name ? name[0] : (profile?.inmate_no != null ? String(profile.inmate_no).slice(-2) : '?')
-  if (profile?.avatar_url) {
-    return <img src={profile.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flex: '0 0 40px' }} />
-  }
-  return (
-    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#3a4049', color: '#e4e5e7', flex: '0 0 40px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-      {initial}
-    </div>
-  )
-}
-
 export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)   // 我目前所在的 open 場次
@@ -47,6 +34,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [guards, setGuards] = useState([])        // 本場獄卒(role=guard/warden)
   const [myGuards, setMyGuards] = useState([])    // 我的專屬獄卒(inmate_guards)
   const [sessionTimer, setSessionTimer] = useState(null)  // 本場番茄鐘 {timer_started_at, total_rounds}
+  const [myProfile, setMyProfile] = useState(null)        // 我自己的 profile(本場囚犯列「你」那筆顯示用)
   const [msg, setMsg] = useState('')
 
   async function load(silent) {
@@ -67,6 +55,11 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     setSession(sess); setMyInmate(mine)
     setSessionTimer(sess ? { timer_started_at: sess.timer_started_at, timer_ended_at: sess.timer_ended_at, total_rounds: sess.total_rounds } : null)
     if (!mine) { setGoals([]); setActives([]); setStepsByMs({}); setLoading(false); return }
+
+    // 我自己的 profile(顯示在「本場囚犯」列的「你」那筆;與身分卡同一來源)
+    const { data: meProf } = await supabase.from('profiles')
+      .select('id, inmate_no, game_name, display_name, avatar_url').eq('id', userId).maybeSingle()
+    setMyProfile(meProf ?? null)
 
     // 2) 我的稿件(全部,供解析標題;active 供挑選)
     const { data: ms } = await supabase.from('manuscripts')
@@ -220,40 +213,50 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
 
   return (
     <div className="sg-page">
-      {/* 0) 個人資料卡(當前犯人自己) */}
-      <ProfileCard userId={userId} />
-
-      {/* 1) 服刑計時 / 狀態階段 */}
-      <SessionStatus userId={userId} />
-
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
-      {/* 專屬獄卒:只有被指派時才顯示;沒指派則整個框不渲染 */}
-      {myGuards.length > 0 && (
-        <div className="card-panel sg-section accent-guard">
-          <div className="head"><h2>專屬獄卒</h2></div>
-          <div className="body">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-              {myGuards.map(g => (
-                <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Avatar profile={g.profile} />
-                  <div>
-                    <strong>{g.profile?.game_name ?? g.profile?.display_name ?? '(未知)'}</strong>
-                    <span className="role-tag guard" style={{ marginLeft: 6 }}>
-                      {g.profile?.role === 'warden' ? '典獄長' : '獄卒'}
-                    </span>
-                    <div style={{ color: 'var(--hazard)', fontSize: 12 }}>👁 正在看著你服刑</div>
-                  </div>
+      {/* === 上排:我 + 專屬獄卒 + 計時器(主角) === */}
+      <div className="ses-top prisoner">
+        {/* 我(直式身分卡,沿用 ProfileCard 的個人資料來源 + 編輯) */}
+        <ProfileCard userId={userId} variant="id" label="我 · 服刑中" />
+
+        {/* 專屬獄卒(直式卡;未指派顯示佔位) */}
+        {myGuards.length > 0 ? (
+          <div className="idcard-stack">
+            {myGuards.map(g => (
+              <div key={g.id} className="idcard">
+                <div className="id-av">
+                  {g.profile?.avatar_url
+                    ? <img src={g.profile.avatar_url} alt="" />
+                    : (g.profile?.game_name ?? g.profile?.display_name ?? '?')[0]}
                 </div>
-              ))}
-            </div>
+                <div className="id-lbl">專屬獄卒</div>
+                <div className="id-nm">
+                  {g.profile?.game_name ?? g.profile?.display_name ?? '(未知)'}
+                  <span className="role-tag guard">{g.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+                </div>
+                <div className="id-watch">👁 正在看著你服刑</div>
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="idcard">
+            <div className="id-av">？</div>
+            <div className="id-lbl">專屬獄卒</div>
+            <div className="id-nm muted">尚未配對</div>
+          </div>
+        )}
+
+        {/* 計時器(主角) */}
+        <SessionStatus userId={userId} />
+      </div>
+
+      {/* === 中段兩欄:本場目標 + 本場囚犯 === */}
+      <div className="ses-mid">
 
       {/* 本場目標 */}
-      <div className="card-panel sg-section">
-        <div className="head"><h2>本場目標</h2></div>
+      <div className="card-panel">
+        <div className="head"><h2>本場目標</h2>{goals.length > 0 && <span className="count">{goals.length} 項</span>}</div>
         <div className="body">
           {goals.length === 0 ? (
             <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
@@ -294,9 +297,60 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         </div>
       </div>
 
-      {/* 本場獄卒 */}
+      {/* 本場囚犯(含我,我那筆高亮標「你」) */}
+      <div className="card-panel">
+        <div className="head"><h2>本場囚犯</h2><span className="count">{cellmates.length + 1} 人</span></div>
+        <div className="body">
+          {/* 我 */}
+          <div className="inmate me">
+            <div className="in-av">
+              {myProfile?.avatar_url
+                ? <img src={myProfile.avatar_url} alt="" />
+                : (myProfile?.game_name ?? myProfile?.display_name ?? '你')[0]}
+            </div>
+            <div>
+              <div className="in-nm">{myProfile?.game_name ?? myProfile?.display_name ?? '(未命名)'}</div>
+              <div className="in-no">No.{myProfile?.inmate_no != null ? String(myProfile.inmate_no).padStart(4, '0') : '----'} · 你</div>
+            </div>
+            <span className="in-prog">目標 {goals.filter(g => computeProgress({ steps: stepsByMs[g.manuscript_id] ?? [], isDone: g.manuscript?.is_done }).complete).length}/{goals.length}</span>
+          </div>
+          {/* 其他同囚 */}
+          {cellmates.map(c => {
+            const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8, sessionTimer?.timer_ended_at)
+            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
+            return (
+              <div key={c.siId} className="inmate">
+                <div className="in-av">
+                  {c.profile?.avatar_url
+                    ? <img src={c.profile.avatar_url} alt="" />
+                    : (c.profile?.game_name ?? c.profile?.display_name ?? '?')[0]}
+                </div>
+                <div>
+                  <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</div>
+                  <div className="in-no">No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</div>
+                </div>
+                <span className="spacer" />
+                <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>
+                <div className="in-works">
+                  {c.works.length === 0 ? (
+                    <span className="empty">本場還沒挑稿</span>
+                  ) : c.works.map(w => (
+                    <span key={w.goalId} className="chip" style={{ background: w.secret ? 'rgba(255,255,255,.08)' : 'rgba(245,197,24,.15)', color: w.secret ? 'var(--dim)' : 'var(--hazard)' }}>
+                      {w.secret ? '🔒 保密作業' : w.title}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      </div>{/* === /中段兩欄 === */}
+
+      {/* === 底部:本場獄卒(頭貼格狀) === */}
       <div className="card-panel sg-section">
-        <div className="head"><h2>本場獄卒</h2></div>
+        <div className="head"><h2>本場獄卒</h2>{guards.length > 0 && <span className="count">{guards.length} 位</span>}</div>
         <div className="body">
           {guards.length === 0 ? (
             <p className="empty">本場目前沒有獄卒在場</p>
@@ -315,41 +369,6 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
               ))}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* 本場同囚 */}
-      <div className="card-panel sg-section">
-        <div className="head"><h2>本場同囚</h2></div>
-        <div className="body">
-          {cellmates.length === 0 ? (
-            <p className="empty">本場目前只有你一個人,或還沒有其他人報到</p>
-          ) : cellmates.map(c => {
-            const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8, sessionTimer?.timer_ended_at)
-            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
-            return (
-            <div key={c.siId} className="panel">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Avatar profile={c.profile} />
-                <div>
-                  <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
-                  <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
-                </div>
-                <span className="spacer" />
-                <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>
-              </div>
-              <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {c.works.length === 0 ? (
-                  <span className="empty">本場還沒挑稿</span>
-                ) : c.works.map(w => (
-                  <span key={w.goalId} className="chip" style={{ background: w.secret ? 'rgba(255,255,255,.08)' : 'rgba(245,197,24,.15)', color: w.secret ? 'var(--dim)' : 'var(--hazard)' }}>
-                    {w.secret ? '🔒 保密作業' : w.title}
-                  </span>
-                ))}
-              </div>
-            </div>
-            )
-          })}
         </div>
       </div>
 

@@ -383,3 +383,78 @@
 .admin .avatar-input .ai-err{color:#f0a99c; font-size:12px}
 .admin .avatar-input .ai-clear{align-self:flex-start; padding:4px 10px; font-size:12px;
   background:transparent; border:1px solid var(--line-2); color:var(--dim)}
+
+/* ================= 服刑中畫面重排(身分卡直式 / 計時器主角 / 囚犯置頂)================= */
+/* 上排:身分卡 + 計時器 */
+.admin .ses-top{display:grid; gap:14px; margin-bottom:14px; align-items:stretch}
+.admin .ses-top.prisoner{grid-template-columns:minmax(190px,1fr) minmax(190px,1fr) 1.6fr}
+.admin .ses-top.guard{grid-template-columns:minmax(220px,1fr) 2fr}
+
+/* 直式身分卡(頭像在上、文字置中在下;頭像 104×96 與本場獄卒卡一致)*/
+.admin .idcard{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px 16px;
+  display:flex; flex-direction:column; align-items:center; text-align:center; gap:9px}
+.admin .idcard-stack{display:flex; flex-direction:column; gap:14px}
+.admin .idcard .id-av{width:104px; height:96px; border-radius:10px; flex:0 0 auto; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:34px;
+  background:var(--raise); color:var(--dim)}
+.admin .idcard .id-av img{width:100%; height:100%; object-fit:cover}
+.admin .idcard .id-lbl{font-size:11px; letter-spacing:1px; color:var(--faint); text-transform:uppercase}
+.admin .idcard .id-no{font-family:var(--mono); font-size:12px; color:var(--dim)}
+.admin .idcard .id-nm{font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap}
+.admin .idcard .id-watch{font-size:12px; color:var(--hazard)}
+.admin .idcard .id-edit{margin-top:2px}
+.admin .idcard.me{border-color:var(--hazard-d)}
+.admin .idcard.me .id-av{background:rgba(245,197,24,.12); color:var(--hazard)}
+.admin .idcard.guardself{border-color:rgba(63,179,107,.4)}
+.admin .idcard.guardself .id-av{background:rgba(63,179,107,.14); color:var(--ok)}
+.admin .idcard.guardself .id-watch{color:var(--ok)}
+
+/* 計時器(主角)*/
+.admin .ses-timer{background:linear-gradient(180deg,#1a1d23,#141619); border:1px solid var(--line); border-radius:8px;
+  padding:18px 24px; display:flex; flex-direction:column; justify-content:center; position:relative; overflow:hidden; min-height:150px}
+.admin .ses-timer.focus{border-color:var(--hazard-d)}
+.admin .ses-timer.focus::before{content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(400px 200px at 80% 0%,rgba(245,197,24,.10),transparent 70%)}
+.admin .ses-timer .st-phase{display:flex; align-items:center; gap:10px; position:relative}
+.admin .ses-timer .st-badge{font-size:12px; font-weight:700; letter-spacing:2px; padding:4px 12px; border-radius:5px}
+.admin .ses-timer .st-round{font-family:var(--mono); font-size:12px; color:var(--dim); margin-left:auto}
+.admin .ses-timer .st-clock{font-family:var(--mono); font-weight:700; font-size:64px; letter-spacing:2px; line-height:1.05;
+  margin:6px 0 2px; position:relative; font-variant-numeric:tabular-nums}
+.admin .ses-timer .st-dots{display:flex; gap:6px; flex-wrap:wrap; position:relative}
+.admin .ses-timer .st-dots i{width:18px; height:6px; border-radius:3px; background:var(--raise)}
+.admin .ses-timer .st-dots i.done{background:var(--hazard-d)}
+.admin .ses-timer .st-dots i.cur{background:var(--hazard); box-shadow:0 0 10px rgba(245,197,24,.5)}
+.admin .ses-timer.waiting{align-items:center; text-align:center; justify-content:center}
+.admin .ses-timer .st-big{font-size:26px; font-weight:900; letter-spacing:2px; color:var(--text)}
+.admin .ses-timer .st-sub{color:var(--dim); font-family:var(--mono); font-size:13px; margin-top:6px}
+
+/* 中段兩欄 */
+.admin .ses-mid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start}
+
+/* 囚犯列 */
+.admin .inmate{display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:6px; margin-bottom:8px;
+  background:var(--panel-2); border:1px solid var(--line); flex-wrap:wrap}
+.admin .inmate .in-av{width:38px; height:38px; flex:0 0 38px; border-radius:6px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; background:var(--raise); color:var(--dim)}
+.admin .inmate .in-av img{width:100%; height:100%; object-fit:cover}
+.admin .inmate .in-nm{font-weight:600; display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+.admin .inmate .in-no{font-family:var(--mono); font-size:11px; color:var(--faint)}
+.admin .inmate .in-prog{margin-left:auto; font-family:var(--mono); font-size:12px; color:var(--dim)}
+.admin .inmate.me{border-color:var(--hazard-d)}
+.admin .inmate.me .in-av{background:rgba(245,197,24,.12); color:var(--hazard)}
+.admin .inmate.mine{border-color:var(--ok); background:rgba(63,179,107,.06)}
+.admin .inmate.mine .in-av{background:rgba(63,179,107,.14); color:var(--ok)}
+.admin .inmate .in-works{margin-top:8px; width:100%; display:flex; gap:6px; flex-wrap:wrap}
+.admin .tag-mine{font-size:11px; font-weight:700; letter-spacing:.5px; padding:2px 8px; border-radius:4px;
+  background:rgba(63,179,107,.16); color:var(--ok)}
+.admin .subgroup{font-size:11px; letter-spacing:2px; color:var(--faint); text-transform:uppercase; margin:14px 0 9px;
+  display:flex; align-items:center; gap:8px}
+.admin .subgroup.first{margin-top:2px}
+.admin .subgroup.mine{color:var(--ok)}
+.admin .subgroup .ln{flex:1; height:1px; background:var(--line)}
+
+@media (max-width:860px){
+  .admin .ses-top.prisoner, .admin .ses-top.guard{grid-template-columns:1fr}
+  .admin .ses-mid{grid-template-columns:1fr}
+  .admin .ses-timer .st-clock{font-size:52px}
+}

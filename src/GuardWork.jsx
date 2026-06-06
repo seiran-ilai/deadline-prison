@@ -15,19 +15,6 @@ const PRESENCE_STYLE = {
   '服刑完畢': { bg: '#666', color: '#fff' },
 }
 
-function Avatar({ profile, size = 40 }) {
-  const name = profile?.game_name ?? profile?.display_name ?? ''
-  const initial = name ? name[0] : (profile?.inmate_no != null ? String(profile.inmate_no).slice(-2) : '?')
-  if (profile?.avatar_url) {
-    return <img src={profile.avatar_url} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: `0 0 ${size}px` }} />
-  }
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: '#3a4049', color: '#e4e5e7', flex: `0 0 ${size}px`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-      {initial}
-    </div>
-  )
-}
-
 // 獄卒作業頁:狀態階段 → 監管犯人名單(+目標代勾) → 本場獄卒一覽 → 本場犯人一覽
 export default function GuardWork({ userId }) {
   const [loading, setLoading] = useState(true)
@@ -136,9 +123,6 @@ export default function GuardWork({ userId }) {
 
   return (
     <div>
-      {/* 0) 個人資料卡(當前獄卒自己) */}
-      <ProfileCard userId={userId} />
-
       {/* 獄卒端子分頁:服刑作業 / MEMO·確認項 */}
       <div className="subtabs">
         <button className={gtab === 'work' ? 'on' : ''} onClick={() => setGtab('work')}>服刑作業</button>
@@ -146,109 +130,152 @@ export default function GuardWork({ userId }) {
       </div>
 
       {gtab === 'memos' ? (
-        <GuardMemosTab userId={userId} />
+        <>
+          <ProfileCard userId={userId} />
+          <GuardMemosTab userId={userId} />
+        </>
       ) : (
       <>
-      {/* 1) 服刑計時 / 狀態階段 */}
-      <SessionStatus userId={userId} />
+      {loading ? (
+        <p className="empty">讀取獄卒作業中…</p>
+      ) : (
+      <>
+      {msg && <div className="banner err">{msg}</div>}
 
-      {loading ? <p className="empty">讀取獄卒作業中…</p> : !myInmate ? (
-        <div className="panel" style={{ textAlign: 'center', color: 'var(--dim)' }}>
-          你目前不在任何服刑場次中,請等典獄長報到為本場獄卒
-        </div>
+      {/* === 上排:我(獄卒) + 計時器(主角,較寬,無專屬獄卒欄) === */}
+      <div className="ses-top guard">
+        <ProfileCard userId={userId} variant="id" label="我 · 看守中"
+          footer={myInmate ? <div className="id-watch">👁 專屬看守 {myInmates.length} 人 · 本場共 {allInmates.length} 人</div> : null} />
+        <SessionStatus userId={userId} />
+      </div>
+
+      {!myInmate ? (
+        <div className="card-panel"><div className="body">
+          <p className="empty" style={{ textAlign: 'center' }}>你目前不在任何服刑場次中,請等典獄長報到為本場獄卒</p>
+        </div></div>
       ) : (
         <>
-          {/* 場次資訊已由上方狀態卡涵蓋,移除重複的場次編號橫幅 */}
-          {msg && <div className="banner err">{msg}</div>}
+          {/* === 中段兩欄:本場 MEMO + 本場囚犯 === */}
+          <div className="ses-mid">
+            {/* 本場 MEMO · 確認項(沿用既有元件 / 邏輯,只套版位) */}
+            <SessionMemoPanel userId={userId} session={session} />
 
-          {/* 本場 MEMO · 確認項(取代犯人本場目標位置)*/}
-          <SessionMemoPanel userId={userId} session={session} />
-
-          {/* 2) 監管犯人名單 + 3) 他們的目標清單(可代勾) */}
-          <h3>監管犯人</h3>
-          {myInmates.length === 0 ? (
-            <p className="empty">目前沒有指派給你的犯人(等典獄長指派專屬獄卒)</p>
-          ) : myInmates.map(c => {
-            const status = presence(c)
-            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
-            return (
-              <div key={c.id} className="panel">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Avatar profile={c.profile} />
-                  <div>
-                    <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
-                    <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
-                  </div>
-                  <span className="spacer" />
-                  {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
-                </div>
-                <div style={{ marginTop: 10 }}>
-                  {c.goals.length === 0 ? (
-                    <p className="empty">本場還沒挑目標</p>
-                  ) : c.goals.map(g => {
-                    const steps = stepsByMs[g.manuscript_id] ?? []
-                    const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
-                    const isOpen = expanded.includes(g.id)
-                    return (
-                      <div key={g.id} style={{ margin: '8px 0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ flex: '0 0 150px', fontSize: 14 }}>{g.manuscript?.title ?? '(保密作業)'}</span>
-                          <div style={{ flex: 1, minWidth: 140 }}><ProgressBar progress={prog} /></div>
-                          <button className="btn-sm" onClick={() => toggleExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
-                        </div>
-                        {isOpen && (
-                          <div className="substeps">
-                            {steps.length === 0 ? (
-                              <p className="empty">這本稿還沒有子項目</p>
-                            ) : steps.map(s => (
-                              <div key={s.id} className="step">
-                                <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
-                                <span className={s.done ? 'done-text' : ''}>{s.title}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+            {/* 本場囚犯:我看守的置頂高亮 + 其餘分組 */}
+            <div className="card-panel">
+              <div className="head"><h2>本場囚犯</h2><span className="count">{allInmates.length} 人</span></div>
+              <div className="body">
+                {/* 我看守的(綠框高亮、指派給我;保留目標代勾) */}
+                <div className="subgroup mine first">我看守的犯人 ({myInmates.length})<span className="ln" /></div>
+                {myInmates.length === 0 ? (
+                  <p className="empty">目前沒有指派給你的犯人(等典獄長指派專屬獄卒)</p>
+                ) : myInmates.map(c => {
+                  const status = presence(c)
+                  const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
+                  return (
+                    <div key={c.id} className="inmate mine" style={{ alignItems: 'flex-start' }}>
+                      <div className="in-av">
+                        {c.profile?.avatar_url ? <img src={c.profile.avatar_url} alt="" />
+                          : (c.profile?.game_name ?? c.profile?.display_name ?? '?')[0]}
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
+                      <div>
+                        <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}<span className="tag-mine">指派給我</span></div>
+                        <div className="in-no">No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</div>
+                      </div>
+                      <span className="spacer" />
+                      {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
+                      <div className="in-works">
+                        {c.goals.length === 0 ? (
+                          <p className="empty">本場還沒挑目標</p>
+                        ) : c.goals.map(g => {
+                          const steps = stepsByMs[g.manuscript_id] ?? []
+                          const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
+                          const isOpen = expanded.includes(g.id)
+                          return (
+                            <div key={g.id} style={{ width: '100%', margin: '4px 0' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span style={{ flex: '0 0 150px', fontSize: 14 }}>{g.manuscript?.title ?? '(保密作業)'}</span>
+                                <div style={{ flex: 1, minWidth: 140 }}><ProgressBar progress={prog} /></div>
+                                <button className="btn-sm" onClick={() => toggleExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
+                              </div>
+                              {isOpen && (
+                                <div className="substeps">
+                                  {steps.length === 0 ? (
+                                    <p className="empty">這本稿還沒有子項目</p>
+                                  ) : steps.map(s => (
+                                    <div key={s.id} className="step">
+                                      <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
+                                      <span className={s.done ? 'done-text' : ''}>{s.title}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
 
-          {/* 4) 本場獄卒一覽 */}
-          <h3>本場獄卒</h3>
-          {allGuards.length === 0 ? (
-            <p className="empty">本場目前沒有獄卒在場</p>
-          ) : allGuards.map(gd => (
-            <div key={gd.id} className="panel accent-guard" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Avatar profile={gd.profile} />
-              <strong>{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</strong>
-              <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
-              {gd.member_id === userId && <span style={{ color: 'var(--hazard)', fontSize: 12 }}>(你)</span>}
+                {/* 本場其他囚犯(非我看守的) */}
+                {(() => {
+                  const mineIds = new Set(myInmates.map(r => r.id))
+                  const others = allInmates.filter(r => !mineIds.has(r.id))
+                  return (
+                    <>
+                      <div className="subgroup">本場其他囚犯 ({others.length})<span className="ln" /></div>
+                      {others.length === 0 ? (
+                        <p className="empty">沒有其他囚犯</p>
+                      ) : others.map(c => {
+                        const status = presence(c)
+                        const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
+                        return (
+                          <div key={c.id} className="inmate">
+                            <div className="in-av">
+                              {c.profile?.avatar_url ? <img src={c.profile.avatar_url} alt="" />
+                                : (c.profile?.game_name ?? c.profile?.display_name ?? '?')[0]}
+                            </div>
+                            <div>
+                              <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</div>
+                              <div className="in-no">No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</div>
+                            </div>
+                            <span className="spacer" />
+                            {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
+                          </div>
+                        )
+                      })}
+                    </>
+                  )
+                })()}
+              </div>
             </div>
-          ))}
+          </div>
 
-          {/* 5) 本場犯人一覽 */}
-          <h3>本場犯人</h3>
-          {allInmates.length === 0 ? (
-            <p className="empty">本場目前沒有犯人</p>
-          ) : allInmates.map(c => {
-            const status = presence(c)
-            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
-            return (
-              <div key={c.id} className="panel" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Avatar profile={c.profile} />
-                <div>
-                  <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
-                  <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
+          {/* === 底部:本場獄卒(頭貼格狀,同犯人端) === */}
+          <div className="card-panel">
+            <div className="head"><h2>本場獄卒</h2>{allGuards.length > 0 && <span className="count">{allGuards.length} 位</span>}</div>
+            <div className="body">
+              {allGuards.length === 0 ? (
+                <p className="empty">本場目前沒有獄卒在場</p>
+              ) : (
+                <div className="guard-grid">
+                  {allGuards.map(gd => (
+                    <div key={gd.id} className="guard-cell">
+                      <div className="g-av">
+                        {gd.profile?.avatar_url ? <img src={gd.profile.avatar_url} alt="" />
+                          : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
+                      </div>
+                      <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}{gd.member_id === userId ? ' · 你' : ''}</div>
+                      <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+                    </div>
+                  ))}
                 </div>
-                <span className="spacer" />
-                {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
-              </div>
-            )
-          })}
+              )}
+            </div>
+          </div>
         </>
+      )}
+      </>
       )}
       </>
       )}
