@@ -177,9 +177,17 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   }
 
   async function removeGoal(goalId) {
+    // 樂觀更新:立即從本地 state 移除該筆,畫面即時更新(不重整、不重抓整場)。
+    // 衍生顯示(進度條/完成度/計數/可挑清單)都由 goals 重算,故無需重抓。
+    const snapshot = goals
+    setGoals(gs => gs.filter(g => g.id !== goalId))
     const { error } = await supabase.from('session_goals').delete().eq('id', goalId)
-    if (error) { setMsg('取消失敗:' + error.message); return }
-    setMsg('已移出本場'); load()
+    if (error) {
+      setGoals(snapshot)   // 失敗回滾:把該筆加回,避免畫面與後端不一致
+      setMsg('取消失敗,已還原:' + error.message)
+      return
+    }
+    setMsg('已移出本場')
   }
 
   async function toggleStep(step) {
