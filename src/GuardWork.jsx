@@ -18,7 +18,7 @@ function Avatar({ profile, size = 40 }) {
     return <img src={profile.avatar_url} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: `0 0 ${size}px` }} />
   }
   return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: '#bbb', color: '#fff', flex: `0 0 ${size}px`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+    <div style={{ width: size, height: size, borderRadius: '50%', background: '#3a4049', color: '#e4e5e7', flex: `0 0 ${size}px`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
       {initial}
     </div>
   )
@@ -124,67 +124,65 @@ export default function GuardWork({ userId }) {
     setExpanded(prev => prev.includes(goalId) ? prev.filter(x => x !== goalId) : [...prev, goalId])
   }
 
-  const card = { border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 12, background: '#fff', color: '#222' }
   const presence = (r) => {
     if (r.role_in_session === 'guard') return null
     return presenceLabel(session?.timer_started_at, session?.total_rounds ?? 8, session?.timer_ended_at)
   }
 
   return (
-    <div style={{ color: '#222' }}>
+    <div>
       {/* 1) 服刑計時 / 狀態階段 */}
       <SessionStatus userId={userId} />
 
-      {loading ? <p style={{ color: '#888' }}>讀取獄卒作業中…</p> : !myInmate ? (
-        <div style={{ ...card, textAlign: 'center', color: '#666' }}>
+      {loading ? <p className="empty">讀取獄卒作業中…</p> : !myInmate ? (
+        <div className="panel" style={{ textAlign: 'center', color: 'var(--dim)' }}>
           你目前不在任何服刑場次中,請等典獄長報到為本場獄卒
         </div>
       ) : (
         <>
           {/* 場次資訊已由上方狀態卡涵蓋,移除重複的場次編號橫幅 */}
-          {msg && <div style={{ ...card, background: '#fdecec', color: '#c0392b' }}>{msg}</div>}
+          {msg && <div className="banner err">{msg}</div>}
 
           {/* 2) 監管犯人名單 + 3) 他們的目標清單(可代勾) */}
           <h3>監管犯人</h3>
           {myInmates.length === 0 ? (
-            <p style={{ color: '#888' }}>目前沒有指派給你的犯人(等典獄長指派專屬獄卒)</p>
+            <p className="empty">目前沒有指派給你的犯人(等典獄長指派專屬獄卒)</p>
           ) : myInmates.map(c => {
             const status = presence(c)
             const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
             return (
-              <div key={c.id} style={card}>
+              <div key={c.id} className="panel">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Avatar profile={c.profile} />
                   <div>
                     <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
                     <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
                   </div>
-                  <span style={{ flex: 1 }} />
-                  {status && <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: ps.bg, color: ps.color }}>{status}</span>}
+                  <span className="spacer" />
+                  {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
                 </div>
                 <div style={{ marginTop: 10 }}>
                   {c.goals.length === 0 ? (
-                    <p style={{ color: '#aaa', fontSize: 13, margin: 0 }}>本場還沒挑目標</p>
+                    <p className="empty">本場還沒挑目標</p>
                   ) : c.goals.map(g => {
                     const steps = stepsByMs[g.manuscript_id] ?? []
                     const done = steps.filter(s => s.done).length
                     const isOpen = expanded.includes(g.id)
                     return (
                       <div key={g.id} style={{ margin: '8px 0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ flex: '0 0 150px', fontSize: 14 }}>{g.manuscript?.title ?? '(保密作業)'}</span>
-                          <div style={{ flex: 1 }}><ProgressBar done={done} total={steps.length} /></div>
-                          <button style={{ padding: '2px 8px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }}
-                            onClick={() => toggleExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
+                          <div style={{ flex: 1, minWidth: 140 }}><ProgressBar done={done} total={steps.length} /></div>
+                          <button className="btn-sm" onClick={() => toggleExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
                         </div>
                         {isOpen && (
-                          <div style={{ margin: '6px 0 6px 12px', paddingLeft: 12, borderLeft: '2px solid #eee' }}>
+                          <div className="substeps">
                             {steps.length === 0 ? (
-                              <p style={{ color: '#999', fontSize: 13, margin: 0 }}>這本稿還沒有子項目</p>
+                              <p className="empty">這本稿還沒有子項目</p>
                             ) : steps.map(s => (
-                              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                              <div key={s.id} className="step">
                                 <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
-                                <span style={{ fontSize: 14, textDecoration: s.done ? 'line-through' : 'none', color: s.done ? '#999' : '#222' }}>{s.title}</span>
+                                <span className={s.done ? 'done-text' : ''}>{s.title}</span>
                               </div>
                             ))}
                           </div>
@@ -198,36 +196,34 @@ export default function GuardWork({ userId }) {
           })}
 
           {/* 4) 本場獄卒一覽 */}
-          <h3 style={{ marginTop: 24 }}>本場獄卒</h3>
+          <h3>本場獄卒</h3>
           {allGuards.length === 0 ? (
-            <p style={{ color: '#888' }}>本場目前沒有獄卒在場</p>
+            <p className="empty">本場目前沒有獄卒在場</p>
           ) : allGuards.map(gd => (
-            <div key={gd.id} style={{ ...card, display: 'flex', alignItems: 'center', gap: 10, background: '#fff7ec' }}>
+            <div key={gd.id} className="panel accent-guard" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Avatar profile={gd.profile} />
               <strong>{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</strong>
-              <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#e08e0b', color: '#fff' }}>
-                {gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}
-              </span>
-              {gd.member_id === userId && <span style={{ color: '#c60', fontSize: 12 }}>(你)</span>}
+              <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+              {gd.member_id === userId && <span style={{ color: 'var(--hazard)', fontSize: 12 }}>(你)</span>}
             </div>
           ))}
 
           {/* 5) 本場犯人一覽 */}
-          <h3 style={{ marginTop: 24 }}>本場犯人</h3>
+          <h3>本場犯人</h3>
           {allInmates.length === 0 ? (
-            <p style={{ color: '#888' }}>本場目前沒有犯人</p>
+            <p className="empty">本場目前沒有犯人</p>
           ) : allInmates.map(c => {
             const status = presence(c)
             const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
             return (
-              <div key={c.id} style={{ ...card, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div key={c.id} className="panel" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Avatar profile={c.profile} />
                 <div>
                   <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
                   <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
                 </div>
-                <span style={{ flex: 1 }} />
-                {status && <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: ps.bg, color: ps.color }}>{status}</span>}
+                <span className="spacer" />
+                {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
               </div>
             )
           })}

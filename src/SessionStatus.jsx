@@ -9,14 +9,12 @@ const PHASE_BG = {
   ended: '#666',
 }
 
-const card = { border: '1px solid #ddd', borderRadius: 8, padding: 24, background: '#fff', color: '#222', textAlign: 'center', marginBottom: 16 }
-
 // 一句話狀態卡(用於倒數以外的所有階段)
 function StatusCard({ text, sub }) {
   return (
-    <div style={card}>
-      <p style={{ color: '#555', fontSize: 22, fontWeight: 700, margin: 0 }}>{text}</p>
-      {sub && <p style={{ color: '#aaa', fontSize: 13, margin: '8px 0 0' }}>{sub}</p>}
+    <div className="status-card">
+      <p className="big">{text}</p>
+      {sub && <p className="small">{sub}</p>}
     </div>
   )
 }
@@ -78,7 +76,7 @@ export default function SessionStatus({ userId }) {
     return () => clearInterval(t)
   }, [])
 
-  if (loading) return <p style={{ color: '#888' }}>讀取本場狀態中…</p>
+  if (loading) return <p className="empty">讀取本場狀態中…</p>
   const { session, role, hasGuard, hasInmates } = data
 
   // 階段1:還沒報到進任何 open 場次 → 統一文字
@@ -97,24 +95,20 @@ export default function SessionStatus({ userId }) {
   const st = pomodoroState(elapsed, session.total_rounds ?? 8, session.timer_ended_at)
   if (st.ended) {
     return (
-      <div style={card}>
-        <p style={{ fontSize: 28, fontWeight: 700, margin: '8px 0' }}>🔓 本場服刑結束</p>
-        <p style={{ color: '#888', margin: 0 }}>本場:{session.title} · 共 {session.total_rounds ?? 8} 輪 已全部完成</p>
+      <div className="status-card">
+        <p className="big" style={{ fontSize: 28 }}>🔓 本場服刑結束</p>
+        <p className="small">本場:{session.title} · 共 {session.total_rounds ?? 8} 輪 已全部完成</p>
       </div>
     )
   }
   return (
-    <div style={card}>
-      <div style={{ color: '#888', fontSize: 14 }}>本場:{session.title}</div>
-      <div style={{ display: 'inline-block', margin: '12px 0', padding: '4px 16px', borderRadius: 16, color: '#fff', background: PHASE_BG[st.phase] }}>
+    <div className="status-card">
+      <div className="small" style={{ marginTop: 0 }}>本場:{session.title}</div>
+      <div className="phase" style={{ background: PHASE_BG[st.phase] }}>
         {PHASE_LABEL[st.phase]}
       </div>
-      <div style={{ fontSize: 72, fontWeight: 800, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', letterSpacing: 2 }}>
-        {fmt(st.remainingSeconds)}
-      </div>
-      <div style={{ color: '#666', marginTop: 8, fontSize: 16 }}>
-        第 {st.round} 輪 / 共 {session.total_rounds ?? 8} 輪
-      </div>
+      <div className="countdown">{fmt(st.remainingSeconds)}</div>
+      <div className="rounds">第 {st.round} 輪 / 共 {session.total_rounds ?? 8} 輪</div>
     </div>
   )
 }

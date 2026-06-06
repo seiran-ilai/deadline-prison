@@ -72,56 +72,56 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
   }
   const roundFloor = Math.max(curRound, 1)  // −輪 下限
 
+  // 整合進場次控制條:番茄鐘狀態做為一個 .seg,主要動作放右側 .go
   return (
-    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 8, background: '#fff', color: '#222' }}>
-      <strong>番茄鐘控制</strong>
-
-      {/* idle:設定總輪數 + 開始 */}
+    <>
+      {/* idle:設定總輪數 + 開始服刑 */}
       {timerStatus === 'idle' && (
         <>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-            專注輪數:
-            <input type="number" min="1" value={roundsInput}
-              onChange={e => setRoundsInput(e.target.value)}
-              style={{ width: 64, padding: '4px 6px', border: '1px solid #ccc', borderRadius: 4, background: '#fff', color: '#222' }} />
-            <button style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }}
-              onClick={saveRounds}>儲存輪數</button>
-            <span style={{ color: '#666', fontSize: 13 }}>
-              預覽總時長:約 <strong>{plan.totalMinutes}</strong> 分(專注25×{plan.focusCount} + 放風5×{plan.normalBreakCount} + 長休15×{plan.longBreakCount})
-            </span>
+          <div className="seg">
+            <span className="lbl">番茄鐘</span>
+            <div className="row">
+              專注
+              <input className="mono" type="number" min="1" value={roundsInput}
+                onChange={e => setRoundsInput(e.target.value)} style={{ width: 56, textAlign: 'center' }} />
+              輪
+              <button className="btn-sm" onClick={saveRounds}>儲存</button>
+            </div>
+            <span className="pomo-prev">約 {plan.totalMinutes} 分(專注25×{plan.focusCount} + 放風5×{plan.normalBreakCount} + 長休15×{plan.longBreakCount})</span>
           </div>
-          <div style={{ marginTop: 10 }}>
-            <button style={{ padding: '6px 16px', border: '1px solid #bbb', borderRadius: 4, background: '#eef4ff', color: '#333', cursor: 'pointer', fontWeight: 700 }}
-              onClick={startTimer}>開始服刑</button>
+          <div className="go"><button className="btn-pri" onClick={startTimer}>▶ 開始服刑</button></div>
+        </>
+      )}
+
+      {/* running:狀態 + ±輪 / 提早結束 / 重新設定 */}
+      {timerStatus === 'running' && (
+        <>
+          <div className="seg">
+            <span className="lbl">番茄鐘</span>
+            <div className="row timer-state">
+              <span className="running">● 服刑中 · 第 {curRound} 輪 / 共 {totalRounds} 輪</span>
+              <button className="btn-sm" onClick={() => changeRounds(1)}>＋輪</button>
+              <button className="btn-sm" disabled={totalRounds <= roundFloor} onClick={() => changeRounds(-1)}>−輪</button>
+            </div>
+            <span className="pomo-prev">開始於 {new Date(session.timer_started_at).toLocaleString()}</span>
+          </div>
+          <div className="go">
+            <button className="btn-danger btn-sm" onClick={endTimer}>提早結束</button>
+            <button className="btn-danger btn-sm" onClick={resetTimer}>重新設定</button>
           </div>
         </>
       )}
 
-      {/* running:提早結束 / 重新設定 / +輪 / −輪 */}
-      {timerStatus === 'running' && (
-        <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ color: '#2a7' }}>● 服刑中 · 第 {curRound} 輪 / 共 {totalRounds} 輪</span>
-          <span style={{ color: '#888', fontSize: 13 }}>開始於 {new Date(session.timer_started_at).toLocaleString()}</span>
-          <button style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }}
-            onClick={() => changeRounds(1)}>＋輪</button>
-          <button disabled={totalRounds <= roundFloor}
-            style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: totalRounds <= roundFloor ? '#bbb' : '#333', cursor: totalRounds <= roundFloor ? 'not-allowed' : 'pointer' }}
-            onClick={() => changeRounds(-1)}>−輪</button>
-          <button style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#c00', cursor: 'pointer' }}
-            onClick={endTimer}>提早結束</button>
-          <button style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#c00', cursor: 'pointer' }}
-            onClick={resetTimer}>重新設定</button>
-        </div>
-      )}
-
       {/* ended:收尾 + 重新設定 */}
       {timerStatus === 'ended' && (
-        <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ color: '#666' }}>🔓 本場服刑結束(收尾)</span>
-          <button style={{ padding: '4px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#c00', cursor: 'pointer' }}
-            onClick={resetTimer}>重新設定</button>
-        </div>
+        <>
+          <div className="seg">
+            <span className="lbl">番茄鐘</span>
+            <div className="row timer-state"><span className="ended">🔓 本場服刑結束(收尾)</span></div>
+          </div>
+          <div className="go"><button className="btn-danger btn-sm" onClick={resetTimer}>重新設定</button></div>
+        </>
       )}
-    </div>
+    </>
   )
 }

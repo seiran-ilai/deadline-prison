@@ -81,42 +81,38 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
     setMsg('已刪除預約'); reloadShared()
   }
 
-  const btn = { padding: '2px 10px', border: '1px solid #bbb', borderRadius: 4, background: '#fafafa', color: '#333', cursor: 'pointer' }
-  const tag = (bg, color) => ({ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: bg, color })
-  const rowCard = { border: '1px solid #ddd', borderRadius: 8, padding: 12, marginBottom: 8, background: '#fff', color: '#222' }
-
   return (
     <div>
       <h3>名單總覽</h3>
 
       {/* 新增預約(搬自原「預約與收押」) */}
       <div style={{ marginBottom: 12 }}>
-        <button style={{ ...btn, background: '#eef4ff' }} onClick={() => setShowForm(v => !v)}>
+        <button onClick={() => setShowForm(v => !v)}>
           {showForm ? '收起' : '＋ 新增預約'}
         </button>
         {showForm && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
-            <input placeholder="遊戲暱稱" value={form.game_name} onChange={e => setForm({ ...form, game_name: e.target.value })} />
-            <input placeholder="Discord 使用者名稱" value={form.discord_account} onChange={e => setForm({ ...form, discord_account: e.target.value })} />
-            <input placeholder="頭貼網址(選填)" value={form.avatar_url} onChange={e => setForm({ ...form, avatar_url: e.target.value })} />
-            <button style={btn} onClick={addPending}>加入預約</button>
+          <div className="toolbar" style={{ marginTop: 8 }}>
+            <input className="inp" placeholder="遊戲暱稱" value={form.game_name} onChange={e => setForm({ ...form, game_name: e.target.value })} />
+            <input className="inp" placeholder="Discord 使用者名稱" value={form.discord_account} onChange={e => setForm({ ...form, discord_account: e.target.value })} />
+            <input className="inp" placeholder="頭貼網址(選填)" value={form.avatar_url} onChange={e => setForm({ ...form, avatar_url: e.target.value })} />
+            <button onClick={addPending}>加入預約</button>
           </div>
         )}
       </div>
 
-      {loading ? <p style={{ color: '#888' }}>載入中…</p> : (() => {
+      {loading ? <p className="empty">載入中…</p> : (() => {
         const hasAny = inmates.length || unmatched.length || pending.length
-        if (!hasAny) return <p style={{ color: '#888' }}>名單還沒有任何人</p>
+        if (!hasAny) return <p className="empty">名單還沒有任何人</p>
         return (<>
           {/* 1) 未配對置頂(要處理) */}
           {unmatched.map(p => (
-            <div key={'u-' + p.id} style={rowCard}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={tag('#fbe9d0', '#a05a00')}>未配對 · 查無預約</span>
+            <div key={'u-' + p.id} className="row-card">
+              <div className="row-head">
+                <span className="tag tag-pill" style={{ background: 'rgba(245,197,24,.15)', color: 'var(--hazard)' }}>未配對 · 查無預約</span>
                 <strong>{p.discord_account ?? p.display_name ?? '(未知)'}</strong>
-                <span style={{ flex: 1 }} />
-                <button style={btn} onClick={() => linkToPending(p.id)}>指到預約</button>
-                <button style={btn} onClick={() => admitDirect(p.id)}>直接收押</button>
+                <span className="spacer" />
+                <button className="btn-sm" onClick={() => linkToPending(p.id)}>指到預約</button>
+                <button className="btn-sm" onClick={() => admitDirect(p.id)}>直接收押</button>
               </div>
             </div>
           ))}
@@ -128,30 +124,29 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
             const isOpen = expandedMember === p.id
             const works = memberWorks[p.id]
             return (
-              <div key={p.id} style={rowCard}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', cursor: 'pointer' }} onClick={() => toggleMember(p.id)}>
+              <div key={p.id} className="row-card">
+                <div className="row-head clickable" onClick={() => toggleMember(p.id)}>
                   <strong>No.{String(p.inmate_no).padStart(4, '0')}</strong>
                   <span>{p.game_name ?? p.display_name}</span>
-                  <span style={{ fontSize: 12, padding: '1px 8px', borderRadius: 10, background: '#eef', color: '#558' }}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
-                  <span style={{ color: '#888', fontSize: 13 }}>光臨 {visitCount[p.id] ?? 0} 次</span>
-                  <span style={{ flex: 1 }} />
-                  <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: ss.bg, color: ss.color }}>{status}</span>
+                  <span className={`role-tag ${p.role ?? 'member'}`}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
+                  <span className="muted">光臨 {visitCount[p.id] ?? 0} 次</span>
+                  <span className="spacer" />
+                  <span className="tag tag-pill" style={{ background: ss.bg, color: ss.color }}>{status}</span>
                   {isWarden && (
-                    <button style={btn}
-                      onClick={e => { e.stopPropagation(); onEditMember(p) }}>編輯</button>
+                    <button className="btn-sm" onClick={e => { e.stopPropagation(); onEditMember(p) }}>編輯</button>
                   )}
-                  <span style={{ color: '#888' }}>{isOpen ? '▲' : '▼'}</span>
+                  <span className="muted">{isOpen ? '▲' : '▼'}</span>
                 </div>
                 {isOpen && (
-                  <div style={{ marginTop: 10, borderTop: '1px dashed #ddd', paddingTop: 10 }}>
-                    {!works ? <p style={{ color: '#999', margin: 0 }}>讀取稿件中…</p>
-                      : works.length === 0 ? <p style={{ color: '#999', margin: 0 }}>這位沒有稿件</p>
+                  <div className="row-detail">
+                    {!works ? <p className="empty">讀取稿件中…</p>
+                      : works.length === 0 ? <p className="empty">這位沒有稿件</p>
                         : works.map(w => (
-                          <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0' }}>
+                          <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0', flexWrap: 'wrap' }}>
                             <span style={{ flex: '0 0 160px', fontSize: 14 }}>
-                              {w.title}{w.status === 'archived' && <span style={{ color: '#aaa' }}>(封存)</span>}
+                              {w.title}{w.status === 'archived' && <span className="faint">(封存)</span>}
                             </span>
-                            <div style={{ flex: 1 }}><ProgressBar done={w.done} total={w.total} /></div>
+                            <div style={{ flex: 1, minWidth: 140 }}><ProgressBar done={w.done} total={w.total} /></div>
                           </div>
                         ))}
                   </div>
@@ -162,13 +157,13 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
 
           {/* 3) 預約中(尚未登入) */}
           {pending.map(p => (
-            <div key={'p-' + p.id} style={rowCard}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={tag('#eee', '#777')}>預約中 · 未登入</span>
+            <div key={'p-' + p.id} className="row-card">
+              <div className="row-head">
+                <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.08)', color: 'var(--dim)' }}>預約中 · 未登入</span>
                 <strong>{p.game_name}</strong>
-                <span style={{ color: '#888', fontSize: 13 }}>Discord:{p.discord_account}</span>
-                <span style={{ flex: 1 }} />
-                <button style={{ ...btn, color: '#c00' }} onClick={() => deletePending(p.id)}>刪除</button>
+                <span className="muted">Discord:{p.discord_account}</span>
+                <span className="spacer" />
+                <button className="btn-sm btn-danger" onClick={() => deletePending(p.id)}>刪除</button>
               </div>
             </div>
           ))}

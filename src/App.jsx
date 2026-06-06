@@ -4,6 +4,7 @@ import ManuscriptManager from './ManuscriptManager'
 import SessionGoals from './SessionGoals'
 import GuardWork from './GuardWork'
 import WardenPanel from './warden/WardenPanel'
+import './styles/admin.css'
 
 // 本次服刑分頁:內容依「本場身分 role_in_session」決定(犯人頁 / 獄卒頁),
 // 與全域 role 無關 —— 典獄長/獄卒被報到成本場犯人時也會看到犯人頁。
@@ -89,37 +90,38 @@ function App() {
     setTestBusy(false)
   }
 
-  const box = { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif', gap: 16 }
-
   if (!user) return (
-    <div style={box}>
-      <h1>死線監獄 · DEADLINE PRISON</h1>
-      <button onClick={signIn}>用 Discord 登入</button>
-      {import.meta.env.DEV && (
-        <div style={{ marginTop: 24, padding: 16, border: '2px dashed #c98a00', borderRadius: 8, background: '#fff8e6', maxWidth: 320, width: '100%' }}>
-          <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#a06800' }}>⚠️ 測試專用（僅開發模式）</p>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: '#7a5a00' }}>正式上線（production build）不會出現此區塊</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {TEST_ACCOUNTS.map((acc) => (
-              <button key={acc.email} onClick={() => testSignIn(acc)} disabled={testBusy}
-                style={{ padding: '8px 12px', borderRadius: 4, border: '1px solid #c98a00', background: '#fff', cursor: testBusy ? 'wait' : 'pointer', color: '#333' }}>
-                {acc.label}
-              </button>
-            ))}
+    <div className="admin">
+      <div className="center-box">
+        <h1>死線<b>監獄</b> · DEADLINE PRISON</h1>
+        <button className="btn-pri" onClick={signIn}>用 Discord 登入</button>
+        {import.meta.env.DEV && (
+          <div className="test-box">
+            <p className="t-title">⚠️ 測試專用(僅開發模式)</p>
+            <p className="t-sub">正式上線(production build)不會出現此區塊</p>
+            <div className="t-list">
+              {TEST_ACCOUNTS.map((acc) => (
+                <button key={acc.email} onClick={() => testSignIn(acc)} disabled={testBusy}>
+                  {acc.label}
+                </button>
+              ))}
+            </div>
+            {testError && <p className="banner err" style={{ marginTop: 12 }}>登入失敗:{testError}</p>}
           </div>
-          {testError && <p style={{ margin: '12px 0 0', color: '#c0392b', fontSize: 13 }}>登入失敗:{testError}</p>}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
-  if (loading) return <div style={box}><p>核對身分中…</p></div>
+  if (loading) return <div className="admin"><div className="center-box"><p className="sub">核對身分中…</p></div></div>
   if (!profile || profile.inmate_no == null) {
     return (
-      <div style={box}>
-        <h1>死線監獄</h1>
-        <p>查無預約資料,請與典獄長確認</p>
-        <a href="https://discord.gg/你的邀請連結" target="_blank" rel="noreferrer">聯繫典獄長(Discord)</a>
-        <button onClick={signOut}>登出</button>
+      <div className="admin">
+        <div className="center-box">
+          <h1>死線<b>監獄</b></h1>
+          <p className="sub">查無預約資料,請與典獄長確認</p>
+          <a className="btn-ghost" href="https://discord.gg/你的邀請連結" target="_blank" rel="noreferrer">聯繫典獄長(Discord)</a>
+          <button onClick={signOut}>登出</button>
+        </div>
       </div>
     )
   }
@@ -136,33 +138,32 @@ function App() {
       : [{ k: 'session', label: '本次服刑' }, { k: 'me', label: '我的稿件' }]
   // 防呆:tab 不在當前身分的分頁清單時,落回第一個
   const activeTab = tabs.some(t => t.k === tab) ? tab : tabs[0].k
-  const tabBtnStyle = (k) => ({
-    padding: '6px 14px', borderRadius: 4, cursor: 'pointer',
-    fontWeight: activeTab === k ? 700 : 400,
-    background: activeTab === k ? '#eef4ff' : '#fafafa',
-    border: activeTab === k ? '1px solid #5a8fd0' : '1px solid #bbb',
-    color: '#333',
-  })
   return (
-    <div style={{ fontFamily: 'sans-serif', maxWidth: 700, margin: '0 auto', padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <strong>死線監獄 · No.{String(profile.inmate_no).padStart(4, '0')} {profile.game_name ?? profile.display_name}</strong>
-        <button onClick={signOut}>登出</button>
+    <div className="admin">
+      <div className="topbar">
+        <div className="logo">死線<b>監獄</b></div>
+        <div className="who">
+          <span className="num">No.{String(profile.inmate_no).padStart(4, '0')}</span>
+          {profile.game_name ?? profile.display_name}
+          <button className="btn-ghost" onClick={signOut}>登出</button>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+      <div className="tabs">
         {tabs.map(t => (
-          <button key={t.k} onClick={() => setTab(t.k)} style={tabBtnStyle(t.k)}>{t.label}</button>
+          <button key={t.k} className={activeTab === t.k ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>
         ))}
       </div>
-      {activeTab === 'session' && <SessionView userId={user.id} />}
-      {activeTab === 'me' && (
-        <div>
-          <p style={{ color: '#666', marginTop: 0 }}>📍 我的稿件 · 遊戲暱稱:{profile.game_name ?? '(未設定)'}</p>
-          <h3>稿件管理</h3>
-          <ManuscriptManager userId={user.id} />
-        </div>
-      )}
-      {activeTab === 'warden' && isStaff && <WardenPanel myRole={profile.role} />}
+      <div className="page">
+        {activeTab === 'session' && <SessionView userId={user.id} />}
+        {activeTab === 'me' && (
+          <div>
+            <p className="muted" style={{ marginBottom: 4 }}>📍 我的稿件 · 遊戲暱稱:{profile.game_name ?? '(未設定)'}</p>
+            <h3>稿件管理</h3>
+            <ManuscriptManager userId={user.id} />
+          </div>
+        )}
+        {activeTab === 'warden' && isStaff && <WardenPanel myRole={profile.role} />}
+      </div>
     </div>
   )
 }
