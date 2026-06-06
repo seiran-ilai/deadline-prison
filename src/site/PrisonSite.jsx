@@ -164,6 +164,7 @@ export default function PrisonSite() {
           <div className="intake"><span className="dot" />收容中 · INTAKE OPEN · 24H</div>
           <h1>死線<span className="glow">監獄</span></h1>
           <div className="ensign">DEADLINE PRISON · NO.<span className="no">0118</span></div>
+          <div className="place-hero">服刑地點:<b>巴哈姆特 - 薰衣草苗園 - 1區 - 18號</b></div>
           <p className="tag">把自己關進來,<b>服完這一頁死線</b>。<br />沒有逃獄,只有交稿。</p>
           <div className="crime">
             <span>罪名:<b>慣性拖稿</b></span>
@@ -270,7 +271,6 @@ export default function PrisonSite() {
           <div className="f-brand">死線<b>監獄</b></div>
           <div className="f-sub">DEADLINE PRISON · 趕稿收容所 · since 2026</div>
           <div className="f-addr">服刑地點:巴哈姆特 - 薰衣草苗園 - 1區 - 18號</div>
-          <a className="sys-entry" href="/app">🔒 監獄系統 ▸</a>
         </footer>
       </div>
 
@@ -296,7 +296,7 @@ export default function PrisonSite() {
                 </>
               ) : active ? (
                 <>
-                  <p className="m-note">你已在此梯次服刑名冊上(狀態:<b style={{ color: 'var(--text)' }}>{selBooking.status}</b>)。</p>
+                  <p className="m-note">你已在此梯次服刑名冊上。</p>
                   <button className="m-dc m-ghost" onClick={cancel} disabled={submitting}>取消預約</button>
                 </>
               ) : selBooking ? (
