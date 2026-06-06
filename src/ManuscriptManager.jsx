@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import MessageBanner from './MessageBanner'
+import { computeProgress } from './progress'
 
 // 優先序設定:1高 2中 3低
 const PRIORITY = {
@@ -26,14 +27,17 @@ function PriorityTag({ priority }) {
   )
 }
 
-export function ProgressBar({ done, total }) {
-  const pct = total ? Math.round((done / total) * 100) : 0
+// 進度條:吃 computeProgress() 的統一結果。
+// 有子項目 → 顯示「done/total（x%）」;無子項目 → 顯示「x%」(由 is_done 決定 0/100)。
+export function ProgressBar({ progress }) {
+  const { done = 0, total = 0, pct = 0, hasSteps = false } = progress ?? {}
+  const p = Math.round(pct * 100)
   return (
     <div className="ad-progress">
       <div className="track">
-        <div className={`fill${pct === 100 ? ' done' : ''}`} style={{ width: `${pct}%` }} />
+        <div className={`fill${p === 100 ? ' done' : ''}`} style={{ width: `${p}%` }} />
       </div>
-      <span className="pct">{total ? `${done}/${total}（${pct}%）` : '尚無子項目'}</span>
+      <span className="pct">{hasSteps ? `${done}/${total}（${p}%）` : `${p}%`}</span>
     </div>
   )
 }
@@ -87,7 +91,7 @@ export default function ManuscriptManager({ userId }) {
 
   async function load() {
     const { data: ms, error } = await supabase.from('manuscripts')
-      .select('id, title, priority, due_date, target_date, status, visibility, created_at')
+      .select('id, title, priority, due_date, target_date, status, visibility, is_done, created_at')
       .eq('member_id', userId).eq('status', view)
       .order('priority').order('created_at')
     if (error) { setMsg('載入失敗:' + error.message); return }
@@ -172,15 +176,19 @@ export default function ManuscriptManager({ userId }) {
     load()
   }
 
+  // 無子項目稿件:直接勾選整本完成(寫 manuscripts.is_done)
+  async function toggleManuscriptDone(m) {
+    const { error } = await supabase.from('manuscripts').update({ is_done: !m.is_done }).eq('id', m.id)
+    if (error) { setMsg('更新失敗:' + error.message); return }
+    load()
+  }
+
   function toggleExpand(id) {
     setExpanded(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
-  // 完成度(0~1):done / total,無子項目為 0(避免除以零)
-  const progressOf = (m) => {
-    const steps = stepsByMs[m.id] ?? []
-    return steps.length ? steps.filter(s => s.done).length / steps.length : 0
-  }
+  // 完成度(0~1):統一邏輯(有子項目→done/total;無子項目→is_done)
+  const progressOf = (m) => computeProgress({ steps: stepsByMs[m.id] ?? [], isDone: m.is_done }).pct
 
   // 排序(前端;各選項用固定預設方向)
   const sorted = [...manuscripts].sort((a, b) => {
@@ -245,8 +253,8 @@ export default function ManuscriptManager({ userId }) {
         <p className="empty">{view === 'active' ? '還沒有進行中的稿件' : '沒有封存的稿件'}</p>
       ) : sorted.map(m => {
         const steps = stepsByMs[m.id] ?? []
-        const done = steps.filter(s => s.done).length
-        const pct = steps.length ? done / steps.length : 0
+        const prog = computeProgress({ steps, isDone: m.is_done })
+        const pct = prog.pct
         const isOpen = expanded.includes(m.id)
         const vis = VISIBILITY[m.visibility] ?? VISIBILITY.public
         return (
@@ -265,7 +273,15 @@ export default function ManuscriptManager({ userId }) {
               <button className="btn-sm btn-danger" onClick={() => deleteManuscript(m.id)}>刪除</button>
             </div>
 
-            <div style={{ margin: '10px 0' }}><ProgressBar done={done} total={steps.length} /></div>
+            <div style={{ margin: '10px 0' }}><ProgressBar progress={prog} /></div>
+
+            {/* 無子項目 → 可直接勾選整本完成;一旦有子項目即由子項目計算,隱藏此勾選 */}
+            {!prog.hasSteps && (
+              <label className="ms-done-toggle">
+                <input type="checkbox" checked={!!m.is_done} onChange={() => toggleManuscriptDone(m)} />
+                <span className={m.is_done ? 'done-text' : ''}>標記整本完成(此稿無子項目)</span>
+              </label>
+            )}
 
             <div className="faint" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               {m.due_date && <span>截止日:{m.due_date}</span>}

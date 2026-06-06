@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
+import { computeProgress } from './progress'
 import { presenceLabel } from './pomodoro'
 import SessionStatus from './SessionStatus'
 import GuardMemosTab from './GuardMemosTab'
@@ -89,7 +90,7 @@ export default function GuardWork({ userId }) {
       const msById = {}
       if (msIds.length) {
         const { data: ms } = await supabase.from('manuscripts')
-          .select('id, title, priority').in('id', msIds)
+          .select('id, title, priority, is_done').in('id', msIds)
         for (const m of ms ?? []) msById[m.id] = m
         const { data: steps } = await supabase.from('manuscript_steps')
           .select('id, manuscript_id, title, done, sort_order')
@@ -186,13 +187,13 @@ export default function GuardWork({ userId }) {
                     <p className="empty">本場還沒挑目標</p>
                   ) : c.goals.map(g => {
                     const steps = stepsByMs[g.manuscript_id] ?? []
-                    const done = steps.filter(s => s.done).length
+                    const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
                     const isOpen = expanded.includes(g.id)
                     return (
                       <div key={g.id} style={{ margin: '8px 0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ flex: '0 0 150px', fontSize: 14 }}>{g.manuscript?.title ?? '(保密作業)'}</span>
-                          <div style={{ flex: 1, minWidth: 140 }}><ProgressBar done={done} total={steps.length} /></div>
+                          <div style={{ flex: 1, minWidth: 140 }}><ProgressBar progress={prog} /></div>
                           <button className="btn-sm" onClick={() => toggleExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
                         </div>
                         {isOpen && (

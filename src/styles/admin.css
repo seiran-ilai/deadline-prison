@@ -194,6 +194,11 @@
 .admin .step{display:flex; align-items:center; gap:8px; margin-bottom:6px}
 .admin .step .done-text{text-decoration:line-through; color:var(--faint)}
 
+/* ---- 無子項目稿件:整本直接勾選 ---- */
+.admin .ms-done-toggle{display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:14px;
+  color:var(--text); margin:2px 0 4px; min-height:auto}
+.admin .ms-done-toggle .done-text{text-decoration:line-through; color:var(--faint)}
+
 /* ---- 番茄鐘狀態(running/ended)---- */
 .admin .timer-state{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px}
 .admin .timer-state .running{color:var(--ok)}
