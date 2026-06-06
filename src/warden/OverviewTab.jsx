@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
 import { ROLE_LABEL, OVERVIEW_STATUS_STYLE, memberStatusLabel } from './constants'
 import { computeProgress } from '../progress'
+import AvatarInput from '../AvatarInput'
 
 // 名單總覽:一份清單、三種狀態 —
 //   已配號(profiles 有 inmate_no)、未配對(profiles 無 inmate_no)、預約中(pending_inmates)。
@@ -92,10 +93,13 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
           {showForm ? '收起' : '＋ 新增預約'}
         </button>
         {showForm && (
-          <div className="toolbar" style={{ marginTop: 8 }}>
+          <div className="toolbar" style={{ marginTop: 8, alignItems: 'flex-start' }}>
             <input className="inp" placeholder="遊戲暱稱" value={form.game_name} onChange={e => setForm({ ...form, game_name: e.target.value })} />
             <input className="inp" placeholder="Discord 使用者名稱" value={form.discord_account} onChange={e => setForm({ ...form, discord_account: e.target.value })} />
-            <input className="inp" placeholder="頭貼網址(選填)" value={form.avatar_url} onChange={e => setForm({ ...form, avatar_url: e.target.value })} />
+            <div className="field" style={{ minWidth: 240 }}>
+              <span className="field-lbl">頭像(選填)</span>
+              <AvatarInput value={form.avatar_url} onChange={url => setForm({ ...form, avatar_url: url })} userId={'pending'} />
+            </div>
             <button onClick={addPending}>加入預約</button>
           </div>
         )}

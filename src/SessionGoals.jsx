@@ -5,6 +5,7 @@ import { presenceLabel } from './pomodoro'
 import MessageBanner from './MessageBanner'
 import SessionStatus from './SessionStatus'
 import { computeProgress } from './progress'
+import ProfileCard from './ProfileCard'
 
 const PRESENCE_STYLE = {
   '服刑中': { bg: '#d9534f', color: '#fff' },
@@ -218,7 +219,10 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   const available = actives.filter(m => !goalIds.includes(m.id))
 
   return (
-    <div>
+    <div className="sg-page">
+      {/* 0) 個人資料卡(當前犯人自己) */}
+      <ProfileCard userId={userId} />
+
       {/* 1) 服刑計時 / 狀態階段 */}
       <SessionStatus userId={userId} />
 
@@ -226,111 +230,128 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
 
       {/* 專屬獄卒:只有被指派時才顯示;沒指派則整個框不渲染 */}
       {myGuards.length > 0 && (
-        <div className="panel accent-guard">
-          <strong>專屬獄卒</strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>
-            {myGuards.map(g => (
-              <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Avatar profile={g.profile} />
-                <div>
-                  <strong>{g.profile?.game_name ?? g.profile?.display_name ?? '(未知)'}</strong>
-                  <span className="role-tag guard" style={{ marginLeft: 6 }}>
-                    {g.profile?.role === 'warden' ? '典獄長' : '獄卒'}
-                  </span>
-                  <div style={{ color: 'var(--hazard)', fontSize: 12 }}>👁 正在看著你服刑</div>
+        <div className="card-panel sg-section accent-guard">
+          <div className="head"><h2>專屬獄卒</h2></div>
+          <div className="body">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              {myGuards.map(g => (
+                <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Avatar profile={g.profile} />
+                  <div>
+                    <strong>{g.profile?.game_name ?? g.profile?.display_name ?? '(未知)'}</strong>
+                    <span className="role-tag guard" style={{ marginLeft: 6 }}>
+                      {g.profile?.role === 'warden' ? '典獄長' : '獄卒'}
+                    </span>
+                    <div style={{ color: 'var(--hazard)', fontSize: 12 }}>👁 正在看著你服刑</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      <h3>本場目標</h3>
-      {goals.length === 0 ? (
-        <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
-      ) : goals.map(g => {
-        const steps = stepsByMs[g.manuscript_id] ?? []
-        const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
-        const p = PRIORITY[g.manuscript?.priority] ?? PRIORITY[2]
-        const isOpen = expanded.includes(g.manuscript_id)
-        return (
-          <div key={g.id} className="panel">
-            <div className="panel-head">
-              <span className="chip" style={{ background: p.bg }}>{p.label}</span>
-              <strong>{g.manuscript?.title ?? '(稿件已不存在)'}</strong>
-              <span className="spacer" />
-              <button className="btn-sm" onClick={() => toggleExpand(g.manuscript_id)}>{isOpen ? '收合' : '展開子項目'}</button>
-              <button className="btn-sm" onClick={() => removeGoal(g.id)}>取消</button>
-            </div>
-            <div style={{ marginTop: 10 }}><ProgressBar progress={prog} /></div>
+      {/* 本場目標 */}
+      <div className="card-panel sg-section">
+        <div className="head"><h2>本場目標</h2></div>
+        <div className="body">
+          {goals.length === 0 ? (
+            <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
+          ) : goals.map(g => {
+            const steps = stepsByMs[g.manuscript_id] ?? []
+            const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
+            const p = PRIORITY[g.manuscript?.priority] ?? PRIORITY[2]
+            const isOpen = expanded.includes(g.manuscript_id)
+            return (
+              <div key={g.id} className="panel">
+                <div className="panel-head">
+                  <span className="chip" style={{ background: p.bg }}>{p.label}</span>
+                  <strong>{g.manuscript?.title ?? '(稿件已不存在)'}</strong>
+                  <span className="spacer" />
+                  <button className="btn-sm" onClick={() => toggleExpand(g.manuscript_id)}>{isOpen ? '收合' : '展開子項目'}</button>
+                  <button className="btn-sm" onClick={() => removeGoal(g.id)}>取消</button>
+                </div>
+                <div style={{ marginTop: 10 }}><ProgressBar progress={prog} /></div>
 
-            {isOpen && (
-              <div className="substeps" style={{ marginTop: 12 }}>
-                {steps.length === 0 ? (
-                  <p className="empty">這本稿還沒有子項目(到「我的稿件」新增)</p>
-                ) : steps.map(s => (
-                  <div key={s.id} className="step">
-                    <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
-                    <span className={s.done ? 'done-text' : ''}>{s.title}</span>
+                {isOpen && (
+                  <div className="substeps" style={{ marginTop: 12 }}>
+                    {steps.length === 0 ? (
+                      <p className="empty">這本稿還沒有子項目(到「我的稿件」新增)</p>
+                    ) : steps.map(s => (
+                      <div key={s.id} className="step">
+                        <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
+                        <span className={s.done ? 'done-text' : ''}>{s.title}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
+            )
+          })}
+          <div className="toolbar" style={{ marginTop: goals.length ? 12 : 4 }}>
+            <button className="btn-pri" onClick={() => setGoalModalOpen(true)}>＋ 新增本場目標</button>
           </div>
-        )
-      })}
-      <div className="toolbar" style={{ marginTop: goals.length ? 12 : 4 }}>
-        <button className="btn-pri" onClick={() => setGoalModalOpen(true)}>＋ 新增本場目標</button>
+        </div>
       </div>
 
-      <h3>本場獄卒</h3>
-      {guards.length === 0 ? (
-        <p className="empty">本場目前沒有獄卒在場</p>
-      ) : (
-        <div className="guard-grid">
-          {guards.map(gd => (
-            <div key={gd.siId} className="guard-cell">
-              <div className="g-av">
-                {gd.profile?.avatar_url
-                  ? <img src={gd.profile.avatar_url} alt="" />
-                  : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
-              </div>
-              <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</div>
-              <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+      {/* 本場獄卒 */}
+      <div className="card-panel sg-section">
+        <div className="head"><h2>本場獄卒</h2></div>
+        <div className="body">
+          {guards.length === 0 ? (
+            <p className="empty">本場目前沒有獄卒在場</p>
+          ) : (
+            <div className="guard-grid">
+              {guards.map(gd => (
+                <div key={gd.siId} className="guard-cell">
+                  <div className="g-av">
+                    {gd.profile?.avatar_url
+                      ? <img src={gd.profile.avatar_url} alt="" />
+                      : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
+                  </div>
+                  <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</div>
+                  <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </div>
 
-      <h3>本場同囚</h3>
-      {cellmates.length === 0 ? (
-        <p className="empty">本場目前只有你一個人,或還沒有其他人報到</p>
-      ) : cellmates.map(c => {
-        const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8, sessionTimer?.timer_ended_at)
-        const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
-        return (
-        <div key={c.siId} className="panel">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Avatar profile={c.profile} />
-            <div>
-              <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
-              <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
+      {/* 本場同囚 */}
+      <div className="card-panel sg-section">
+        <div className="head"><h2>本場同囚</h2></div>
+        <div className="body">
+          {cellmates.length === 0 ? (
+            <p className="empty">本場目前只有你一個人,或還沒有其他人報到</p>
+          ) : cellmates.map(c => {
+            const status = presenceLabel(sessionTimer?.timer_started_at, sessionTimer?.total_rounds ?? 8, sessionTimer?.timer_ended_at)
+            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
+            return (
+            <div key={c.siId} className="panel">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Avatar profile={c.profile} />
+                <div>
+                  <strong>No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</strong>
+                  <span style={{ marginLeft: 6 }}>{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</span>
+                </div>
+                <span className="spacer" />
+                <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>
+              </div>
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {c.works.length === 0 ? (
+                  <span className="empty">本場還沒挑稿</span>
+                ) : c.works.map(w => (
+                  <span key={w.goalId} className="chip" style={{ background: w.secret ? 'rgba(255,255,255,.08)' : 'rgba(245,197,24,.15)', color: w.secret ? 'var(--dim)' : 'var(--hazard)' }}>
+                    {w.secret ? '🔒 保密作業' : w.title}
+                  </span>
+                ))}
+              </div>
             </div>
-            <span className="spacer" />
-            <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>
-          </div>
-          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {c.works.length === 0 ? (
-              <span className="empty">本場還沒挑稿</span>
-            ) : c.works.map(w => (
-              <span key={w.goalId} className="chip" style={{ background: w.secret ? 'rgba(255,255,255,.08)' : 'rgba(245,197,24,.15)', color: w.secret ? 'var(--dim)' : 'var(--hazard)' }}>
-                {w.secret ? '🔒 保密作業' : w.title}
-              </span>
-            ))}
-          </div>
+            )
+          })}
         </div>
-        )
-      })}
+      </div>
 
       {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用既有 addGoal,可連續挑多筆。
           available 即時依 goals/actives 重算(挑進來的稿自動從清單移除)。 */}
