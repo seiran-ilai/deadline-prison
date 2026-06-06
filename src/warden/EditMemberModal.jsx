@@ -17,6 +17,19 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
       setMsg('儲存失敗:' + error.message + '(若是改身分,僅典獄長可變更)')
       return
     }
+    // 編號變動才另外呼叫 set_inmate_no(走唯一索引;撞號時 RPC raise,把訊息顯示在錯誤 banner)。
+    // 兩個呼叫都成功才視為儲存完成(此處 set_inmate_no 失敗則不關閉 modal,讓使用者改號重試)。
+    const origNo = m._origNo == null ? null : Number(m._origNo)
+    const raw = String(m.inmate_no ?? '').trim()
+    const newNo = raw === '' ? null : Number(raw)
+    if (newNo !== origNo) {
+      if (newNo == null || !Number.isInteger(newNo) || newNo <= 0) {
+        setMsg('儲存失敗:編號需為正整數')
+        return
+      }
+      const { error: noErr } = await supabase.rpc('set_inmate_no', { target_id: m.id, new_no: newNo })
+      if (noErr) { setMsg('儲存失敗:' + noErr.message); return }
+    }
     const roleChanged = m.role !== m._origRole
     setMsg(roleChanged
       ? `已儲存。已將身分變更為「${ROLE_LABEL[m.role] ?? m.role}」,該使用者需「重新登入」才會生效`
@@ -29,6 +42,10 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
     <div className="admin-modal-bg" onClick={() => setMember(null)}>
       <div className="admin-modal" onClick={e => e.stopPropagation()}>
         <h3>編輯犯人資料</h3>
+        <label>編號 No.
+          <input type="number" min="1" value={member.inmate_no}
+            onChange={e => setMember({ ...member, inmate_no: e.target.value })} />
+        </label>
         <label>遊戲暱稱
           <input value={member.game_name} onChange={e => setMember({ ...member, game_name: e.target.value })} />
         </label>

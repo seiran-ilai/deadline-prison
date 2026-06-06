@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   try {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!token) return res.status(401).json({ error: 'not_authenticated' })
-    const { session_id, note } = req.body || {}
+    const { session_id, note, game_name, avatar_url } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
 
     // 以使用者 JWT 建立 client → insert 走 RLS(user_id = auth.uid())
@@ -37,8 +37,13 @@ export default async function handler(req, res) {
     if (sess.capacity != null && sess.booked >= sess.capacity) return res.status(409).json({ error: 'full' })
 
     // insert(DB 唯一鍵兜底重複)
+    // game_name / avatar_url:前端帶來的展示值(暱稱/頭像),僅供該筆預約顯示,不作身分依據;
+    // 身分一律以上方 JWT 驗證的 user.id / dc_* 為準。長度做基本上限,避免過長字串。
+    const gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : null
+    const av = typeof avatar_url === 'string' ? avatar_url.trim().slice(0, 500) : null
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: user.id, dc_id, dc_name, note: note || null,
+      game_name: gn || null, avatar_url: av || null,
     })
     if (insErr) {
       if (insErr.code === '23505') return res.status(409).json({ error: 'already_booked' })

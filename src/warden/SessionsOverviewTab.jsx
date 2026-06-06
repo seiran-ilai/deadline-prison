@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import GuardAssign from './GuardAssign'
 
 // 場次總覽(僅典獄長):列出所有場次、開新場、編輯(標題/日期)、關閉/重新開啟、刪除。
 // 不放番茄鐘控制與直播(那些屬「進行中場次」分頁的控場,避免重複)。
+// open 場次可展開唯讀檢視本場名單(犯人列可就地指派/移除專屬獄卒);closed 場次不可展開。
 export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [sessions, setSessions] = useState([])
   const [counts, setCounts] = useState({})        // session_id -> 報到人數
@@ -14,6 +16,8 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [editTitle, setEditTitle] = useState('')
   const [editDate, setEditDate] = useState('')
   const [editCap, setEditCap] = useState('')
+  const [expandedId, setExpandedId] = useState(null) // 展開檢視中的場次 id(僅 open)
+  const [rosterById, setRosterById] = useState({})   // session_id -> { inmates:[], guards:[] }
 
   // 載入所有場次 + 各場人數(分開查再 JS 合併,不用巢狀 select)
   async function load() {
@@ -30,6 +34,28 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     setSessions(sorted); setCounts(cnt); setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // 展開/收合某場次(僅 open 可展開);展開時載入本場名單(分開查再 JS 合併,不用巢狀 select)
+  async function toggleExpand(s) {
+    if (s.status !== 'open') return
+    if (expandedId === s.id) { setExpandedId(null); return }
+    setExpandedId(s.id)
+    if (rosterById[s.id]) return
+    const { data: si } = await supabase.from('session_inmates')
+      .select('id, member_id, role_in_session, state').eq('session_id', s.id)
+    if (!si || !si.length) { setRosterById(prev => ({ ...prev, [s.id]: { inmates: [], guards: [] } })); return }
+    const { data: profs } = await supabase.from('profiles')
+      .select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', si.map(r => r.member_id))
+    const profById = {}; for (const p of profs ?? []) profById[p.id] = p
+    const merged = si.map(r => ({ id: r.id, member_id: r.member_id, role_in_session: r.role_in_session, state: r.state, profile: profById[r.member_id] }))
+    setRosterById(prev => ({
+      ...prev,
+      [s.id]: {
+        inmates: merged.filter(m => m.role_in_session !== 'guard'),
+        guards: merged.filter(m => m.role_in_session === 'guard'),
+      },
+    }))
+  }
 
   // 把上限輸入轉成 int 或 null(空白 / 非正整數 → null = 不限)
   const capValue = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : null }
@@ -86,7 +112,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
 
       {loading ? <p className="empty">載入中…</p>
         : sessions.length === 0 ? <p className="empty">還沒有任何場次</p>
-          : sessions.map(s => (
+          : sessions.map(s => {
+            const isOpen = expandedId === s.id
+            const roster = rosterById[s.id]
+            return (
             <div key={s.id} className="row-card">
               {editId === s.id ? (
                 <div className="row-head">
@@ -98,6 +127,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                 </div>
               ) : (
                 <div className="row-head">
+                  {/* open 場次左側可展開箭頭;closed 不顯示、不可展開 */}
+                  {s.status === 'open'
+                    ? <button className="btn-sm so-caret" onClick={() => toggleExpand(s)}>{isOpen ? '▾' : '▸'}</button>
+                    : <span className="so-caret-ph" aria-hidden="true" />}
                   <strong>{s.title}</strong>
                   <span className="muted">{s.session_date ?? '未設定日期'}</span>
                   <span className="tag tag-pill" style={s.status === 'open'
@@ -112,8 +145,49 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                   <button className="btn-sm btn-danger" onClick={() => deleteSession(s)}>刪除</button>
                 </div>
               )}
+
+              {/* 展開:唯讀檢視本場名單(犯人列右側嵌 GuardAssign 指派/移除專屬獄卒)。僅 open 場次。 */}
+              {isOpen && s.status === 'open' && (
+                <div className="row-detail">
+                  {!roster ? <p className="empty">讀取本場名單中…</p> : (<>
+                    <div className="group-lbl">本場犯人 ({roster.inmates.length})<span className="ln" /></div>
+                    {roster.inmates.length === 0 ? <p className="empty">本場沒有犯人</p> : roster.inmates.map(r => (
+                      <div key={r.id} className="inmate">
+                        <div className="in-av">
+                          {r.profile?.avatar_url
+                            ? <img src={r.profile.avatar_url} alt="" />
+                            : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
+                        </div>
+                        <div>
+                          <div className="in-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '(未知)'}</div>
+                          <div className="in-no">No.{r.profile?.inmate_no != null ? String(r.profile.inmate_no).padStart(4, '0') : '----'}</div>
+                        </div>
+                        <span className="spacer" />
+                        <GuardAssign sessionInmateId={r.id} guardRoster={roster.guards} setMsg={setMsg} />
+                      </div>
+                    ))}
+
+                    <div className="group-lbl">本場獄卒 ({roster.guards.length})<span className="ln" /></div>
+                    {roster.guards.length === 0 ? <p className="empty">本場沒有獄卒</p> : (
+                      <div className="guard-grid">
+                        {roster.guards.map(r => (
+                          <div key={r.id} className="guard-cell">
+                            <div className="g-av">
+                              {r.profile?.avatar_url
+                                ? <img src={r.profile.avatar_url} alt="" />
+                                : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
+                            </div>
+                            <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '(未知)'}</div>
+                            <span className="role-tag guard">{r.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>)}
+                </div>
+              )}
             </div>
-          ))}
+          )})}
     </div>
   )
 }

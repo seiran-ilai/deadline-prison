@@ -15,6 +15,8 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
   const [memberWorks, setMemberWorks] = useState({})     // member_id -> [稿件+進度]
   const [showForm, setShowForm] = useState(false)        // 新增預約表單開關
   const [form, setForm] = useState({ game_name: '', discord_account: '', avatar_url: '' })
+  const [q, setQ] = useState('')                          // 已配號清單搜尋(暱稱 / 編號)
+  const [sortDir, setSortDir] = useState('asc')           // 已配號清單排序:asc=編號舊→新(預設) / desc=新→舊
 
   // 總覽:光臨次數 + 目前狀態(分開查再合併)
   async function loadOverview() {
@@ -83,9 +85,38 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
     setMsg('已刪除預約'); reloadShared()
   }
 
+  // 給未配對者下一個編號(RPC assign_next_inmate_no;成功後重載共用資料,該員移入已配號)
+  async function assignNextNo(userId) {
+    const { error } = await supabase.rpc('assign_next_inmate_no', { target_id: userId })
+    if (error) { setMsg('給號失敗:' + error.message); return }
+    setMsg('已指派下一個編號'); reloadShared()
+  }
+
+  // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序(排序在前端做,load() 沒帶 order)
+  const ql = q.trim().toLowerCase()
+  const shownInmates = inmates
+    .filter(p => {
+      if (!ql) return true
+      const name = (p.game_name ?? p.display_name ?? '').toLowerCase()
+      const no = String(p.inmate_no ?? '')
+      return name.includes(ql) || no.includes(ql) || no.padStart(4, '0').includes(ql)
+    })
+    .slice()
+    .sort((a, b) => sortDir === 'asc'
+      ? (a.inmate_no ?? 0) - (b.inmate_no ?? 0)
+      : (b.inmate_no ?? 0) - (a.inmate_no ?? 0))
+
   return (
-    <div>
-      <h3>名單總覽</h3>
+    <div className="ov-page">
+      <div className="ov-head">
+        <h3>名單總覽</h3>
+        <span className="spacer" />
+        <input className="inp" placeholder="搜尋暱稱 / 編號" value={q} onChange={e => setQ(e.target.value)} />
+        <select className="sel" value={sortDir} onChange={e => setSortDir(e.target.value)}>
+          <option value="asc">編號 舊→新</option>
+          <option value="desc">編號 新→舊</option>
+        </select>
+      </div>
 
       {/* 新增預約(搬自原「預約與收押」) */}
       <div style={{ marginBottom: 12 }}>
@@ -118,12 +149,13 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
                 <span className="spacer" />
                 <button className="btn-sm" onClick={() => linkToPending(p.id)}>指到預約</button>
                 <button className="btn-sm" onClick={() => admitDirect(p.id)}>直接收押</button>
+                <button className="btn-sm" onClick={() => assignNextNo(p.id)}>給下一號</button>
               </div>
             </div>
           ))}
 
-          {/* 2) 已配號 profiles(沿用原總覽:狀態 / 光臨 / 展開稿件 / 編輯) */}
-          {inmates.map(p => {
+          {/* 2) 已配號 profiles(沿用原總覽:狀態 / 光臨 / 展開稿件 / 編輯;前端過濾 + 編號排序) */}
+          {shownInmates.map(p => {
             const status = memberStatusLabel(memberSession[p.id])
             const ss = OVERVIEW_STATUS_STYLE[status] ?? { bg: '#eee', color: '#888' }
             const isOpen = expandedMember === p.id

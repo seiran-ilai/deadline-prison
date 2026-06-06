@@ -248,7 +248,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         {/* 我(直式身分卡,沿用 ProfileCard 的個人資料來源 + 編輯) */}
         <ProfileCard userId={userId} variant="id" label="我 · 服刑中" />
 
-        {/* 專屬獄卒(直式卡;未指派顯示佔位) */}
+        {/* 專屬獄卒(直式卡;骨架與 ProfileCard variant="id" 一致:id-av / id-lbl / id-no / id-nm / id-watch,
+            缺的欄位以 &nbsp; + 既有 min-height 留白佔位;底部以 id-spacer(margin-top:auto)推齊讓並排卡片對齊) */}
         {myGuards.length > 0 ? (
           <div className="idcard-stack">
             {myGuards.map(g => (
@@ -265,6 +266,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
                   <span className="role-tag guard">{g.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
                 </div>
                 <div className="id-watch">👁 正在看著你服刑</div>
+                <div className="id-spacer" aria-hidden="true">&nbsp;</div>
               </div>
             ))}
           </div>
@@ -274,6 +276,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
             <div className="id-lbl">專屬獄卒</div>
             <div className="id-no">{' '}</div>
             <div className="id-nm muted">尚未配對</div>
+            <div className="id-watch">&nbsp;</div>
+            <div className="id-spacer" aria-hidden="true">&nbsp;</div>
           </div>
         )}
 

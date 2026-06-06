@@ -4,6 +4,7 @@ import { ProgressBar } from '../ManuscriptManager'
 import { computeProgress } from '../progress'
 import { ROLE_LABEL } from './constants'
 import SessionTimerControl from './SessionTimerControl'
+import GuardAssign from './GuardAssign'
 
 export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared, onGoToManuscripts }) {
   const [roster, setRoster] = useState([])
@@ -16,8 +17,6 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   const [pickGoal, setPickGoal] = useState({})           // session_inmate_id -> 選中的 manuscript_id
   const [goalModalInmate, setGoalModalInmate] = useState(null) // 開啟「新增本場目標」modal 的犯人 roster row(null=關閉)
   const [goalExpanded, setGoalExpanded] = useState([])   // 展開中的目標(session_goals.id)
-  const [assignedByInmate, setAssignedByInmate] = useState({}) // session_inmate_id -> [{id, guard_id, profile}]
-  const [pickAssign, setPickAssign] = useState({})         // session_inmate_id -> 要指派的 guard member_id
 
   async function loadRoster(sid) {
     if (!sid) { setRoster([]); return }
@@ -65,7 +64,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     for (const s of steps) (sBy[s.manuscript_id] ??= []).push(s)
     setGoalsByInmate(gByInmate); setMsByMember(mByMember); setGoalSteps(sBy)
   }
-  useEffect(() => { loadGoals(); loadAssignments() }, [roster])
+  useEffect(() => { loadGoals() }, [roster])
 
   async function addInmateGoal(sessionInmateId, manuscriptId) {
     const mid = manuscriptId ?? pickGoal[sessionInmateId]   // modal 直接帶稿件 id;沿用原下拉時讀 pickGoal
@@ -80,41 +79,6 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     const { error } = await supabase.from('session_goals').delete().eq('id', goalId)
     if (error) { setMsg('移除目標失敗:' + error.message); return }
     loadGoals()
-  }
-
-  // 載入本場犯人各自的專屬獄卒(分開查再合併)
-  async function loadAssignments(rosterArg) {
-    const rs = rosterArg ?? roster
-    const inmateRows = rs.filter(r => r.role_in_session !== 'guard')
-    if (!inmateRows.length) { setAssignedByInmate({}); return }
-    const { data: igs } = await supabase.from('inmate_guards')
-      .select('id, session_inmate_id, guard_id').in('session_inmate_id', inmateRows.map(r => r.id))
-    const guardIds = [...new Set((igs ?? []).map(g => g.guard_id))]
-    const gpById = {}
-    if (guardIds.length) {
-      const { data: gprofs } = await supabase.from('profiles')
-        .select('id, game_name, display_name, avatar_url, role').in('id', guardIds)
-      for (const p of gprofs ?? []) gpById[p.id] = p
-    }
-    const byInmate = {}
-    for (const g of igs ?? [])
-      (byInmate[g.session_inmate_id] ??= []).push({ id: g.id, guard_id: g.guard_id, profile: gpById[g.guard_id] })
-    setAssignedByInmate(byInmate)
-  }
-
-  async function assignGuard(sessionInmateId) {
-    const gid = pickAssign[sessionInmateId]
-    if (!gid) return
-    const { error } = await supabase.from('inmate_guards')
-      .insert({ session_inmate_id: sessionInmateId, guard_id: gid })
-    if (error) { setMsg('指派失敗:' + error.message); return }
-    setPickAssign({ ...pickAssign, [sessionInmateId]: '' }); loadAssignments()
-  }
-
-  async function removeAssign(inmateGuardId) {
-    const { error } = await supabase.from('inmate_guards').delete().eq('id', inmateGuardId)
-    if (error) { setMsg('移除指派失敗:' + error.message); return }
-    loadAssignments()
   }
 
   function openBroadcast(sessionId) {
@@ -347,27 +311,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                     {isWarden && (
                       <div className="detail-row" style={{ alignItems: 'flex-start' }}>
                         <span className="k">專屬獄卒</span>
-                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                            {(assignedByInmate[r.id] ?? []).length === 0
-                              ? <span className="v">未指派</span>
-                              : (assignedByInmate[r.id] ?? []).map(a => (
-                                <span key={a.id} className="tag tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(63,179,107,.12)', color: 'var(--ok)' }}>
-                                  {a.profile?.role === 'warden' ? '典獄長' : '獄卒'}·{a.profile?.game_name ?? a.profile?.display_name ?? '?'}
-                                  <button onClick={() => removeAssign(a.id)} style={{ border: 'none', background: 'none', color: 'inherit', padding: 0, minHeight: 'auto' }}>✕</button>
-                                </span>
-                              ))}
-                          </div>
-                          <div className="detail-row">
-                            <select className="sel" value={pickAssign[r.id] ?? ''} onChange={e => setPickAssign({ ...pickAssign, [r.id]: e.target.value })}>
-                              <option value="">— 指派專屬獄卒 —</option>
-                              {guardRoster.filter(g => !(assignedByInmate[r.id] ?? []).some(a => a.guard_id === g.member_id))
-                                .map(g => <option key={g.id} value={g.member_id}>{g.profile?.game_name ?? g.profile?.display_name}</option>)}
-                            </select>
-                            <button className="btn-sm" onClick={() => assignGuard(r.id)}>指派</button>
-                            {guardRoster.length === 0 && <span className="faint">(本場尚無獄卒可指派)</span>}
-                          </div>
-                        </div>
+                        <GuardAssign sessionInmateId={r.id} guardRoster={guardRoster} setMsg={setMsg} />
                       </div>
                     )}
                   </div>

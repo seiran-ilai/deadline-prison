@@ -105,8 +105,8 @@ export default function BroadcastScreen({ sessionId }) {
         {guards.length === 0 ? <div style={{ color: '#777', fontSize: 20 }}>無</div> : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
             {guards.map((g, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <PersonAvatar profile={g.profile} size={56} />
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <PersonAvatar profile={g.profile} size={160} />
                 <span style={{ fontSize: 24 }}>{g.profile?.game_name ?? g.profile?.display_name ?? '?'}</span>
               </div>
             ))}
@@ -120,8 +120,8 @@ export default function BroadcastScreen({ sessionId }) {
         {inmates.length === 0 ? <div style={{ color: '#777', fontSize: 20 }}>本場還沒有囚犯</div> : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
             {inmates.map((m, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 120 }}>
-                <PersonAvatar profile={m.profile} size={72} />
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 260 }}>
+                <PersonAvatar profile={m.profile} size={240} />
                 <span style={{ fontSize: 18, textAlign: 'center' }}>{m.profile?.game_name ?? m.profile?.display_name ?? '?'}</span>
                 <span style={{ fontSize: 14, color: '#888' }}>No.{m.profile?.inmate_no != null ? String(m.profile.inmate_no).padStart(4, '0') : '----'}</span>
               </div>

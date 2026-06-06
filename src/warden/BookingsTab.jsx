@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import AvatarInput from '../AvatarInput'
 
 const STATUS_STYLE = {
   pending: { label: '待確認', bg: '#e0b04a', color: '#1a1a1a' },
@@ -14,11 +15,12 @@ export default function BookingsTab({ setMsg }) {
   const [bySession, setBySession] = useState({})    // session_id -> [booking]
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
+  const [editing, setEditing] = useState(null)   // 編輯暱稱/頭像中的 booking { id, game_name, avatar_url }
 
   async function load() {
     setLoading(true)
     const { data: bk } = await supabase.from('bookings')
-      .select('id, session_id, dc_id, dc_name, note, status, created_at').order('created_at')
+      .select('id, session_id, dc_id, dc_name, note, status, created_at, game_name, avatar_url').order('created_at')
     const grouped = {}
     for (const b of bk ?? []) (grouped[b.session_id] ??= []).push(b)
     const sids = Object.keys(grouped)
@@ -42,6 +44,14 @@ export default function BookingsTab({ setMsg }) {
     const { error } = await supabase.from('bookings').update({ status }).eq('id', b.id)
     if (error) { setMsg('更新狀態失敗:' + error.message); return }
     setMsg('已更新預約狀態'); load()
+  }
+
+  async function saveBookingInfo() {
+    const e = editing
+    const { error } = await supabase.from('bookings')
+      .update({ game_name: e.game_name || null, avatar_url: e.avatar_url || null }).eq('id', e.id)
+    if (error) { setMsg('更新預約資料失敗:' + error.message); return }
+    setMsg('已更新預約暱稱/頭像'); setEditing(null); load()
   }
 
   return (
@@ -71,12 +81,15 @@ export default function BookingsTab({ setMsg }) {
                       const st = STATUS_STYLE[b.status] ?? STATUS_STYLE.pending
                       return (
                         <div key={b.id} className="sub-row">
+                          {b.avatar_url && <img className="avatar" src={b.avatar_url} alt="" />}
                           <strong>{b.dc_name}</strong>
+                          {b.game_name && <span className="muted">暱稱:{b.game_name}</span>}
                           <span className="faint">DC:{b.dc_id}</span>
                           {b.note && <span className="muted">備註:{b.note}</span>}
                           <span className="tag tag-pill" style={{ background: st.bg, color: st.color }}>{st.label}</span>
                           <span className="faint">{new Date(b.created_at).toLocaleString()}</span>
                           <span className="spacer" />
+                          <button className="btn-sm" onClick={() => setEditing({ id: b.id, game_name: b.game_name ?? '', avatar_url: b.avatar_url ?? '' })}>編輯暱稱/頭像</button>
                           {b.status !== 'confirmed' && <button className="btn-sm" onClick={() => setStatus(b, 'confirmed')}>確認</button>}
                           {b.status !== 'pending' && <button className="btn-sm" onClick={() => setStatus(b, 'pending')}>改待確認</button>}
                           {b.status !== 'cancelled' && <button className="btn-sm btn-danger" onClick={() => setStatus(b, 'cancelled')}>取消</button>}
@@ -88,6 +101,26 @@ export default function BookingsTab({ setMsg }) {
               </div>
             )
           })}
+
+      {/* 編輯預約暱稱/頭像 modal(沿用 AvatarInput;只改該筆預約的展示值,不動身分) */}
+      {editing && (
+        <div className="admin-modal-bg" onClick={() => setEditing(null)}>
+          <div className="admin-modal" onClick={e => e.stopPropagation()}>
+            <h3>編輯預約暱稱/頭像</h3>
+            <label>暱稱
+              <input value={editing.game_name} onChange={e => setEditing({ ...editing, game_name: e.target.value })} />
+            </label>
+            <div className="field">
+              <span className="field-lbl">頭像</span>
+              <AvatarInput value={editing.avatar_url} onChange={url => setEditing({ ...editing, avatar_url: url })} userId={editing.id} />
+            </div>
+            <div className="modal-acts">
+              <button onClick={() => setEditing(null)}>取消</button>
+              <button className="btn-pri" onClick={saveBookingInfo}>儲存</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

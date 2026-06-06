@@ -145,9 +145,9 @@
 .admin .member{border:1px solid var(--line); border-radius:8px; background:var(--panel-2); margin-bottom:12px; overflow:hidden}
 .admin .member .m-top{display:flex; align-items:center; gap:12px; padding:14px 16px; flex-wrap:wrap}
 .admin .member.guard-member{background:rgba(63,179,107,.06)}
-.admin .avatar{width:40px; height:40px; border-radius:6px; display:flex; align-items:center; justify-content:center;
-  font-family:var(--mono); font-weight:700; font-size:15px; background:var(--raise); color:var(--dim);
-  flex:0 0 40px; object-fit:cover; overflow:hidden}
+.admin .avatar{width:56px; height:56px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-weight:700; font-size:20px; background:var(--raise); color:var(--dim);
+  flex:0 0 56px; object-fit:cover; overflow:hidden}
 .admin .avatar img{width:100%; height:100%; object-fit:cover}
 .admin .avatar.guard-av{background:rgba(63,179,107,.15); color:var(--ok)}
 .admin .m-id{font-family:var(--mono); font-size:12px; color:var(--dim)}
@@ -172,6 +172,9 @@
 .admin .row-card .row-detail{margin-top:12px; border-top:1px dashed var(--line); padding-top:12px}
 .admin .sub-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0; border-bottom:1px solid var(--line)}
 .admin .sub-row:last-child{border-bottom:none}
+/* 場次總覽:open 場次列的展開箭頭(closed 不顯示) */
+.admin .so-caret{padding:4px 8px; font-size:13px; line-height:1; color:var(--dim)}
+.admin .so-caret:hover{color:var(--text)}
 .admin .spacer{flex:1}
 .admin .muted{color:var(--dim); font-size:13px}
 .admin .faint{color:var(--faint); font-size:12px}
@@ -245,10 +248,10 @@
 
 /* ---- 本場獄卒格狀清單(頭貼方塊 + 暱稱)---- */
 .admin .guard-grid{display:flex; flex-wrap:wrap; gap:14px}
-.admin .guard-cell{position:relative; width:120px; display:flex; flex-direction:column; align-items:center; gap:8px;
+.admin .guard-cell{position:relative; width:140px; display:flex; flex-direction:column; align-items:center; gap:8px;
   padding:14px 8px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2)}
-.admin .guard-cell .g-av{width:96px; height:96px; border-radius:8px; display:flex; align-items:center; justify-content:center;
-  font-family:var(--mono); font-weight:700; font-size:30px; background:rgba(63,179,107,.15); color:var(--ok); overflow:hidden}
+.admin .guard-cell .g-av{width:120px; height:120px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-weight:700; font-size:48px; background:rgba(63,179,107,.15); color:var(--ok); overflow:hidden}
 .admin .guard-cell .g-av img{width:100%; height:100%; object-fit:cover}
 .admin .guard-cell .g-nm{font-size:13px; font-weight:600; text-align:center; line-height:1.3;
   max-width:100%; word-break:break-word}
@@ -312,9 +315,16 @@
   .admin .btn-pri{min-height:46px}
   /* 本場獄卒方塊手機等比縮小、換行不溢出 */
   .admin .guard-grid{gap:10px}
-  .admin .guard-cell{width:88px; padding:10px 6px 9px}
-  .admin .guard-cell .g-av{width:64px; height:64px; font-size:22px}
+  .admin .guard-cell{width:104px; padding:10px 6px 9px}
+  .admin .guard-cell .g-av{width:88px; height:88px; font-size:35px}
   .admin .guard-cell .g-x{min-height:auto}
+  /* 卡片類頭像(身分卡 / ProfileCard 橫卡)手機縮為 88、initial 字級 0.4× */
+  .admin .idcard .id-av{width:88px; height:88px; font-size:35px}
+  .admin .profile-card .pc-av{width:88px; height:88px; flex:0 0 88px; font-size:35px}
+  /* 列表列頭像(囚犯 / 同囚 / 主控台名單列)手機縮為 48 */
+  .admin .inmate .in-av{width:48px; height:48px; flex:0 0 48px}
+  .admin .avatar{width:48px; height:48px; flex:0 0 48px}
+  .admin .idcard .id-spacer{min-height:40px}
 }
 
 /* ================= 獄卒 MEMO / 確認項 ================= */
@@ -349,9 +359,9 @@
 /* ================= 個人資料卡 / 頭像輸入 ================= */
 /* ---- ProfileCard:橫向精簡卡(左頭像 / 中暱稱+角色 / 右編輯)---- */
 .admin .profile-card{display:flex; align-items:center; gap:14px; padding:12px 16px; margin-bottom:16px}
-.admin .profile-card .pc-av{width:52px; height:52px; flex:0 0 52px; border-radius:8px; overflow:hidden;
+.admin .profile-card .pc-av{width:120px; height:120px; flex:0 0 120px; border-radius:8px; overflow:hidden;
   display:flex; align-items:center; justify-content:center; background:var(--raise); color:var(--dim);
-  font-family:var(--mono); font-weight:700; font-size:20px}
+  font-family:var(--mono); font-weight:700; font-size:48px}
 .admin .profile-card .pc-av img{width:100%; height:100%; object-fit:cover}
 .admin .profile-card .pc-main{flex:1; min-width:0; display:flex; flex-direction:column; gap:4px}
 .admin .profile-card .pc-name{font-size:16px; font-weight:700; color:var(--text);
@@ -389,21 +399,23 @@
 .admin .ses-top.prisoner{grid-template-columns:minmax(190px,1fr) minmax(190px,1fr) 1.6fr}
 .admin .ses-top.guard{grid-template-columns:minmax(220px,1fr) 2fr}
 
-/* 直式身分卡(頭像在上、文字置中在下;頭像 104×96 與本場獄卒卡一致)*/
+/* 直式身分卡(頭像在上、文字置中在下;頭像正方 120×120 與本場獄卒卡一致)*/
 .admin .idcard{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px 16px;
   display:flex; flex-direction:column; align-items:center; text-align:center; gap:9px}
 .admin .idcard-stack{display:flex; flex-direction:column; gap:14px}
-.admin .idcard .id-av{width:104px; height:96px; border-radius:10px; flex:0 0 auto; overflow:hidden;
-  display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:34px;
+.admin .idcard .id-av{width:120px; height:120px; border-radius:10px; flex:0 0 auto; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:48px;
   background:var(--raise); color:var(--dim)}
 .admin .idcard .id-av img{width:100%; height:100%; object-fit:cover}
 /* 固定槽位:即使無內容也保留行高,讓並排身分卡的暱稱對齊(留白占位) */
 .admin .idcard .id-lbl{font-size:11px; letter-spacing:1px; color:var(--faint); text-transform:uppercase; min-height:14px}
 .admin .idcard .id-no{font-family:var(--mono); font-size:12px; color:var(--dim); min-height:18px}
 .admin .idcard .id-nm{font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap}
-.admin .idcard .id-watch{font-size:12px; color:var(--hazard)}
-/* 編輯鈕固定貼齊卡片底部(缺編輯鈕的卡片以等高留白撐住,不讓兩卡內容上下錯位) */
+.admin .idcard .id-watch{font-size:12px; color:var(--hazard); min-height:17px}
+/* 編輯鈕固定貼齊卡片底部(缺編輯鈕的卡片以等高 .id-spacer 留白撐住,不讓兩卡內容上下錯位) */
 .admin .idcard .id-edit{margin-top:auto}
+/* 無編輯鈕的卡(專屬獄卒):底部補等高留白,推到底以對齊並排卡片的底邊 */
+.admin .idcard .id-spacer{margin-top:auto; min-height:30px}
 .admin .idcard.me{border-color:var(--hazard-d)}
 .admin .idcard.me .id-av{background:rgba(245,197,24,.12); color:var(--hazard)}
 .admin .idcard.guardself{border-color:rgba(63,179,107,.4)}
@@ -435,8 +447,8 @@
 /* 囚犯列 */
 .admin .inmate{display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:6px; margin-bottom:8px;
   background:var(--panel-2); border:1px solid var(--line); flex-wrap:wrap}
-.admin .inmate .in-av{width:38px; height:38px; flex:0 0 38px; border-radius:6px; overflow:hidden;
-  display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; background:var(--raise); color:var(--dim)}
+.admin .inmate .in-av{width:56px; height:56px; flex:0 0 56px; border-radius:6px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:20px; background:var(--raise); color:var(--dim)}
 .admin .inmate .in-av img{width:100%; height:100%; object-fit:cover}
 .admin .inmate .in-nm{font-weight:600; display:flex; align-items:center; gap:6px; flex-wrap:wrap}
 .admin .inmate .in-no{font-family:var(--mono); font-size:11px; color:var(--faint)}
@@ -463,6 +475,12 @@
 
 /* 我的稿件:限制最大寬度並置中,不貼齊整個寬螢幕(手機下自動滿寬單欄) */
 .admin .ms-page{max-width:880px; margin:0 auto}
+
+/* 名單總覽:限寬置中(比照 .ms-page);標題列右側嵌搜尋 + 排序 */
+.admin .ov-page{max-width:880px; margin:0 auto}
+.admin .ov-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px}
+.admin .ov-head h3{margin:0}
+.admin .ov-head .inp{max-width:220px}
 
 @media (max-width:860px){
   .admin .ses-top.prisoner, .admin .ses-top.guard{grid-template-columns:1fr}

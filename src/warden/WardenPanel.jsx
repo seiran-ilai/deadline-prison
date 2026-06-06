@@ -44,6 +44,8 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
       discord_account: p.discord_account ?? '',
       role: p.role ?? 'member',
       _origRole: p.role ?? 'member',
+      inmate_no: p.inmate_no ?? '',
+      _origNo: p.inmate_no ?? null,
     })
   }
 

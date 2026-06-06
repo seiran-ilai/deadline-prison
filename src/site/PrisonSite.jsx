@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import { createBooking, cancelBooking } from '../bookingApi'
 import { sessionStatus, toSessionView, splitDate } from '../prison'
+import AvatarInput from '../AvatarInput'
 import './prison-site.css'
 
 const RULES = [
@@ -26,6 +27,9 @@ export default function PrisonSite() {
   const [selBooking, setSelBooking] = useState(null) // 我在 sel 這場的預約(含 cancelled)
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [myProfile, setMyProfile] = useState(null)   // 預約者既有 profile(暱稱/頭像來源判定)
+  const [bkName, setBkName] = useState('')           // 入監暱稱(預設帶既有 game_name)
+  const [bkAvatar, setBkAvatar] = useState('')       // 入監頭像 URL(預設帶既有 avatar_url)
   const rootRef = useRef(null)
 
   const loadData = useCallback(async () => {
@@ -71,12 +75,20 @@ export default function PrisonSite() {
     return () => { io.disconnect(); navIO.disconnect() }
   }, [loading])
 
-  // 我在所選場次的預約狀態(用於 modal 顯示已報/可取消)
+  // 我在所選場次的預約狀態(用於 modal 顯示已報/可取消)+ 既有 profile(暱稱/頭像來源)
   useEffect(() => {
     let alive = true
-    if (!sel || !user) { setSelBooking(null); return }
+    if (!sel || !user) { setSelBooking(null); setMyProfile(null); return }
     supabase.from('bookings').select('id, status').eq('session_id', sel.id).eq('user_id', user.id).maybeSingle()
       .then(({ data }) => { if (alive) setSelBooking(data ?? null) })
+    // 來源 = 既有 profile;兩者皆有 → 直接沿用,缺任一 → modal 內補填(預填既有值)
+    supabase.from('profiles').select('game_name, avatar_url').eq('id', user.id).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        setMyProfile(data ?? null)
+        setBkName(data?.game_name ?? '')
+        setBkAvatar(data?.avatar_url ?? '')
+      })
     return () => { alive = false }
   }, [sel, user])
 
@@ -100,7 +112,8 @@ export default function PrisonSite() {
 
   async function confirmBooking() {
     setSubmitting(true); setMsg(null)
-    const r = await createBooking(sel.id, null)
+    // 暱稱/頭像僅作該筆預約展示值(伺服器仍以 JWT 驗身分);沿用既有 profile 值或 modal 補填的值
+    const r = await createBooking(sel.id, { game_name: bkName.trim() || null, avatar_url: bkAvatar || null })
     setSubmitting(false)
     if (r.ok) setMsg('收監成功。鈴響時見。')
     else if (r.error === 'already_booked') setMsg('你已在此梯次服刑名冊上。')
@@ -304,10 +317,30 @@ export default function PrisonSite() {
                   <p className="m-note">你先前已取消此梯次。要重新登記入監名冊嗎?</p>
                   <button className="m-dc m-confirm" onClick={rebook} disabled={submitting}>{submitting ? '處理中…' : '重新報名'}</button>
                 </>
-              ) : (
+              ) : (myProfile?.game_name && myProfile?.avatar_url) ? (
+                // 既有 profile 暱稱/頭像皆有 → 直接以該身分入監,沿用既有值
                 <>
-                  <p className="m-note">以 <b style={{ color: 'var(--text)' }}>你的 Discord 身分</b>入監,確認後登入服刑名冊。</p>
+                  <div className="m-intake-id">
+                    {myProfile.avatar_url && <img className="m-intake-av" src={myProfile.avatar_url} alt="" />}
+                    <p className="m-note" style={{ margin: 0 }}>以 <b style={{ color: 'var(--text)' }}>{myProfile.game_name}</b> 身分入監,確認後登入服刑名冊。</p>
+                  </div>
                   <button className="m-dc m-confirm" onClick={confirmBooking} disabled={submitting}>{submitting ? '收監中…' : '確認入監'}</button>
+                </>
+              ) : (
+                // 缺暱稱或頭像 → modal 內補填(暱稱必填 + 頭像上傳),填妥才能確認入監
+                <>
+                  <p className="m-note">入監前請設定你的<b style={{ color: 'var(--text)' }}>服刑暱稱與頭像</b>(將作為本梯次名冊的顯示資料)。</p>
+                  <div className="m-field">
+                    <span className="m-field-lbl">服刑暱稱(必填)</span>
+                    <input className="m-input" placeholder="顯示在名冊上的暱稱" value={bkName} onChange={e => setBkName(e.target.value)} />
+                  </div>
+                  <div className="m-field">
+                    <span className="m-field-lbl">頭像</span>
+                    <AvatarInput value={bkAvatar} onChange={url => setBkAvatar(url)} userId={user.id} />
+                  </div>
+                  <button className="m-dc m-confirm" onClick={confirmBooking} disabled={submitting || !bkName.trim() || !bkAvatar}>
+                    {submitting ? '收監中…' : '確認入監'}
+                  </button>
                 </>
               )}
             </div>

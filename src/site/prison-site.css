@@ -203,6 +203,39 @@
 .dp-modal .m-close{position:absolute; top:14px; right:16px; background:none; border:none; color:var(--dim); font-family:var(--mono); font-size:22px; cursor:pointer; line-height:1}
 .dp-modal .m-close:hover{color:var(--hazard)}
 
+/* 入監摘要(既有暱稱/頭像皆有時直接沿用) */
+.dp-modal .m-intake-id{display:flex; align-items:center; gap:14px; margin:18px 0 22px}
+.dp-modal .m-intake-av{width:64px; height:64px; flex:0 0 64px; border-radius:8px; object-fit:cover; border:1px solid var(--steel)}
+
+/* 入監補填欄位(暱稱 + 頭像) */
+.dp-modal .m-field{margin:16px 0; display:flex; flex-direction:column; gap:8px}
+.dp-modal .m-field-lbl{font-family:var(--mono); font-size:12px; letter-spacing:1px; color:var(--dim)}
+.dp-modal .m-input{background:var(--concrete-0); border:1px solid var(--steel); color:var(--text);
+  padding:10px 12px; font-family:var(--cjk); font-size:14px; width:100%}
+.dp-modal .m-input:focus{outline:none; border-color:var(--hazard)}
+
+/* AvatarInput 於形象站(.dp-site)的外觀:沿用元件 markup,改用形象站色票 */
+.dp-site .avatar-input{display:flex; gap:14px; align-items:flex-start; width:100%}
+.dp-site .avatar-input .ai-preview{width:72px; height:72px; flex:0 0 72px; overflow:hidden;
+  background:var(--concrete-2); border:1px solid var(--steel); display:flex; align-items:center; justify-content:center}
+.dp-site .avatar-input .ai-preview img{width:100%; height:100%; object-fit:cover}
+.dp-site .avatar-input .ai-empty{font-size:12px; color:var(--faint)}
+.dp-site .avatar-input .ai-body{flex:1; min-width:0; display:flex; flex-direction:column; gap:8px}
+.dp-site .avatar-input .ai-tabs{display:flex; gap:6px}
+.dp-site .avatar-input .ai-tabs button{padding:6px 12px; font-size:12px; font-family:var(--cjk); cursor:pointer;
+  background:transparent; border:1px solid var(--steel); color:var(--dim)}
+.dp-site .avatar-input .ai-tabs button.on{background:var(--hazard); border-color:var(--hazard); color:#0a0a0a; font-weight:700}
+.dp-site .avatar-input .inp{width:100%; background:var(--concrete-0); border:1px solid var(--steel); color:var(--text);
+  padding:9px 12px; font-family:var(--cjk); font-size:14px}
+.dp-site .avatar-input .inp:focus{outline:none; border-color:var(--hazard)}
+.dp-site .avatar-input .ai-file{display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
+  border:1px dashed var(--steel); padding:10px 14px; font-size:13px; color:var(--dim); background:var(--concrete-0)}
+.dp-site .avatar-input .ai-file:hover{border-color:var(--hazard); color:var(--text)}
+.dp-site .avatar-input .ai-file input[type=file]{display:none}
+.dp-site .avatar-input .ai-err{color:#f0a99c; font-size:12px}
+.dp-site .avatar-input .ai-clear{align-self:flex-start; padding:4px 10px; font-size:12px; cursor:pointer;
+  background:transparent; border:1px solid var(--steel); color:var(--dim)}
+
 @media(max-width:720px){
   .dp-site nav .links{display:none}
   .dp-site nav .nav-entries{margin-left:auto}
