@@ -223,6 +223,34 @@
 .admin-modal button.btn-pri{background:#f5c518; border:none; color:#0a0c0e; font-weight:700}
 .admin-modal .warn{color:#f0c674; font-size:13px; margin:0}
 
+/* ---- 新增本場目標 modal ---- */
+.admin-modal.goal-modal{width:440px; gap:12px}
+.admin-modal .goal-modal-head{display:flex; align-items:center; gap:10px}
+.admin-modal .goal-modal-head h3{flex:1; min-width:0}
+.admin-modal .goal-modal-x{border:none; background:none; color:#9298a2; font-size:16px; line-height:1; padding:4px 8px}
+.admin-modal .goal-modal-x:hover{color:#e4e5e7; background:none; border:none}
+.admin-modal .goal-modal-empty{display:flex; flex-direction:column; gap:14px; align-items:flex-start;
+  padding:8px 0 4px}
+.admin-modal .goal-pick-list{display:flex; flex-direction:column; gap:8px; max-height:52vh; overflow-y:auto}
+.admin-modal .goal-pick{display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  padding:11px 14px; background:#1d2127; border:1px solid rgba(255,255,255,.14); border-radius:6px}
+.admin-modal .goal-pick:hover{border-color:#f5c518; background:#232830}
+.admin-modal .goal-pick .goal-pick-title{flex:1; min-width:0; font-size:14px; color:#e4e5e7;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.admin-modal .goal-pick .goal-pick-add{font-size:12px; color:#f5c518; font-weight:700; white-space:nowrap}
+
+/* ---- 本場獄卒格狀清單(頭貼方塊 + 暱稱)---- */
+.admin .guard-grid{display:flex; flex-wrap:wrap; gap:14px}
+.admin .guard-cell{position:relative; width:120px; display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:14px 8px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2)}
+.admin .guard-cell .g-av{width:96px; height:96px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-weight:700; font-size:30px; background:rgba(63,179,107,.15); color:var(--ok); overflow:hidden}
+.admin .guard-cell .g-av img{width:100%; height:100%; object-fit:cover}
+.admin .guard-cell .g-nm{font-size:13px; font-weight:600; text-align:center; line-height:1.3;
+  max-width:100%; word-break:break-word}
+.admin .guard-cell .g-x{position:absolute; top:5px; right:5px; width:22px; height:22px; min-height:auto; padding:0;
+  display:flex; align-items:center; justify-content:center; border-radius:50%; font-size:11px; line-height:1}
+
 /* ---- 置中狀態頁(登入 / 查無預約 / 載入)---- */
 .admin .center-box{min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:16px; text-align:center; padding:24px}
@@ -278,4 +306,9 @@
   /* 點擊目標 ≥44px(手機優先)*/
   .admin button{min-height:40px}
   .admin .btn-pri{min-height:46px}
+  /* 本場獄卒方塊手機等比縮小、換行不溢出 */
+  .admin .guard-grid{gap:10px}
+  .admin .guard-cell{width:88px; padding:10px 6px 9px}
+  .admin .guard-cell .g-av{width:64px; height:64px; font-size:22px}
+  .admin .guard-cell .g-x{min-height:auto}
 }

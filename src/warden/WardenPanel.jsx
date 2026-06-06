@@ -7,7 +7,7 @@ import SessionsOverviewTab from './SessionsOverviewTab'
 import BookingsTab from './BookingsTab'
 import EditMemberModal from './EditMemberModal'
 
-export default function WardenPanel({ myRole }) {
+export default function WardenPanel({ myRole, onGoToManuscripts }) {
   const isWarden = myRole === 'warden'
   const [pending, setPending] = useState([])
   const [unmatched, setUnmatched] = useState([])
@@ -60,7 +60,7 @@ export default function WardenPanel({ myRole }) {
         <SessionTab
           currentSession={currentSession} setCurrentSession={setCurrentSession}
           sessions={sessions} inmates={inmates} isWarden={isWarden}
-          setMsg={setMsg} reloadShared={load} />
+          setMsg={setMsg} reloadShared={load} onGoToManuscripts={onGoToManuscripts} />
       )}
       {wtab === 'sessions' && isWarden && (
         <SessionsOverviewTab setMsg={setMsg} reloadShared={load} />

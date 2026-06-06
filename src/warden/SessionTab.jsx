@@ -4,7 +4,7 @@ import { ProgressBar } from '../ManuscriptManager'
 import { ROLE_LABEL } from './constants'
 import SessionTimerControl from './SessionTimerControl'
 
-export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared }) {
+export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared, onGoToManuscripts }) {
   const [roster, setRoster] = useState([])
   const [rosterLoading, setRosterLoading] = useState(false)
   const [search, setSearch] = useState('')                 // 候選清單搜尋(名字/編號)
@@ -13,6 +13,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   const [msByMember, setMsByMember] = useState({})       // member_id -> [active manuscripts]
   const [goalSteps, setGoalSteps] = useState({})         // manuscript_id -> [steps]
   const [pickGoal, setPickGoal] = useState({})           // session_inmate_id -> 選中的 manuscript_id
+  const [goalModalInmate, setGoalModalInmate] = useState(null) // 開啟「新增本場目標」modal 的犯人 roster row(null=關閉)
   const [goalExpanded, setGoalExpanded] = useState([])   // 展開中的目標(session_goals.id)
   const [assignedByInmate, setAssignedByInmate] = useState({}) // session_inmate_id -> [{id, guard_id, profile}]
   const [pickAssign, setPickAssign] = useState({})         // session_inmate_id -> 要指派的 guard member_id
@@ -65,8 +66,8 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   }
   useEffect(() => { loadGoals(); loadAssignments() }, [roster])
 
-  async function addInmateGoal(sessionInmateId) {
-    const mid = pickGoal[sessionInmateId]
+  async function addInmateGoal(sessionInmateId, manuscriptId) {
+    const mid = manuscriptId ?? pickGoal[sessionInmateId]   // modal 直接帶稿件 id;沿用原下拉時讀 pickGoal
     if (!mid) return
     const { error } = await supabase.from('session_goals')
       .insert({ session_inmate_id: sessionInmateId, manuscript_id: mid })
@@ -293,8 +294,6 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               <div className="group-lbl">本場犯人 ({inmateRoster.length})<span className="ln" /></div>
               {inmateRoster.length === 0 ? <p className="empty">本場沒有犯人</p> : inmateRoster.map(r => {
               const goals = goalsByInmate[r.id] ?? []
-              const goalIds = goals.map(g => g.manuscript_id)
-              const available = (msByMember[r.member_id] ?? []).filter(m => !goalIds.includes(m.id))
               const avInit = r.profile?.inmate_no != null ? String(r.profile.inmate_no).padStart(2, '0').slice(-2) : (r.profile?.game_name ?? '?')[0]
               return (
                 <div key={r.id} className="member">
@@ -339,12 +338,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                           )
                         })}
                         <div className="detail-row">
-                          <select className="sel" value={pickGoal[r.id] ?? ''} onChange={e => setPickGoal({ ...pickGoal, [r.id]: e.target.value })}>
-                            <option value="">— 加一本稿進本場 —</option>
-                            {available.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-                          </select>
-                          <button className="btn-sm" onClick={() => addInmateGoal(r.id)}>加入</button>
-                          {available.length === 0 && <span className="faint">(此人沒有可加的 active 稿件)</span>}
+                          <button className="btn-sm" onClick={() => setGoalModalInmate(r)}>+ 新增本場目標</button>
                         </div>
                       </div>
                     </div>
@@ -381,27 +375,63 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
             })}
 
               <div className="group-lbl">本場獄卒 ({guardRoster.length})<span className="ln" /></div>
-              {guardRoster.length === 0 ? <p className="empty">本場沒有獄卒</p> : guardRoster.map(r => (
-                <div key={r.id} className="member guard-member">
-                  <div className="m-top">
-                    <div className="avatar guard-av">
-                      {r.profile?.avatar_url
-                        ? <img src={r.profile.avatar_url} alt="" />
-                        : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
-                    </div>
-                    <div className="m-nm">
-                      {r.profile?.game_name ?? r.profile?.display_name}
+              {guardRoster.length === 0 ? <p className="empty">本場沒有獄卒</p> : (
+                <div className="guard-grid">
+                  {guardRoster.map(r => (
+                    <div key={r.id} className="guard-cell">
+                      <button className="g-x btn-danger" title="移出本場" onClick={() => removeFromSession(r.id)}>✕</button>
+                      <div className="g-av">
+                        {r.profile?.avatar_url
+                          ? <img src={r.profile.avatar_url} alt="" />
+                          : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
+                      </div>
+                      <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name}</div>
                       <span className="role-tag guard">{r.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
                     </div>
-                    <button className="btn-danger btn-sm spacer" onClick={() => removeFromSession(r.id)}>移出本場</button>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
               </>)
             })()}
           </div>
         </div>
       </div>
+
+      {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用 addInmateGoal,可連續挑多筆。
+          可挑清單即時依 goalsByInmate/msByMember 重算(挑進來的稿自動從清單移除)。 */}
+      {goalModalInmate && (() => {
+        const r = goalModalInmate
+        const goalIds = (goalsByInmate[r.id] ?? []).map(g => g.manuscript_id)
+        const available = (msByMember[r.member_id] ?? []).filter(m => !goalIds.includes(m.id))
+        const name = r.profile?.game_name ?? r.profile?.display_name
+        return (
+          <div className="admin-modal-bg" onClick={() => setGoalModalInmate(null)}>
+            <div className="admin-modal goal-modal" onClick={e => e.stopPropagation()}>
+              <div className="goal-modal-head">
+                <h3>新增本場目標 · {name}</h3>
+                <button className="goal-modal-x" onClick={() => setGoalModalInmate(null)}>✕</button>
+              </div>
+              {available.length === 0 ? (
+                <div className="goal-modal-empty">
+                  <p className="warn">沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
+                  {onGoToManuscripts && (
+                    <button className="btn-pri" onClick={() => { setGoalModalInmate(null); onGoToManuscripts() }}>前往我的稿件</button>
+                  )}
+                </div>
+              ) : (
+                <div className="goal-pick-list">
+                  {available.map(m => (
+                    <button key={m.id} className="goal-pick" onClick={() => addInmateGoal(r.id, m.id)}>
+                      <span className="goal-pick-title">{m.title}</span>
+                      <span className="goal-pick-add">＋ 加入</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

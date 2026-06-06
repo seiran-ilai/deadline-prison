@@ -162,7 +162,7 @@ function App() {
             <ManuscriptManager userId={user.id} />
           </div>
         )}
-        {activeTab === 'warden' && isStaff && <WardenPanel myRole={profile.role} />}
+        {activeTab === 'warden' && isStaff && <WardenPanel myRole={profile.role} onGoToManuscripts={() => setTab('me')} />}
       </div>
     </div>
   )
