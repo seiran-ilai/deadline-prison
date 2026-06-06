@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient'
 import { ROLE_LABEL } from './constants'
+import AvatarInput from '../AvatarInput'
 
 // 編輯犯人資料 modal(僅 warden 會被容器渲染)
 export default function EditMemberModal({ member, setMember, setMsg, reloadShared }) {
@@ -31,9 +32,10 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
         <label>遊戲暱稱
           <input value={member.game_name} onChange={e => setMember({ ...member, game_name: e.target.value })} />
         </label>
-        <label>頭貼網址
-          <input value={member.avatar_url} onChange={e => setMember({ ...member, avatar_url: e.target.value })} />
-        </label>
+        <div className="field">
+          <span className="field-lbl">頭像</span>
+          <AvatarInput value={member.avatar_url} onChange={url => setMember({ ...member, avatar_url: url })} userId={member.id} />
+        </div>
         <label>Discord 帳號
           <input value={member.discord_account} onChange={e => setMember({ ...member, discord_account: e.target.value })} />
         </label>

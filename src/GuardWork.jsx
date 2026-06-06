@@ -5,6 +5,7 @@ import { presenceLabel } from './pomodoro'
 import SessionStatus from './SessionStatus'
 import GuardMemosTab from './GuardMemosTab'
 import SessionMemoPanel from './SessionMemoPanel'
+import ProfileCard from './ProfileCard'
 
 const PRESENCE_STYLE = {
   '服刑中': { bg: '#d9534f', color: '#fff' },
@@ -134,6 +135,9 @@ export default function GuardWork({ userId }) {
 
   return (
     <div>
+      {/* 0) 個人資料卡(當前獄卒自己) */}
+      <ProfileCard userId={userId} />
+
       {/* 獄卒端子分頁:服刑作業 / MEMO·確認項 */}
       <div className="subtabs">
         <button className={gtab === 'work' ? 'on' : ''} onClick={() => setGtab('work')}>服刑作業</button>
