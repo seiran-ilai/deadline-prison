@@ -156,7 +156,7 @@ function App() {
       <div className="page">
         {activeTab === 'session' && <SessionView userId={user.id} onGoToManuscripts={() => setTab('me')} />}
         {activeTab === 'me' && (
-          <div>
+          <div className="ms-page">
             <p className="muted" style={{ marginBottom: 4 }}>📍 我的稿件 · 遊戲暱稱:{profile.game_name ?? '(未設定)'}</p>
             <h3>稿件管理</h3>
             <ManuscriptManager userId={user.id} />

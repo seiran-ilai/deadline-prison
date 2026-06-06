@@ -30,6 +30,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [pick, setPick] = useState('')            // 挑選下拉選中的 manuscript_id(沿用;modal 直接帶 id)
   const [goalModalOpen, setGoalModalOpen] = useState(false) // 「新增本場目標」modal 開關
   const [expanded, setExpanded] = useState([])    // 展開中的目標(manuscript_id)
+  const [showAllGoals, setShowAllGoals] = useState(false)     // 本場目標:展開全部(取消固定高度)
+  const [showAllInmates, setShowAllInmates] = useState(false) // 本場囚犯:展開全部(取消固定高度)
   const [cellmates, setCellmates] = useState([])  // 本場同囚(其他犯人)
   const [guards, setGuards] = useState([])        // 本場獄卒(role=guard/warden)
   const [myGuards, setMyGuards] = useState([])    // 我的專屬獄卒(inmate_guards)
@@ -241,6 +243,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
                     : (g.profile?.game_name ?? g.profile?.display_name ?? '?')[0]}
                 </div>
                 <div className="id-lbl">專屬獄卒</div>
+                <div className="id-no">{' '}</div>
                 <div className="id-nm">
                   {g.profile?.game_name ?? g.profile?.display_name ?? '(未知)'}
                   <span className="role-tag guard">{g.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
@@ -253,6 +256,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
           <div className="idcard">
             <div className="id-av">？</div>
             <div className="id-lbl">專屬獄卒</div>
+            <div className="id-no">{' '}</div>
             <div className="id-nm muted">尚未配對</div>
           </div>
         )}
@@ -266,11 +270,24 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
 
       {/* 本場目標 */}
       <div className="card-panel">
-        <div className="head"><h2>本場目標</h2>{goals.length > 0 && <span className="count">{goals.length} 項</span>}</div>
+        <div className="head">
+          <h2>本場目標</h2>
+          {goals.length > 0 && <span className="count">{goals.length} 項</span>}
+          {goals.length > 5 && (
+            <>
+              <span className="spacer" />
+              <button className="btn-sm cap-toggle" onClick={() => setShowAllGoals(v => !v)}>
+                {showAllGoals ? '收合 ⌃' : '展開全部 ⌄'}
+              </button>
+            </>
+          )}
+        </div>
         <div className="body">
           {goals.length === 0 ? (
             <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
-          ) : goals.map(g => {
+          ) : (
+          <div className={`cap-list${showAllGoals ? '' : ' capped'}`}>
+          {goals.map(g => {
             const steps = stepsByMs[g.manuscript_id] ?? []
             const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
             const p = PRIORITY[g.manuscript?.priority] ?? PRIORITY[2]
@@ -307,6 +324,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
               </div>
             )
           })}
+          </div>
+          )}
           <div className="toolbar" style={{ marginTop: goals.length ? 12 : 4 }}>
             <button className="btn-pri" onClick={() => setGoalModalOpen(true)}>＋ 新增本場目標</button>
           </div>
@@ -315,8 +334,20 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
 
       {/* 本場囚犯(含我,我那筆高亮標「你」) */}
       <div className="card-panel">
-        <div className="head"><h2>本場囚犯</h2><span className="count">{cellmates.length + 1} 人</span></div>
+        <div className="head">
+          <h2>本場囚犯</h2>
+          <span className="count">{cellmates.length + 1} 人</span>
+          {cellmates.length + 1 > 5 && (
+            <>
+              <span className="spacer" />
+              <button className="btn-sm cap-toggle" onClick={() => setShowAllInmates(v => !v)}>
+                {showAllInmates ? '收合 ⌃' : '展開全部 ⌄'}
+              </button>
+            </>
+          )}
+        </div>
         <div className="body">
+          <div className={`cap-list${showAllInmates ? '' : ' capped'}`}>
           {/* 我 */}
           <div className="inmate me">
             <div className="in-av">
@@ -359,6 +390,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
               </div>
             )
           })}
+          </div>
         </div>
       </div>
 

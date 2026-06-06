@@ -397,11 +397,13 @@
   display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:34px;
   background:var(--raise); color:var(--dim)}
 .admin .idcard .id-av img{width:100%; height:100%; object-fit:cover}
-.admin .idcard .id-lbl{font-size:11px; letter-spacing:1px; color:var(--faint); text-transform:uppercase}
-.admin .idcard .id-no{font-family:var(--mono); font-size:12px; color:var(--dim)}
+/* 固定槽位:即使無內容也保留行高,讓並排身分卡的暱稱對齊(留白占位) */
+.admin .idcard .id-lbl{font-size:11px; letter-spacing:1px; color:var(--faint); text-transform:uppercase; min-height:14px}
+.admin .idcard .id-no{font-family:var(--mono); font-size:12px; color:var(--dim); min-height:18px}
 .admin .idcard .id-nm{font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap}
 .admin .idcard .id-watch{font-size:12px; color:var(--hazard)}
-.admin .idcard .id-edit{margin-top:2px}
+/* 編輯鈕固定貼齊卡片底部(缺編輯鈕的卡片以等高留白撐住,不讓兩卡內容上下錯位) */
+.admin .idcard .id-edit{margin-top:auto}
 .admin .idcard.me{border-color:var(--hazard-d)}
 .admin .idcard.me .id-av{background:rgba(245,197,24,.12); color:var(--hazard)}
 .admin .idcard.guardself{border-color:rgba(63,179,107,.4)}
@@ -451,6 +453,16 @@
 .admin .subgroup.first{margin-top:2px}
 .admin .subgroup.mine{color:var(--ok)}
 .admin .subgroup .ln{flex:1; height:1px; background:var(--line)}
+
+/* 本場目標 / 本場囚犯:固定高度(約 5 列)+ 內部捲動;標題列「展開全部」鈕可解除限高。
+   兩欄共用同一高度,確保並排等高;只控版面,不影響項目內容與操作。 */
+.admin .cap-list.capped{max-height:340px; overflow-y:auto; overflow-x:hidden;
+  margin-right:-6px; padding-right:6px}
+.admin .cap-toggle{font-size:12px; color:var(--dim)}
+.admin .cap-toggle:hover{color:var(--text)}
+
+/* 我的稿件:限制最大寬度並置中,不貼齊整個寬螢幕(手機下自動滿寬單欄) */
+.admin .ms-page{max-width:880px; margin:0 auto}
 
 @media (max-width:860px){
   .admin .ses-top.prisoner, .admin .ses-top.guard{grid-template-columns:1fr}

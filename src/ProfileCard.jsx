@@ -40,17 +40,18 @@ export default function ProfileCard({ userId, variant = 'row', label, footer }) 
   )
 
   // 直式身分卡(服刑中上排)
+  // 內部分層固定:頭像 / 標籤 / 編號 / 暱稱 為固定槽位,缺少的欄位以留白占位撐住,
+  // 讓多張並排的身分卡頭像同基線、暱稱同高度(對齊用,不改資料)。
   if (variant === 'id') {
     const selfClass = profile.role === 'member' ? 'me' : 'guardself'
+    const showNo = profile.role === 'member' && profile.inmate_no != null
     return (
       <div className={`idcard ${selfClass}`}>
         <div className="id-av">
           {profile.avatar_url ? <img src={profile.avatar_url} alt="" /> : init}
         </div>
-        {label && <div className="id-lbl">{label}</div>}
-        {profile.role === 'member' && profile.inmate_no != null && (
-          <div className="id-no">No.{String(profile.inmate_no).padStart(4, '0')}</div>
-        )}
+        <div className="id-lbl">{label || ' '}</div>
+        <div className="id-no">{showNo ? `No.${String(profile.inmate_no).padStart(4, '0')}` : ' '}</div>
         <div className="id-nm">{name} <span className={`role-tag ${roleClass}`}>{roleLabel}</span></div>
         {footer}
         <button className="btn-sm id-edit" onClick={() => setEditing(true)}>編輯</button>
