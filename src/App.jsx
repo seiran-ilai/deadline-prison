@@ -93,7 +93,7 @@ function App() {
 
   if (!user) return (
     <div style={box}>
-      <h1>死線監獄 · Doing Time</h1>
+      <h1>死線監獄 · DEADLINE PRISON</h1>
       <button onClick={signIn}>用 Discord 登入</button>
       {import.meta.env.DEV && (
         <div style={{ marginTop: 24, padding: 16, border: '2px dashed #c98a00', borderRadius: 8, background: '#fff8e6', maxWidth: 320, width: '100%' }}>

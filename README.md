@@ -1,16 +1,28 @@
-# React + Vite
+# 死線監獄 ｜ DEADLINE PRISON
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一間以「番茄鐘」執行的趕稿收容所。入監即上鎖,鈴響才放風,全程同步直播犯人服刑進度——你不是一個人在趕,是一群人一起服刑。
 
-Currently, two official plugins are available:
+以 React + Vite 打造,登入採 Discord OAuth(透過 Supabase Auth),場次/名單/目標資料存於 Supabase。
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 開發
 
-## React Compiler
+```bash
+npm install
+npm run dev      # 本機開發
+npm run build    # 產出 production build
+npm run preview  # 預覽 production build
+npm run lint     # ESLint
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 環境變數
 
-## Expanding the ESLint configuration
+於本機 `.env`(以及 Vercel 專案設定)提供:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+`api/booking.js` 亦支援不帶前綴的 `SUPABASE_URL` / `SUPABASE_ANON_KEY`。
+
+> OAuth 回呼採動態 `window.location`,不寫死網域;更換網域時只需在 Supabase Auth 與 Discord Developer Portal 的 Redirect 清單加入新網域。
