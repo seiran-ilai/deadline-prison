@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
 import { presenceLabel } from './pomodoro'
 import SessionStatus from './SessionStatus'
+import GuardMemosTab from './GuardMemosTab'
+import SessionMemoPanel from './SessionMemoPanel'
 
 const PRESENCE_STYLE = {
   '服刑中': { bg: '#d9534f', color: '#fff' },
@@ -35,6 +37,7 @@ export default function GuardWork({ userId }) {
   const [stepsByMs, setStepsByMs] = useState({})    // manuscript_id -> [steps]
   const [expanded, setExpanded] = useState([])      // 展開中的目標(session_goals.id)
   const [msg, setMsg] = useState('')
+  const [gtab, setGtab] = useState('work')          // 獄卒端子分頁:work=服刑作業 / memos=MEMO確認項
 
   async function load() {
     setLoading(true)
@@ -131,6 +134,16 @@ export default function GuardWork({ userId }) {
 
   return (
     <div>
+      {/* 獄卒端子分頁:服刑作業 / MEMO·確認項 */}
+      <div className="subtabs">
+        <button className={gtab === 'work' ? 'on' : ''} onClick={() => setGtab('work')}>服刑作業</button>
+        <button className={gtab === 'memos' ? 'on' : ''} onClick={() => setGtab('memos')}>MEMO / 確認項</button>
+      </div>
+
+      {gtab === 'memos' ? (
+        <GuardMemosTab userId={userId} />
+      ) : (
+      <>
       {/* 1) 服刑計時 / 狀態階段 */}
       <SessionStatus userId={userId} />
 
@@ -142,6 +155,9 @@ export default function GuardWork({ userId }) {
         <>
           {/* 場次資訊已由上方狀態卡涵蓋,移除重複的場次編號橫幅 */}
           {msg && <div className="banner err">{msg}</div>}
+
+          {/* 本場 MEMO · 確認項(取代犯人本場目標位置)*/}
+          <SessionMemoPanel userId={userId} session={session} />
 
           {/* 2) 監管犯人名單 + 3) 他們的目標清單(可代勾) */}
           <h3>監管犯人</h3>
@@ -228,6 +244,8 @@ export default function GuardWork({ userId }) {
             )
           })}
         </>
+      )}
+      </>
       )}
     </div>
   )
