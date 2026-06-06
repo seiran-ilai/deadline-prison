@@ -6,8 +6,9 @@ import SessionTab from './SessionTab'
 import SessionsOverviewTab from './SessionsOverviewTab'
 import BookingsTab from './BookingsTab'
 import EditMemberModal from './EditMemberModal'
+import ProfileCard from '../ProfileCard'
 
-export default function WardenPanel({ myRole, onGoToManuscripts }) {
+export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
   const isWarden = myRole === 'warden'
   const [pending, setPending] = useState([])
   const [unmatched, setUnmatched] = useState([])
@@ -48,6 +49,7 @@ export default function WardenPanel({ myRole, onGoToManuscripts }) {
 
   return (
     <div>
+      <ProfileCard userId={userId} />
       <div className="subtabs">
         <button className={wtab === 'overview' ? 'on' : ''} onClick={() => setWtab('overview')}>名單總覽</button>
         {isWarden && <button className={wtab === 'sessions' ? 'on' : ''} onClick={() => setWtab('sessions')}>場次總覽</button>}

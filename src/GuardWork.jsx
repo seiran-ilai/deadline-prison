@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
 import { presenceLabel } from './pomodoro'
 import SessionStatus from './SessionStatus'
+import ProfileCard from './ProfileCard'
 
 const PRESENCE_STYLE = {
   '服刑中': { bg: '#d9534f', color: '#fff' },
@@ -131,6 +132,9 @@ export default function GuardWork({ userId }) {
 
   return (
     <div>
+      {/* 0) 個人資料卡(當前獄卒自己) */}
+      <ProfileCard userId={userId} />
+
       {/* 1) 服刑計時 / 狀態階段 */}
       <SessionStatus userId={userId} />
 
