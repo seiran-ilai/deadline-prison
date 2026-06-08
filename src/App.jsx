@@ -4,6 +4,8 @@ import ManuscriptManager from './ManuscriptManager'
 import SessionGoals from './SessionGoals'
 import GuardWork from './GuardWork'
 import WardenPanel from './warden/WardenPanel'
+import ProfilePage from './ProfilePage'
+import RecordsPage from './RecordsPage'
 import './styles/admin.css'
 
 // 本次服刑分頁:內容依「本場身分 role_in_session」決定(犯人頁 / 獄卒頁),
@@ -132,10 +134,10 @@ function App() {
   //  獄卒   → 獄卒作業 / 我的稿件
   //  犯人   → 本次服刑 / 我的稿件
   const tabs = profile.role === 'warden'
-    ? [{ k: 'warden', label: '典獄長主控台' }, { k: 'me', label: '我的稿件' }, { k: 'session', label: '本次服刑' }]
+    ? [{ k: 'warden', label: '典獄長主控台' }, { k: 'me', label: '我的稿件' }, { k: 'session', label: '本次服刑' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
     : profile.role === 'guard'
-      ? [{ k: 'session', label: '獄卒作業' }, { k: 'me', label: '我的稿件' }]
-      : [{ k: 'session', label: '本次服刑' }, { k: 'me', label: '我的稿件' }]
+      ? [{ k: 'session', label: '獄卒作業' }, { k: 'me', label: '我的稿件' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
+      : [{ k: 'session', label: '本次服刑' }, { k: 'me', label: '我的稿件' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
   // 防呆:tab 不在當前身分的分頁清單時,落回第一個
   const activeTab = tabs.some(t => t.k === tab) ? tab : tabs[0].k
   return (
@@ -163,6 +165,11 @@ function App() {
           </div>
         )}
         {activeTab === 'warden' && isStaff && <WardenPanel myRole={profile.role} userId={user.id} onGoToManuscripts={() => setTab('me')} />}
+        {activeTab === 'records' && <RecordsPage userId={user.id} role={profile.role} />}
+        {activeTab === 'profile' && (
+          <ProfilePage userId={user.id} role={profile.role}
+            onSaved={(patch) => setProfile(p => ({ ...p, ...patch }))} />
+        )}
       </div>
     </div>
   )

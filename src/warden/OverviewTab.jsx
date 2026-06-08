@@ -1,56 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { ProgressBar } from '../ManuscriptManager'
-import { ROLE_LABEL, OVERVIEW_STATUS_STYLE, memberStatusLabel } from './constants'
-import { computeProgress } from '../progress'
+import { ROLE_LABEL } from './constants'
 import AvatarInput from '../AvatarInput'
 
-// 名單總覽:一份清單、三種狀態 —
-//   已配號(profiles 有 inmate_no)、未配對(profiles 無 inmate_no)、預約中(pending_inmates)。
-// 新增預約表單也搬到這裡(取代原「預約與收押」分頁)。
+// 名單總覽(卡片網格版):一份清單、三種狀態 —
+//   已配號(profiles 有 inmate_no,分獄卒區 / 犯人區)、未配對(profiles 無 inmate_no)、預約中(pending_inmates)。
+// 待處理區(未配對 + 預約中)置頂;搜尋 / 排序只作用於已配號的獄卒區與犯人區。
+// 不再顯示光臨次數、目前狀態,也不再展開看稿件進度(簡化)。
 export default function OverviewTab({ inmates, unmatched = [], pending = [], loading, isWarden, onEditMember, setMsg, reloadShared }) {
-  const [visitCount, setVisitCount] = useState({})       // member_id -> 光臨次數
-  const [memberSession, setMemberSession] = useState({}) // member_id -> 目前所在 open 場次
-  const [expandedMember, setExpandedMember] = useState(null) // 展開中的 member_id
-  const [memberWorks, setMemberWorks] = useState({})     // member_id -> [稿件+進度]
   const [showForm, setShowForm] = useState(false)        // 新增預約表單開關
   const [form, setForm] = useState({ game_name: '', discord_account: '', avatar_url: '' })
   const [q, setQ] = useState('')                          // 已配號清單搜尋(暱稱 / 編號)
   const [sortDir, setSortDir] = useState('asc')           // 已配號清單排序:asc=編號舊→新(預設) / desc=新→舊
-
-  // 總覽:光臨次數 + 目前狀態(分開查再合併)
-  async function loadOverview() {
-    const { data: allSi } = await supabase.from('session_inmates').select('member_id, session_id')
-    const { data: openSess } = await supabase.from('sessions')
-      .select('id, timer_started_at, timer_ended_at, total_rounds').eq('status', 'open')
-    const openById = {}; for (const s of openSess ?? []) openById[s.id] = s
-    const counts = {}, memSess = {}
-    for (const r of allSi ?? []) {
-      counts[r.member_id] = (counts[r.member_id] ?? 0) + 1
-      if (openById[r.session_id] && !memSess[r.member_id]) memSess[r.member_id] = openById[r.session_id]
-    }
-    setVisitCount(counts); setMemberSession(memSess)
-  }
-  useEffect(() => { loadOverview() }, [])
-
-  // 點開某人 → 載入他的稿件 + 進度(staff 可讀全部,含 private)
-  async function toggleMember(memberId) {
-    if (expandedMember === memberId) { setExpandedMember(null); return }
-    setExpandedMember(memberId)
-    if (memberWorks[memberId]) return
-    const { data: ms } = await supabase.from('manuscripts')
-      .select('id, title, status, visibility, is_done').eq('member_id', memberId).order('priority').order('created_at')
-    const msIds = (ms ?? []).map(m => m.id)
-    let steps = []
-    if (msIds.length) {
-      const { data: st } = await supabase.from('manuscript_steps').select('manuscript_id, done').in('manuscript_id', msIds)
-      steps = st ?? []
-    }
-    const agg = {}
-    for (const s of steps) { (agg[s.manuscript_id] ??= { done: 0, total: 0 }).total++; if (s.done) agg[s.manuscript_id].done++ }
-    const works = (ms ?? []).map(m => ({ ...m, done: agg[m.id]?.done ?? 0, total: agg[m.id]?.total ?? 0 }))
-    setMemberWorks(prev => ({ ...prev, [memberId]: works }))
-  }
 
   // ── 預約 / 配號動作(沿用原「預約與收押」邏輯,不重寫) ──
   async function addPending() {
@@ -59,13 +20,6 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
       game_name: form.game_name, discord_account: form.discord_account, avatar_url: form.avatar_url || null })
     if (error) { setMsg('新增失敗:' + error.message); return }
     setMsg('已加入預約名單'); setForm({ game_name: '', discord_account: '', avatar_url: '' }); setShowForm(false); reloadShared()
-  }
-
-  async function admitDirect(userId) {
-    const name = prompt('請輸入遊戲暱稱:'); if (!name) return
-    const { error } = await supabase.rpc('admit_unmatched', { target_id: userId, p_game_name: name })
-    if (error) { setMsg('收押失敗:' + error.message); return }
-    setMsg('已收押'); reloadShared()
   }
 
   async function linkToPending(userId) {
@@ -92,7 +46,7 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
     setMsg('已指派下一個編號'); reloadShared()
   }
 
-  // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序(排序在前端做,load() 沒帶 order)
+  // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序
   const ql = q.trim().toLowerCase()
   const shownInmates = inmates
     .filter(p => {
@@ -106,6 +60,31 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
       ? (a.inmate_no ?? 0) - (b.inmate_no ?? 0)
       : (b.inmate_no ?? 0) - (a.inmate_no ?? 0))
 
+  const staff = shownInmates.filter(p => p.role === 'guard' || p.role === 'warden')
+  const members = shownInmates.filter(p => p.role !== 'guard' && p.role !== 'warden')
+
+  // 已配號卡片(獄卒區 / 犯人區):頭貼 + 暱稱 + 編號 + 角色標籤 + 編輯
+  const MemberCard = (p) => {
+    const roleClass = p.role === 'warden' ? 'warden' : p.role === 'guard' ? 'guard' : 'member'
+    const isStaffCard = roleClass === 'guard' || roleClass === 'warden'
+    const name = p.game_name ?? p.display_name ?? '(未命名)'
+    return (
+      <div key={p.id} className={`ov-card${isStaffCard ? ' staff' : ''}`}>
+        <div className="ov-av">
+          {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{name[0] ?? '?'}</span>}
+        </div>
+        <div className="ov-nm">{name}</div>
+        <div className="ov-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
+        <span className={`role-tag ${roleClass}`}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
+        {isWarden && (
+          <div className="ov-acts">
+            <button className="btn-sm" onClick={() => onEditMember(p)}>編輯</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="ov-page">
       <div className="ov-head">
@@ -116,94 +95,78 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
           <option value="asc">編號 舊→新</option>
           <option value="desc">編號 新→舊</option>
         </select>
+        <button onClick={() => setShowForm(v => !v)}>{showForm ? '收起' : '＋ 新增預約'}</button>
       </div>
 
       {/* 新增預約(搬自原「預約與收押」) */}
-      <div style={{ marginBottom: 12 }}>
-        <button onClick={() => setShowForm(v => !v)}>
-          {showForm ? '收起' : '＋ 新增預約'}
-        </button>
-        {showForm && (
-          <div className="toolbar" style={{ marginTop: 8, alignItems: 'flex-start' }}>
-            <input className="inp" placeholder="遊戲暱稱" value={form.game_name} onChange={e => setForm({ ...form, game_name: e.target.value })} />
-            <input className="inp" placeholder="Discord 使用者名稱" value={form.discord_account} onChange={e => setForm({ ...form, discord_account: e.target.value })} />
-            <div className="field" style={{ minWidth: 240 }}>
-              <span className="field-lbl">頭像(選填)</span>
-              <AvatarInput value={form.avatar_url} onChange={url => setForm({ ...form, avatar_url: url })} userId={'pending'} />
-            </div>
-            <button onClick={addPending}>加入預約</button>
+      {showForm && (
+        <div className="toolbar" style={{ marginBottom: 12, alignItems: 'flex-start' }}>
+          <input className="inp" placeholder="遊戲暱稱" value={form.game_name} onChange={e => setForm({ ...form, game_name: e.target.value })} />
+          <input className="inp" placeholder="Discord 使用者名稱" value={form.discord_account} onChange={e => setForm({ ...form, discord_account: e.target.value })} />
+          <div className="field" style={{ minWidth: 240 }}>
+            <span className="field-lbl">頭像(選填)</span>
+            <AvatarInput value={form.avatar_url} onChange={url => setForm({ ...form, avatar_url: url })} userId={'pending'} />
           </div>
-        )}
-      </div>
+          <button onClick={addPending}>加入預約</button>
+        </div>
+      )}
 
       {loading ? <p className="empty">載入中…</p> : (() => {
         const hasAny = inmates.length || unmatched.length || pending.length
         if (!hasAny) return <p className="empty">名單還沒有任何人</p>
         return (<>
-          {/* 1) 未配對置頂(要處理) */}
-          {unmatched.map(p => (
-            <div key={'u-' + p.id} className="row-card">
-              <div className="row-head">
-                <span className="tag tag-pill" style={{ background: 'rgba(245,197,24,.15)', color: 'var(--hazard)' }}>未配對 · 查無預約</span>
-                <strong>{p.discord_account ?? p.display_name ?? '(未知)'}</strong>
-                <span className="spacer" />
-                <button className="btn-sm" onClick={() => linkToPending(p.id)}>指到預約</button>
-                <button className="btn-sm" onClick={() => admitDirect(p.id)}>直接收押</button>
-                <button className="btn-sm" onClick={() => assignNextNo(p.id)}>給下一號</button>
-              </div>
-            </div>
-          ))}
-
-          {/* 2) 已配號 profiles(沿用原總覽:狀態 / 光臨 / 展開稿件 / 編輯;前端過濾 + 編號排序) */}
-          {shownInmates.map(p => {
-            const status = memberStatusLabel(memberSession[p.id])
-            const ss = OVERVIEW_STATUS_STYLE[status] ?? { bg: '#eee', color: '#888' }
-            const isOpen = expandedMember === p.id
-            const works = memberWorks[p.id]
-            return (
-              <div key={p.id} className="row-card">
-                <div className="row-head clickable" onClick={() => toggleMember(p.id)}>
-                  <strong>No.{String(p.inmate_no).padStart(4, '0')}</strong>
-                  <span>{p.game_name ?? p.display_name}</span>
-                  <span className={`role-tag ${p.role ?? 'member'}`}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
-                  <span className="muted">光臨 {visitCount[p.id] ?? 0} 次</span>
-                  <span className="spacer" />
-                  <span className="tag tag-pill" style={{ background: ss.bg, color: ss.color }}>{status}</span>
-                  {isWarden && (
-                    <button className="btn-sm" onClick={e => { e.stopPropagation(); onEditMember(p) }}>編輯</button>
-                  )}
-                  <span className="muted">{isOpen ? '▲' : '▼'}</span>
-                </div>
-                {isOpen && (
-                  <div className="row-detail">
-                    {!works ? <p className="empty">讀取稿件中…</p>
-                      : works.length === 0 ? <p className="empty">這位沒有稿件</p>
-                        : works.map(w => (
-                          <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0', flexWrap: 'wrap' }}>
-                            <span style={{ flex: '0 0 160px', fontSize: 14 }}>
-                              {w.title}{w.status === 'archived' && <span className="faint">(封存)</span>}
-                            </span>
-                            <div style={{ flex: 1, minWidth: 140 }}><ProgressBar progress={computeProgress({ done: w.done, total: w.total, isDone: w.is_done })} /></div>
-                          </div>
-                        ))}
+          {/* 1) 待處理區(置頂):未配對(查無預約) + 預約中(未登入) */}
+          {(unmatched.length > 0 || pending.length > 0) && (
+            <section className="ov-group">
+              <div className="subgroup">待處理 ({unmatched.length + pending.length})<span className="ln" /></div>
+              <div className="ov-grid">
+                {unmatched.map(p => {
+                  const name = p.discord_account ?? p.display_name ?? '(未知)'
+                  return (
+                    <div key={'u-' + p.id} className="ov-card todo">
+                      <div className="ov-av">
+                        {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{name[0] ?? '?'}</span>}
+                      </div>
+                      <div className="ov-nm">{name}</div>
+                      <span className="tag tag-pill" style={{ background: 'rgba(245,197,24,.15)', color: 'var(--hazard)' }}>查無預約</span>
+                      <div className="ov-acts">
+                        <button className="btn-sm" onClick={() => assignNextNo(p.id)}>給下一號</button>
+                        <button className="btn-sm" onClick={() => linkToPending(p.id)}>指到預約</button>
+                      </div>
+                    </div>
+                  )
+                })}
+                {pending.map(p => (
+                  <div key={'p-' + p.id} className="ov-card todo">
+                    <div className="ov-av">
+                      {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{(p.game_name ?? '?')[0]}</span>}
+                    </div>
+                    <div className="ov-nm">{p.game_name}</div>
+                    <div className="ov-no">DC:{p.discord_account}</div>
+                    <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.08)', color: 'var(--dim)' }}>預約中</span>
+                    <div className="ov-acts">
+                      <button className="btn-sm btn-danger" onClick={() => deletePending(p.id)}>刪除</button>
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
-            )
-          })}
+            </section>
+          )}
 
-          {/* 3) 預約中(尚未登入) */}
-          {pending.map(p => (
-            <div key={'p-' + p.id} className="row-card">
-              <div className="row-head">
-                <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.08)', color: 'var(--dim)' }}>預約中 · 未登入</span>
-                <strong>{p.game_name}</strong>
-                <span className="muted">Discord:{p.discord_account}</span>
-                <span className="spacer" />
-                <button className="btn-sm btn-danger" onClick={() => deletePending(p.id)}>刪除</button>
-              </div>
-            </div>
-          ))}
+          {/* 2) 獄卒區(role in guard/warden,綠框點綴) */}
+          {staff.length > 0 && (
+            <section className="ov-group">
+              <div className="subgroup mine">獄方 ({staff.length})<span className="ln" /></div>
+              <div className="ov-grid">{staff.map(MemberCard)}</div>
+            </section>
+          )}
+
+          {/* 3) 犯人區(role = member) */}
+          <section className="ov-group">
+            <div className="subgroup">犯人 ({members.length})<span className="ln" /></div>
+            {members.length === 0 ? <p className="empty">{ql ? '沒有符合的犯人' : '尚無已配號犯人'}</p>
+              : <div className="ov-grid">{members.map(MemberCard)}</div>}
+          </section>
         </>)
       })()}
     </div>

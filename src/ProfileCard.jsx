@@ -8,7 +8,7 @@ import ProfileEditModal from './ProfileEditModal'
 // variant:
 //   'row'(預設)— 橫向精簡卡(典獄長後台 / 一般用)
 //   'id'        — 服刑中畫面上排的直式身分卡(頭像在上、文字置中);可帶 label / footer
-export default function ProfileCard({ userId, variant = 'row', label, footer }) {
+export default function ProfileCard({ userId, variant = 'row', label, footer, editable = true }) {
   const [profile, setProfile] = useState(null)
   const [editing, setEditing] = useState(false)
 
@@ -54,7 +54,7 @@ export default function ProfileCard({ userId, variant = 'row', label, footer }) 
         <div className="id-no">{showNo ? `No.${String(profile.inmate_no).padStart(4, '0')}` : ' '}</div>
         <div className="id-nm">{name} <span className={`role-tag ${roleClass}`}>{roleLabel}</span></div>
         {footer}
-        <button className="btn-sm id-edit" onClick={() => setEditing(true)}>編輯</button>
+        {editable && <button className="btn-sm id-edit" onClick={() => setEditing(true)}>編輯</button>}
         {modal}
       </div>
     )

@@ -26,6 +26,8 @@ export default function BroadcastScreen({ sessionId }) {
   const [session, setSession] = useState(null)  // { title, timer_started_at, total_rounds }
   const [guards, setGuards] = useState([])
   const [inmates, setInmates] = useState([])
+  const [visits, setVisits] = useState([])      // 本場探監(新→舊)
+  const [visitIdx, setVisitIdx] = useState(0)   // 探監輪播目前索引
   const [notFound, setNotFound] = useState(false)
   const [, setTick] = useState(0)
 
@@ -35,6 +37,11 @@ export default function BroadcastScreen({ sessionId }) {
       .select('title, timer_started_at, timer_ended_at, total_rounds').eq('id', sessionId).single()
     if (!sess) { setNotFound(true); return }
     setSession(sess)
+    // 本場探監(輪播用;與名單獨立撈,空名單也照顯示)
+    const { data: vs } = await supabase.from('visits')
+      .select('id, inmate_id, visitor_name, message, created_at')
+      .eq('session_id', sessionId).order('created_at', { ascending: false })
+    setVisits(vs ?? [])
     const { data: si } = await supabase.from('session_inmates')
       .select('member_id, role_in_session').eq('session_id', sessionId)
     if (!si || si.length === 0) { setGuards([]); setInmates([]); return }
@@ -57,6 +64,13 @@ export default function BroadcastScreen({ sessionId }) {
     const t = setInterval(() => setTick(x => x + 1), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // 探監輪播:多筆時每 7 秒切下一筆;一筆固定、零筆不顯示(modulo 容忍筆數變動)
+  useEffect(() => {
+    if (visits.length <= 1) return
+    const t = setInterval(() => setVisitIdx(i => (i + 1) % visits.length), 7000)
+    return () => clearInterval(t)
+  }, [visits.length])
 
   const screen = {
     minHeight: '100vh', background: '#1a1a1a', color: '#fff', fontFamily: 'sans-serif',
@@ -98,6 +112,31 @@ export default function BroadcastScreen({ sessionId }) {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
         {timerBlock}
       </div>
+
+      {/* 探監廣播輪播(放番茄鐘下方,不擋主角;多筆自動切換) */}
+      {visits.length > 0 && (() => {
+        const profById = {}
+        for (const m of [...inmates, ...guards]) if (m.profile) profById[m.profile.id] = m.profile
+        const v = visits[visitIdx % visits.length]
+        if (!v) return null
+        const ip = profById[v.inmate_id]
+        const inmateName = ip?.game_name ?? ip?.display_name ?? '某囚'
+        const no = ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'
+        return (
+          <div style={{
+            background: 'linear-gradient(90deg,#2a1f3d,#181820)', border: '2px solid #b56fd9',
+            borderRadius: 16, padding: '20px 36px', textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 22, color: '#c89be0', marginBottom: 8, letterSpacing: 3 }}>
+              💌 探監廣播{visits.length > 1 ? ` · ${(visitIdx % visits.length) + 1} / ${visits.length}` : ''}
+            </div>
+            <div style={{ fontSize: 34, fontWeight: 800 }}>
+              〈{v.visitor_name}〉 探望 <span style={{ color: '#ffd966' }}>No.{no} {inmateName}</span>
+            </div>
+            <div style={{ fontSize: 30, color: '#fff', marginTop: 10 }}>「{v.message}」</div>
+          </div>
+        )
+      })()}
 
       {/* 本場獄卒 */}
       <div>

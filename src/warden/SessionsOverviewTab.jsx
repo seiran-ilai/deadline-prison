@@ -12,10 +12,12 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [newTitle, setNewTitle] = useState('')
   const [newDate, setNewDate] = useState('')
   const [newCap, setNewCap] = useState('')          // 人數上限(空 = 不限)
+  const [newPublic, setNewPublic] = useState(true)  // 對外公開(預設公開)
   const [editId, setEditId] = useState(null)       // 編輯中的場次 id
   const [editTitle, setEditTitle] = useState('')
   const [editDate, setEditDate] = useState('')
   const [editCap, setEditCap] = useState('')
+  const [editPublic, setEditPublic] = useState(true)
   const [expandedId, setExpandedId] = useState(null) // 展開檢視中的場次 id(僅 open)
   const [rosterById, setRosterById] = useState({})   // session_id -> { inmates:[], guards:[] }
 
@@ -23,7 +25,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   async function load() {
     setLoading(true)
     const { data: sess } = await supabase.from('sessions')
-      .select('id, title, session_date, status, opened_by, capacity, created_at')
+      .select('id, title, session_date, status, opened_by, capacity, created_at, is_public')
     const { data: si } = await supabase.from('session_inmates').select('session_id')
     const cnt = {}
     for (const r of si ?? []) cnt[r.session_id] = (cnt[r.session_id] ?? 0) + 1
@@ -62,24 +64,25 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
 
   async function openNew() {
     if (!newTitle) { setMsg('請填場次名'); return }
-    const payload = { title: newTitle }
+    const payload = { title: newTitle, is_public: newPublic }
     if (newDate) payload.session_date = newDate
     payload.capacity = capValue(newCap)
     const { error } = await supabase.from('sessions').insert(payload)
     if (error) { setMsg('開場失敗:' + error.message); return }
-    setMsg('已開場:' + newTitle); setNewTitle(''); setNewDate(''); setNewCap('')
+    setMsg('已開場:' + newTitle); setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true)
     load(); reloadShared()
   }
 
   function startEdit(s) {
     setEditId(s.id); setEditTitle(s.title ?? ''); setEditDate(s.session_date ?? ''); setEditCap(s.capacity ?? '')
+    setEditPublic(s.is_public !== false)   // 帶入現值(null/undefined 視為公開)
   }
-  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate(''); setEditCap('') }
+  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate(''); setEditCap(''); setEditPublic(true) }
 
   async function saveEdit(id) {
     if (!editTitle) { setMsg('場次名不能空白'); return }
     const { error } = await supabase.from('sessions')
-      .update({ title: editTitle, session_date: editDate || null, capacity: capValue(editCap) }).eq('id', id)
+      .update({ title: editTitle, session_date: editDate || null, capacity: capValue(editCap), is_public: editPublic }).eq('id', id)
     if (error) { setMsg('編輯失敗:' + error.message); return }
     setMsg('已更新場次'); cancelEdit(); load(); reloadShared()
   }
@@ -107,6 +110,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
         <input className="inp" placeholder="場次名(如 6/14 晚場)" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
         <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
         <input type="number" min="1" placeholder="人數上限(空=不限)" value={newCap} onChange={e => setNewCap(e.target.value)} style={{ width: 160 }} />
+        <label><input type="checkbox" checked={newPublic} onChange={e => setNewPublic(e.target.checked)} />對外公開</label>
         <button className="btn-pri" onClick={openNew}>開新場次</button>
       </div>
 
@@ -122,6 +126,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                   <input className="inp" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                   <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
                   <input type="number" min="1" placeholder="上限(空=不限)" value={editCap} onChange={e => setEditCap(e.target.value)} style={{ width: 130 }} />
+                  <label><input type="checkbox" checked={editPublic} onChange={e => setEditPublic(e.target.checked)} />對外公開</label>
                   <button onClick={() => saveEdit(s.id)}>儲存</button>
                   <button onClick={cancelEdit}>取消</button>
                 </div>
@@ -137,6 +142,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                     ? { background: 'rgba(63,179,107,.15)', color: 'var(--ok)' }
                     : { background: 'rgba(255,255,255,.08)', color: 'var(--dim)' }}>
                     {s.status === 'open' ? '進行中' : '已結束'}</span>
+                  <span className="tag tag-pill" style={s.is_public !== false
+                    ? { background: 'rgba(245,197,24,.12)', color: 'var(--hazard)' }
+                    : { background: 'rgba(255,255,255,.06)', color: 'var(--faint)' }}>
+                    {s.is_public !== false ? '官網公開' : '內部場'}</span>
                   <span className="muted">報到 {counts[s.id] ?? 0} 人</span>
                   <span className="muted">上限 {s.capacity ?? '不限'}</span>
                   <span className="spacer" />

@@ -21,6 +21,9 @@ const DiscordIcon = () => (
 export default function PrisonSite() {
   const [sessions, setSessions] = useState([])
   const [staff, setStaff] = useState([])
+  const [wall, setWall] = useState([])  // 犯人牆(願意公開服刑紀錄的犯人)
+  const [crime, setCrime] = useState([])    // 名人堂 · 慣犯榜(入監次數 Top10)
+  const [popular, setPopular] = useState([]) // 名人堂 · 人氣榜(收到探監 Top10)
   const [user, setUser] = useState(undefined)  // undefined=載入中, null=未登入
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState(null)         // 開著的入監 modal 對應場次
@@ -35,23 +38,28 @@ export default function PrisonSite() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     setUser(session?.user ?? null)
-    const [{ data: sess }, { data: st }] = await Promise.all([
+    const [{ data: sess }, { data: st }, { data: wl }, { data: crimeData }, { data: popData }] = await Promise.all([
       supabase.rpc('public_sessions'),
       supabase.rpc('public_staff'),
+      supabase.rpc('public_wall'),
+      supabase.rpc('leaderboard_visits_count'),
+      supabase.rpc('leaderboard_popularity'),
     ])
+    setCrime(crimeData ?? [])
+    setPopular(popData ?? [])
     setSessions((sess ?? []).map(toSessionView))
-    let w = 0, g = 0
-    setStaff((st ?? []).map(r => {
-      const isW = r.role === 'warden'
-      const seq = isW ? ++w : ++g
-      return {
-        role: isW ? '典獄長' : '獄卒',
-        name: r.game_name || r.display_name || '——',
-        no: (isW ? 'W' : 'G') + '-' + String(seq).padStart(3, '0'),
-        img: r.avatar_url || '',
-        bio: isW ? '掌管全獄、開關場次與計時。逃稿者的最終裁決者。' : '巡場、報到、看守服刑秩序。鈴響時最不通融的人。',
-      }
-    }))
+    setStaff((st ?? []).map(r => ({
+      role: r.role === 'warden' ? '典獄長' : '獄卒',
+      name: r.game_name || r.display_name || '——',
+      img: r.avatar_url || '',
+      bio: r.bio || '',   // 真實 bio;空則由顯示端補 fallback
+    })))
+    setWall((wl ?? []).map(r => ({
+      no: r.inmate_no,
+      name: r.game_name || r.display_name || '——',
+      img: r.avatar_url || '',
+      bio: r.bio || '',
+    })))
     setLoading(false)
   }, [])
 
@@ -71,7 +79,7 @@ export default function PrisonSite() {
           a.classList.toggle('active', a.getAttribute('data-sec') === e.target.id))
       }
     }), { rootMargin: '-50% 0px -50% 0px' });
-    ['about', 'staff', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
+    ['about', 'staff', 'wall', 'hall', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
     return () => { io.disconnect(); navIO.disconnect() }
   }, [loading])
 
@@ -158,6 +166,8 @@ export default function PrisonSite() {
           <div className="links">
             <a data-sec="about" onClick={() => scrollTo('about')}>監獄介紹</a>
             <a data-sec="staff" onClick={() => scrollTo('staff')}>監獄人員</a>
+            <a data-sec="wall" onClick={() => scrollTo('wall')}>犯人牆</a>
+            <a data-sec="hall" onClick={() => scrollTo('hall')}>名人堂</a>
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
             <button className="btn-serve" onClick={() => scrollTo('sessions')}>入監服刑</button>
           </div>
@@ -229,15 +239,75 @@ export default function PrisonSite() {
             {staff.length === 0 ? <p style={{ color: 'var(--dim)' }}>名冊整備中…</p> : staff.map((p, i) => (
               <div className="card" key={i}>
                 <div className="mug">
-                  <div className="height" />
                   {p.img ? <img src={p.img} alt={p.role} /> : <div className="initial">{p.role[0] || '?'}</div>}
-                  <div className="plate">{p.no}</div>
                 </div>
                 <div className="body">
                   <div className="role">{p.role}</div>
                   <h4>{p.name}</h4>
-                  <p className="bio">{p.bio}</p>
+                  <p className="bio">{p.bio || '〔機密資料未公開〕'}</p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="hazard" />
+
+        {/* 犯人牆(自願公開服刑紀錄的犯人) */}
+        <section id="wall">
+          <div className="eyebrow reveal">服刑紀錄 <span className="blk">// BLOCK 03</span></div>
+          <h2 className="title reveal">犯人牆</h2>
+          <p className="subline reveal">自願把服刑紀錄公開示眾的犯人。沒被趕完的稿,大家一起看著。</p>
+          <div className="roster reveal">
+            {loading ? <p style={{ color: 'var(--dim)' }}>調閱服刑紀錄中…</p>
+              : wall.length === 0 ? <p style={{ color: 'var(--dim)' }}>目前無人願意公開服刑紀錄</p>
+                : wall.map((p, i) => (
+                  <div className="card" key={i}>
+                    <div className="mug">
+                      {p.img ? <img src={p.img} alt={p.name} /> : <div className="initial">{p.name[0] || '?'}</div>}
+                    </div>
+                    <div className="body">
+                      <div className="role">No.{String(p.no ?? 0).padStart(4, '0')}</div>
+                      <h4>{p.name}</h4>
+                      <p className="bio">{p.bio || '〔機密資料未公開〕'}</p>
+                    </div>
+                  </div>
+                ))}
+          </div>
+        </section>
+
+        <div className="hazard" />
+
+        {/* 監獄名人堂(排行榜:慣犯榜 / 人氣榜) */}
+        <section id="hall">
+          <div className="eyebrow reveal">監獄名人堂 <span className="blk">// BLOCK 04</span></div>
+          <h2 className="title reveal">名人堂</h2>
+          <p className="subline reveal">服刑最勤、人氣最高的犯人。次數照實計入,名字是否公開由本人決定。</p>
+          <div className="halls reveal">
+            {[
+              { key: 'crime', icon: '⛓', title: '慣犯榜', sub: '入監次數 TOP 10', rows: crime },
+              { key: 'popular', icon: '💌', title: '人氣榜', sub: '收到探監 TOP 10', rows: popular },
+            ].map(board => (
+              <div className="hall-board" key={board.key}>
+                <div className="hall-head">
+                  <span className="hall-icon">{board.icon}</span>{board.title}
+                  <span className="hall-sub">{board.sub}</span>
+                </div>
+                {loading ? <p className="hall-empty">名冊整備中…</p>
+                  : board.rows.length === 0 ? <p className="hall-empty">名冊整備中…</p>
+                    : (
+                      <ol className="hall-list">
+                        {board.rows.map(r => (
+                          <li className={`hall-row${r.rank <= 3 ? ' top' : ''}`} key={r.rank}>
+                            <span className="hall-rank">{r.rank}</span>
+                            <span className={`hall-name${r.display_name ? '' : ' masked'}`}>
+                              {r.display_name ?? '〔機密犯人〕'}
+                            </span>
+                            <span className="hall-count">{r.count} 次</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
               </div>
             ))}
           </div>
@@ -247,7 +317,7 @@ export default function PrisonSite() {
 
         {/* 趕稿場次 */}
         <section id="sessions">
-          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 03</span></div>
+          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 05</span></div>
           <h2 className="title reveal">近期趕稿場次</h2>
           <p className="subline reveal">選一個梯次自首入監。額滿停止收監,過期梯次已結案。</p>
           <div className="sessions reveal">

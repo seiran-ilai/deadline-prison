@@ -246,7 +246,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       {/* === 上排:我 + 專屬獄卒 + 計時器(主角) === */}
       <div className="ses-top prisoner">
         {/* 我(直式身分卡,沿用 ProfileCard 的個人資料來源 + 編輯) */}
-        <ProfileCard userId={userId} variant="id" label="我 · 服刑中" />
+        <ProfileCard userId={userId} variant="id" label="我 · 服刑中" editable={false} />
 
         {/* 專屬獄卒(直式卡;骨架與 ProfileCard variant="id" 一致:id-av / id-lbl / id-no / id-nm / id-watch,
             缺的欄位以 &nbsp; + 既有 min-height 留白佔位;底部以 id-spacer(margin-top:auto)推齊讓並排卡片對齊) */}

@@ -17,6 +17,9 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   const [pickGoal, setPickGoal] = useState({})           // session_inmate_id -> 選中的 manuscript_id
   const [goalModalInmate, setGoalModalInmate] = useState(null) // 開啟「新增本場目標」modal 的犯人 roster row(null=關閉)
   const [goalExpanded, setGoalExpanded] = useState([])   // 展開中的目標(session_goals.id)
+  const [visits, setVisits] = useState([])               // 本場探監(新→舊)
+  const [vForm, setVForm] = useState({ inmate_id: '', visitor_name: '', message: '' }) // 探監登錄表單
+  const [editingVisit, setEditingVisit] = useState(null) // inline 編輯中的探監 {id, visitor_name, message}
 
   async function loadRoster(sid) {
     if (!sid) { setRoster([]); return }
@@ -65,6 +68,55 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     setGoalsByInmate(gByInmate); setMsByMember(mByMember); setGoalSteps(sBy)
   }
   useEffect(() => { loadGoals() }, [roster])
+
+  // 本場探監(visits);供 add/edit/delete 後手動刷新
+  async function loadVisits(sid) {
+    if (!sid) return
+    const { data } = await supabase.from('visits')
+      .select('id, inmate_id, visitor_name, message, created_at')
+      .eq('session_id', sid).order('created_at', { ascending: false })
+    setVisits(data ?? [])
+  }
+  // 切換場次時載入(IIFE:setState 皆在 await 後,避免 effect 同步 setState)
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      if (!currentSession) return
+      const { data } = await supabase.from('visits')
+        .select('id, inmate_id, visitor_name, message, created_at')
+        .eq('session_id', currentSession).order('created_at', { ascending: false })
+      if (alive) setVisits(data ?? [])
+    })()
+    return () => { alive = false }
+  }, [currentSession])
+
+  async function addVisit() {
+    if (!vForm.inmate_id || !vForm.visitor_name.trim() || !vForm.message.trim()) {
+      setMsg('請選擇犯人、填寫探監者與廣播內容'); return
+    }
+    const { error } = await supabase.from('visits').insert({
+      session_id: currentSession, inmate_id: vForm.inmate_id,
+      visitor_name: vForm.visitor_name.trim(), message: vForm.message.trim(),
+    })
+    if (error) { setMsg('登錄探監失敗:' + error.message); return }
+    setMsg('已登錄探監'); setVForm({ inmate_id: '', visitor_name: '', message: '' }); loadVisits(currentSession)
+  }
+
+  async function saveVisitEdit() {
+    if (!editingVisit.visitor_name.trim() || !editingVisit.message.trim()) { setMsg('探監者與內容不可空白'); return }
+    const { error } = await supabase.from('visits')
+      .update({ visitor_name: editingVisit.visitor_name.trim(), message: editingVisit.message.trim() })
+      .eq('id', editingVisit.id)   // updated_at 由觸發器自動更新
+    if (error) { setMsg('更新探監失敗:' + error.message); return }
+    setMsg('已更新探監'); setEditingVisit(null); loadVisits(currentSession)
+  }
+
+  async function deleteVisit(id) {
+    if (!window.confirm('確定刪除這筆探監?')) return
+    const { error } = await supabase.from('visits').delete().eq('id', id)
+    if (error) { setMsg('刪除探監失敗:' + error.message); return }
+    setMsg('已刪除探監'); loadVisits(currentSession)
+  }
 
   async function addInmateGoal(sessionInmateId, manuscriptId) {
     const mid = manuscriptId ?? pickGoal[sessionInmateId]   // modal 直接帶稿件 id;沿用原下拉時讀 pickGoal
@@ -169,6 +221,9 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     })
   }
   const currentSessionObj = sessions.find(s => s.id === currentSession)
+  // 探監用:本場犯人(下拉選項)+ member_id → profile(列表顯示犯人名)
+  const inmateRoster = roster.filter(r => r.role_in_session !== 'guard')
+  const profByMember = {}; for (const r of roster) profByMember[r.member_id] = r.profile
 
   return (
     <div>
@@ -341,6 +396,73 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
           </div>
         </div>
       </div>
+
+      {/* 探監登錄(僅 warden;選本場犯人 + 探監者 + 廣播內容 → visits) */}
+      {isWarden && currentSession && (
+        <div className="card-panel visit-panel">
+          <div className="head"><h2>探監登錄</h2><span className="count">{visits.length} 筆</span></div>
+          <div className="body">
+            <div className="visit-form">
+              <select className="sel" value={vForm.inmate_id} onChange={e => setVForm({ ...vForm, inmate_id: e.target.value })}>
+                <option value="">— 選擇犯人 —</option>
+                {inmateRoster.map(r => (
+                  <option key={r.id} value={r.member_id}>
+                    No.{String(r.profile?.inmate_no ?? 0).padStart(4, '0')} {r.profile?.game_name ?? r.profile?.display_name ?? '?'}
+                  </option>
+                ))}
+              </select>
+              <input className="inp" placeholder="探監者名字" value={vForm.visitor_name}
+                onChange={e => setVForm({ ...vForm, visitor_name: e.target.value })} />
+              <div className="visit-msg-field">
+                <textarea className="inp" rows={2} maxLength={80} placeholder="廣播內容(最多 80 字)"
+                  value={vForm.message} onChange={e => setVForm({ ...vForm, message: e.target.value })} />
+                <span className="visit-count">{vForm.message.length} / 80</span>
+              </div>
+              <button className="btn-pri" onClick={addVisit}>送出探監</button>
+            </div>
+
+            {visits.length === 0 ? (
+              <p className="empty">本場還沒有探監紀錄</p>
+            ) : (
+              <div className="visit-list">
+                {visits.map(v => {
+                  const ip = profByMember[v.inmate_id]
+                  const inmateName = ip?.game_name ?? ip?.display_name ?? '(已離場)'
+                  const isEditing = editingVisit?.id === v.id
+                  return (
+                    <div key={v.id} className="visit-row">
+                      {isEditing ? (
+                        <div className="visit-edit">
+                          <input className="inp" placeholder="探監者" value={editingVisit.visitor_name}
+                            onChange={e => setEditingVisit({ ...editingVisit, visitor_name: e.target.value })} />
+                          <textarea className="inp" rows={2} maxLength={80} placeholder="內容" value={editingVisit.message}
+                            onChange={e => setEditingVisit({ ...editingVisit, message: e.target.value })} />
+                          <div className="visit-acts">
+                            <button className="btn-sm" onClick={() => setEditingVisit(null)}>取消</button>
+                            <button className="btn-sm btn-pri" onClick={saveVisitEdit}>儲存</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="visit-text">
+                            <span className="visit-who">💌 {v.visitor_name} → No.{ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'} {inmateName}</span>
+                            <span className="visit-body">「{v.message}」</span>
+                          </div>
+                          <span className="spacer" />
+                          <div className="visit-acts">
+                            <button className="btn-sm" onClick={() => setEditingVisit({ id: v.id, visitor_name: v.visitor_name, message: v.message })}>編輯</button>
+                            <button className="btn-sm btn-danger" onClick={() => deleteVisit(v.id)}>刪除</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用 addInmateGoal,可連續挑多筆。
           可挑清單即時依 goalsByInmate/msByMember 重算(挑進來的稿自動從清單移除)。 */}

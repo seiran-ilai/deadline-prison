@@ -149,7 +149,7 @@ export default function GuardWork({ userId }) {
 
       {/* === 上排:我(獄卒) + 計時器(主角,較寬,無專屬獄卒欄) === */}
       <div className="ses-top guard">
-        <ProfileCard userId={userId} variant="id" label="我 · 看守中"
+        <ProfileCard userId={userId} variant="id" label="我 · 看守中" editable={false}
           footer={myInmate ? <div className="id-watch">👁 專屬看守 {myInmates.length} 人 · 本場共 {allInmates.length} 人</div> : null} />
         <SessionStatus userId={userId} />
       </div>
