@@ -116,6 +116,9 @@
 .admin .card-panel > .head h2{font-size:15px; font-weight:700; letter-spacing:.5px; color:var(--text)}
 .admin .card-panel > .head .count{font-family:var(--mono); font-size:12px; color:var(--hazard);
   background:rgba(245,197,24,.1); padding:2px 9px; border-radius:20px}
+/* 等待室(intake)提示徽章:本場目標卡標題旁的小提示 */
+.admin .card-panel > .head .hint-badge{font-size:12px; color:var(--ok);
+  background:rgba(63,179,107,.12); padding:2px 9px; border-radius:20px}
 .admin .card-panel > .body{padding:14px 18px}
 
 /* ---- 候選清單 ---- */

@@ -9,7 +9,9 @@ export function sessionStatus(s, now = new Date()) {
   return 'open'
 }
 
-// public_sessions() 回的列 → 前台場次視圖(capacity null → 0 = 不限)
+// public_sessions() 回的列 → 前台場次視圖。
+// capacity 保留 null(= 不限人數,不可改寫成 0,否則「不限」會被誤判為已額滿)。
+// display_status / can_book 由後端轉好,前端一律以此為準(不再用 timer 自行判斷)。
 export function toSessionView(r) {
   const dateISO = r.session_date ? String(r.session_date).slice(0, 10) : ''
   const mmdd = dateISO ? dateISO.slice(5).replace('-', '') : ''
@@ -19,7 +21,9 @@ export function toSessionView(r) {
     title: r.title,
     dateISO,
     booked: r.booked ?? 0,
-    capacity: r.capacity ?? 0,
+    capacity: r.capacity ?? null,
+    displayStatus: r.display_status,
+    canBook: r.can_book === true,
   }
 }
 

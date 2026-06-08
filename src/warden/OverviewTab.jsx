@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { ROLE_LABEL } from './constants'
 import AvatarInput from '../AvatarInput'
@@ -12,6 +12,17 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
   const [form, setForm] = useState({ game_name: '', discord_account: '', avatar_url: '' })
   const [q, setQ] = useState('')                          // 已配號清單搜尋(暱稱 / 編號)
   const [sortDir, setSortDir] = useState('asc')           // 已配號清單排序:asc=編號舊→新(預設) / desc=新→舊
+  const [participated, setParticipated] = useState(null)  // 參加過任何場次的 member_id 集合(null=載入中)
+
+  // 撈一份 session_inmates 的 member_id 集合,用來判斷某人是否「沒參加過任何場次」(可安全刪除的前提)
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const { data } = await supabase.from('session_inmates').select('member_id')
+      if (alive) setParticipated(new Set((data ?? []).map(r => r.member_id)))
+    })()
+    return () => { alive = false }
+  }, [])
 
   // ── 預約 / 配號動作(沿用原「預約與收押」邏輯,不重寫) ──
   async function addPending() {
@@ -44,6 +55,19 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
     const { error } = await supabase.rpc('assign_next_inmate_no', { target_id: userId })
     if (error) { setMsg('給號失敗:' + error.message); return }
     setMsg('已指派下一個編號'); reloadShared()
+  }
+
+  // 可安全刪除:role=member 且未配號 且 沒參加過任何場次(與後端 delete_unmatched_profile 條件一致)
+  const canDelete = (p) =>
+    p.role === 'member' && p.inmate_no == null && participated != null && !participated.has(p.id)
+
+  // 軟性移除(刪 profile,不動 auth.users;對方再次登入會重新出現)
+  async function deleteUnmatched(p) {
+    const name = p.discord_account ?? p.display_name ?? p.game_name ?? '(未知)'
+    if (!window.confirm(`確定刪除〈${name}〉?此帳號將從名單移除。注意:若對方之後再次以 Discord 登入,仍會重新出現在名單中(需重新處理)。`)) return
+    const { error } = await supabase.rpc('delete_unmatched_profile', { target_id: p.id })
+    if (error) { setMsg('刪除失敗:' + error.message); return }
+    setMsg('已刪除'); reloadShared()
   }
 
   // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序
@@ -132,6 +156,7 @@ export default function OverviewTab({ inmates, unmatched = [], pending = [], loa
                       <div className="ov-acts">
                         <button className="btn-sm" onClick={() => assignNextNo(p.id)}>給下一號</button>
                         <button className="btn-sm" onClick={() => linkToPending(p.id)}>指到預約</button>
+                        {canDelete(p) && <button className="btn-sm btn-danger" onClick={() => deleteUnmatched(p)}>刪除</button>}
                       </div>
                     </div>
                   )

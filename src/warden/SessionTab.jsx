@@ -2,9 +2,17 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
 import { computeProgress } from '../progress'
-import { ROLE_LABEL } from './constants'
+import { ROLE_LABEL, normalizeStatus } from './constants'
 import SessionTimerControl from './SessionTimerControl'
 import GuardAssign from './GuardAssign'
+
+// 非 serving 狀態時,控制條番茄鐘區的提示(實際狀態機按鈕在「場次總覽」分頁)
+const TIMER_HINT = {
+  booking: '場次預約中,尚未開始入場',
+  booking_paused: '已停止預約,尚未開始入場',
+  intake: '已開始入場,於「場次總覽」按『開始服刑』啟動番茄鐘',
+  ended: '本場已結束',
+}
 
 export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared, onGoToManuscripts }) {
   const [roster, setRoster] = useState([])
@@ -248,11 +256,17 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               ))}
           </div>
         </div>
-        {/* 番茄鐘控台:吃一個 session 的獨立元件,渲染為控制條的番茄鐘 .seg + 開始服刑 .go。
+        {/* 番茄鐘控台:只有場次 = serving 時才有意義(計時資料),故只在 serving 渲染。
+            其餘狀態在此顯示提示,實際狀態機操作在「場次總覽」分頁。
             key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
         {currentSessionObj && (
-          <SessionTimerControl key={currentSessionObj.id} session={currentSessionObj}
-            setMsg={setMsg} reloadShared={reloadShared} />
+          normalizeStatus(currentSessionObj) === 'serving'
+            ? <SessionTimerControl key={currentSessionObj.id} session={currentSessionObj}
+                setMsg={setMsg} reloadShared={reloadShared} />
+            : <div className="seg">
+                <span className="lbl">番茄鐘</span>
+                <div className="row timer-state"><span className="muted">{TIMER_HINT[normalizeStatus(currentSessionObj)] ?? '本場尚未開始服刑'}</span></div>
+              </div>
         )}
       </div>
 

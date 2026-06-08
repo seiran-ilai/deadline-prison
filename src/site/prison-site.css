@@ -187,6 +187,13 @@
 .dp-site .tag-status.open{color:var(--hazard); border:1px solid var(--hazard-deep)}
 .dp-site .tag-status.full{color:var(--alarm); border:1px solid var(--alarm)}
 .dp-site .tag-status.ended{color:var(--faint); border:1px solid var(--faint)}
+/* public_sessions display_status 狀態色票(沿用既有 .sess / .tag-status 版面,只擴充配色)*/
+.dp-site .sess.booking{border-left-color:#3fb36b}
+.dp-site .sess.paused,.dp-site .sess.intake{border-left-color:var(--steel-2)}
+.dp-site .sess.serving{border-left-color:var(--alarm)}
+.dp-site .tag-status.booking{color:#3fb36b; border:1px solid #2f8f54}
+.dp-site .tag-status.paused,.dp-site .tag-status.intake{color:var(--dim); border:1px solid var(--steel)}
+.dp-site .tag-status.serving{color:var(--alarm); border:1px solid var(--alarm)}
 .dp-site .btn-book{font-family:var(--cond); font-size:19px; letter-spacing:2px; display:block; width:148px; background:var(--hazard); color:#0a0a0a; border:none; cursor:pointer; padding:11px 0; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); transition:transform .12s, background .2s}
 .dp-site .btn-book:hover{background:#fff; transform:translateY(-1px)}
 .dp-site .btn-book:disabled{background:var(--concrete-3); color:var(--faint); cursor:not-allowed; transform:none}

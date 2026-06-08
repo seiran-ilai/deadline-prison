@@ -6,6 +6,7 @@ import GuardWork from './GuardWork'
 import WardenPanel from './warden/WardenPanel'
 import ProfilePage from './ProfilePage'
 import RecordsPage from './RecordsPage'
+import { normalizeStatus } from './warden/constants'
 import './styles/admin.css'
 
 // 本次服刑分頁:內容依「本場身分 role_in_session」決定(犯人頁 / 獄卒頁),
@@ -18,9 +19,12 @@ function SessionView({ userId, onGoToManuscripts }) {
       const { data: si } = await supabase.from('session_inmates')
         .select('session_id, role_in_session').eq('member_id', userId)
       if (!si || !si.length) { if (alive) setRoleInSession(null); return }
-      const { data: open } = await supabase.from('sessions')
-        .select('id').in('id', si.map(r => r.session_id)).eq('status', 'open')
-      const row = (open && open.length) ? si.find(r => r.session_id === open[0].id) : null
+      // 全撈 + normalizeStatus 過濾(過渡期 DB 仍可能有舊值 open/closed,不用 .eq('status','open'))
+      const { data: rows } = await supabase.from('sessions')
+        .select('id, status, timer_started_at').in('id', si.map(r => r.session_id))
+      const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
+      const sess = live[0] ?? null
+      const row = sess ? si.find(r => r.session_id === sess.id) : null
       if (alive) setRoleInSession(row ? row.role_in_session : null)
     }
     load()
@@ -121,7 +125,7 @@ function App() {
         <div className="center-box">
           <h1>死線<b>監獄</b></h1>
           <p className="sub">查無預約資料,請與典獄長確認</p>
-          <a className="btn-ghost" href="https://discord.gg/你的邀請連結" target="_blank" rel="noreferrer">聯繫典獄長(Discord)</a>
+          <a className="btn-ghost" href="https://discord.gg/tpRn7En9mk" target="_blank" rel="noreferrer">聯繫典獄長(Discord)</a>
           <button onClick={signOut}>登出</button>
         </div>
       </div>

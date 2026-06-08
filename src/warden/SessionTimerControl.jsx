@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { sessionPlan, pomodoroState } from '../pomodoro'
+import { pomodoroState } from '../pomodoro'
 
-// 單一場次的番茄鐘控台(僅典獄長)。
-// 吃一個 session 物件;單場就渲染一個,日後要同時控多場時直接 map 成每場一張卡即可。
+// 單一場次的番茄鐘控台(僅典獄長)。容器層只在「場次 = serving」時才 render(見 SessionTab)。
+// 「開始服刑」已移到「場次總覽」狀態機(intake→serving),轉 serving 時後端自動設 timer_started_at,
+// 故本元件不再有 idle 的「開始服刑」UI。番茄鐘只是 serving 狀態內的計時資料。
 // 用 <SessionTimerControl key={session.id} ... /> 讓切換場次時 roundsInput 等內部狀態自動重置。
 export default function SessionTimerControl({ session, setMsg, reloadShared }) {
   const sessionId = session.id
-  const [roundsInput, setRoundsInput] = useState(session.total_rounds ?? 8) // 番茄鐘專注輪數輸入(idle 用)
+  const [roundsInput, setRoundsInput] = useState(session.total_rounds ?? 8) // 專注輪數輸入
 
   // 每秒重算(讓 running 顯示的目前輪數與 −輪 下限即時推進)
   const [, setTick] = useState(0)
@@ -23,30 +24,20 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
     setMsg('已設定專注輪數:' + n); reloadShared()
   }
 
-  // 開始:idle → running(同時清掉收尾時間,以防重新開始)
-  async function startTimer() {
-    const { error } = await supabase.from('sessions')
-      .update({ timer_started_at: new Date().toISOString(), timer_ended_at: null }).eq('id', sessionId)
-    if (error) { setMsg('開始失敗:' + error.message); return }
-    setMsg('已開始服刑'); reloadShared()
-  }
-
-  // 提早結束:running → ended(收尾)
+  // 提早結束:serving → ended(走場次狀態機,不直接動 timer_*)
   async function endTimer() {
-    if (!window.confirm('確定提早結束本場?將立刻進入收尾')) return
-    const { error } = await supabase.from('sessions')
-      .update({ timer_ended_at: new Date().toISOString() }).eq('id', sessionId)
+    if (!window.confirm('確定結束本場服刑?結束後不可重開')) return
+    const { error } = await supabase.rpc('set_session_status', { p_session: sessionId, p_new_status: 'ended' })
     if (error) { setMsg('結束失敗:' + error.message); return }
-    setMsg('已提早結束本場'); reloadShared()
+    setMsg('已結束服刑'); reloadShared()
   }
 
-  // 重新設定:任何狀態 → idle(清掉開始與結束時間)
+  // 退回入場:serving → intake(後端轉 intake 時會自動清掉番茄鐘計時)
   async function resetTimer() {
-    if (!window.confirm('確定重新設定番茄鐘?將清掉開始與結束時間,全場回到等待狀態')) return
-    const { error } = await supabase.from('sessions')
-      .update({ timer_started_at: null, timer_ended_at: null }).eq('id', sessionId)
-    if (error) { setMsg('重新設定失敗:' + error.message); return }
-    setMsg('已重新設定番茄鐘'); reloadShared()
+    if (!window.confirm('將清掉番茄鐘計時、退回入場狀態,全場回到等待')) return
+    const { error } = await supabase.rpc('set_session_status', { p_session: sessionId, p_new_status: 'intake' })
+    if (error) { setMsg('退回入場失敗:' + error.message); return }
+    setMsg('已退回入場'); reloadShared()
   }
 
   // 整場 ±輪:即時改 total_rounds;−輪 下限 = max(目前進行中的輪數, 1)
@@ -57,8 +48,6 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
     if (error) { setMsg('調整輪數失敗:' + error.message); return }
     setMsg(`已${delta > 0 ? '+' : '−'}1 輪,現為 ${next} 輪`); reloadShared()
   }
-
-  const plan = sessionPlan(Math.max(1, parseInt(roundsInput) || 1))
 
   // 番茄鐘狀態(與直播大螢幕、犯人手機共用同一純函式)
   const totalRounds = session.total_rounds ?? 8
@@ -75,25 +64,7 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
   // 整合進場次控制條:番茄鐘狀態做為一個 .seg,主要動作放右側 .go
   return (
     <>
-      {/* idle:設定總輪數 + 開始服刑 */}
-      {timerStatus === 'idle' && (
-        <>
-          <div className="seg">
-            <span className="lbl">番茄鐘</span>
-            <div className="row">
-              專注
-              <input className="mono" type="number" min="1" value={roundsInput}
-                onChange={e => setRoundsInput(e.target.value)} style={{ width: 56, textAlign: 'center' }} />
-              輪
-              <button className="btn-sm" onClick={saveRounds}>儲存</button>
-            </div>
-            <span className="pomo-prev">約 {plan.totalMinutes} 分(專注25×{plan.focusCount} + 放風5×{plan.normalBreakCount} + 長休15×{plan.longBreakCount})</span>
-          </div>
-          <div className="go"><button className="btn-pri" onClick={startTimer}>▶ 開始服刑</button></div>
-        </>
-      )}
-
-      {/* running:狀態 + ±輪 / 提早結束 / 重新設定 */}
+      {/* running:狀態 + ±輪 / 提早結束(轉 ended)/ 退回入場(轉 intake) */}
       {timerStatus === 'running' && (
         <>
           <div className="seg">
@@ -107,20 +78,31 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
           </div>
           <div className="go">
             <button className="btn-danger btn-sm" onClick={endTimer}>提早結束</button>
-            <button className="btn-danger btn-sm" onClick={resetTimer}>重新設定</button>
+            <button className="btn-danger btn-sm" onClick={resetTimer}>退回入場</button>
           </div>
         </>
       )}
 
-      {/* ended:收尾 + 重新設定 */}
+      {/* ended(番茄鐘算完):不自動轉場次狀態,只提示收尾並提供按鈕 */}
       {timerStatus === 'ended' && (
         <>
           <div className="seg">
             <span className="lbl">番茄鐘</span>
-            <div className="row timer-state"><span className="ended">🔓 本場服刑結束(收尾)</span></div>
+            <div className="row timer-state"><span className="ended">🔓 本場服刑結束(收尾中,請按下方『結束服刑』)</span></div>
           </div>
-          <div className="go"><button className="btn-danger btn-sm" onClick={resetTimer}>重新設定</button></div>
+          <div className="go">
+            <button className="btn-danger btn-sm" onClick={endTimer}>結束服刑</button>
+            <button className="btn-danger btn-sm" onClick={resetTimer}>退回入場(清番茄鐘)</button>
+          </div>
         </>
+      )}
+
+      {/* idle:serving 理論上必有 timer_started_at;遇到代表資料異常,僅提示不提供開始鈕 */}
+      {timerStatus === 'idle' && (
+        <div className="seg">
+          <span className="lbl">番茄鐘</span>
+          <div className="row timer-state"><span className="muted">計時未啟動</span></div>
+        </div>
       )}
     </>
   )

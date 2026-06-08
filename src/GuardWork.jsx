@@ -6,6 +6,7 @@ import SessionStatus from './SessionStatus'
 import GuardMemosTab from './GuardMemosTab'
 import SessionMemoPanel from './SessionMemoPanel'
 import ProfileCard from './ProfileCard'
+import { normalizeStatus } from './warden/constants'
 
 // 犯人列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
 const PRESENCE_STYLE = {
@@ -34,10 +35,13 @@ export default function GuardWork({ userId }) {
       .select('id, session_id, role_in_session, state').eq('member_id', userId)
     let mine = null, sess = null
     if (si && si.length) {
-      const { data: open } = await supabase.from('sessions')
+      // 全撈 + normalizeStatus 過濾(過渡期 DB 仍可能有舊值,不用 .eq('status','open'))
+      const { data: rows } = await supabase.from('sessions')
         .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
-        .in('id', si.map(r => r.session_id)).eq('status', 'open')
-      if (open && open.length) { sess = open[0]; mine = si.find(r => r.session_id === sess.id) }
+        .in('id', si.map(r => r.session_id))
+      const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
+      sess = live[0] ?? null
+      if (sess) mine = si.find(r => r.session_id === sess.id)
     }
     setSession(sess); setMyInmate(mine)
     if (!mine) {
@@ -153,6 +157,11 @@ export default function GuardWork({ userId }) {
           footer={myInmate ? <div className="id-watch">👁 專屬看守 {myInmates.length} 人 · 本場共 {allInmates.length} 人</div> : null} />
         <SessionStatus userId={userId} />
       </div>
+
+      {/* ended 防呆提示(外層一般已擋已結束場次,保險起見;名單維持顯示供獄卒收尾檢視) */}
+      {session && normalizeStatus(session) === 'ended' && (
+        <div className="banner">本場已結束</div>
+      )}
 
       {!myInmate ? (
         <div className="card-panel"><div className="body">

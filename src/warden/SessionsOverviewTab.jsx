@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import { normalizeStatus, SESSION_STATUS_LABEL } from './constants'
 import GuardAssign from './GuardAssign'
 
-// 場次總覽(僅典獄長):列出所有場次、開新場、編輯(標題/日期)、關閉/重新開啟、刪除。
+// 場次總覽(僅典獄長):列出所有場次、開新場、編輯(標題/日期)、五態狀態機、刪除。
 // 不放番茄鐘控制與直播(那些屬「進行中場次」分頁的控場,避免重複)。
-// open 場次可展開唯讀檢視本場名單(犯人列可就地指派/移除專屬獄卒);closed 場次不可展開。
+// 未結束場次可展開唯讀檢視本場名單(犯人列可就地指派/移除專屬獄卒);已結束場次不可展開。
+// 場次狀態一律以 normalizeStatus(s) 判斷,不直接比對 s.status。
 export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [sessions, setSessions] = useState([])
   const [counts, setCounts] = useState({})        // session_id -> 報到人數
@@ -25,21 +27,21 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   async function load() {
     setLoading(true)
     const { data: sess } = await supabase.from('sessions')
-      .select('id, title, session_date, status, opened_by, capacity, created_at, is_public')
+      .select('id, title, session_date, status, timer_started_at, opened_by, capacity, created_at, is_public')
     const { data: si } = await supabase.from('session_inmates').select('session_id')
     const cnt = {}
     for (const r of si ?? []) cnt[r.session_id] = (cnt[r.session_id] ?? 0) + 1
-    // 排序:進行中(open)在上、已結束(closed)在下;同組內依日期由近到遠
-    const rank = s => (s.status === 'open' ? 0 : 1)
+    // 排序:未結束在上、已結束(ended)在下;同組內依日期由近到遠
+    const rank = s => (normalizeStatus(s) === 'ended' ? 1 : 0)
     const dateKey = s => new Date(s.session_date ?? s.created_at).getTime()
     const sorted = (sess ?? []).slice().sort((a, b) => rank(a) - rank(b) || dateKey(b) - dateKey(a))
     setSessions(sorted); setCounts(cnt); setLoading(false)
   }
   useEffect(() => { load() }, [])
 
-  // 展開/收合某場次(僅 open 可展開);展開時載入本場名單(分開查再 JS 合併,不用巢狀 select)
+  // 展開/收合某場次(已結束不可展開);展開時載入本場名單(分開查再 JS 合併,不用巢狀 select)
   async function toggleExpand(s) {
-    if (s.status !== 'open') return
+    if (normalizeStatus(s) === 'ended') return
     if (expandedId === s.id) { setExpandedId(null); return }
     setExpandedId(s.id)
     if (rosterById[s.id]) return
@@ -87,11 +89,42 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     setMsg('已更新場次'); cancelEdit(); load(); reloadShared()
   }
 
-  async function toggleStatus(s) {
-    const next = s.status === 'open' ? 'closed' : 'open'
-    const { error } = await supabase.from('sessions').update({ status: next }).eq('id', s.id)
+  // 場次五態狀態機:一律走 set_session_status RPC,成功後刷新本頁與共用資料。
+  // confirmText 有值時先二次確認(結束服刑、退回入場用)。
+  async function setStatus(s, newStatus, okMsg, confirmText) {
+    if (confirmText && !window.confirm(confirmText)) return
+    const { error } = await supabase.rpc('set_session_status', { p_session: s.id, p_new_status: newStatus })
     if (error) { setMsg('狀態更新失敗:' + error.message); return }
-    setMsg(next === 'closed' ? '已關閉場次' : '已重新開啟場次'); load(); reloadShared()
+    setMsg(okMsg); load(); reloadShared()
+  }
+
+  // 依 normalizeStatus(s) 顯示對應狀態機按鈕(退回類用次要/危險色與正向鈕區隔)
+  function statusButtons(s) {
+    switch (normalizeStatus(s)) {
+      case 'booking':
+        return (<>
+          <button className="btn-sm" onClick={() => setStatus(s, 'booking_paused', '已停止預約')}>停止預約</button>
+          <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'intake', '已開始入場')}>開始入場</button>
+        </>)
+      case 'booking_paused':
+        return (<>
+          <button className="btn-sm" onClick={() => setStatus(s, 'booking', '已恢復報名')}>恢復報名</button>
+          <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'intake', '已開始入場')}>開始入場</button>
+        </>)
+      case 'intake':
+        return (<>
+          <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'serving', '已開始服刑')}>開始服刑</button>
+          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'booking_paused', '已退回停止預約')}>退回停止預約</button>
+          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'booking', '已退回預約中')}>退回預約中</button>
+        </>)
+      case 'serving':
+        return (<>
+          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'ended', '已結束服刑', '確定結束本場服刑?結束後不可重開')}>結束服刑</button>
+          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'intake', '已退回入場', '將清掉番茄鐘計時、退回入場狀態,全場回到等待')}>退回入場(清番茄鐘)</button>
+        </>)
+      default:   // ended:不顯示狀態機按鈕
+        return <span className="muted">已結束</span>
+    }
   }
 
   async function deleteSession(s) {
@@ -119,6 +152,8 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
           : sessions.map(s => {
             const isOpen = expandedId === s.id
             const roster = rosterById[s.id]
+            const st = normalizeStatus(s)
+            const ended = st === 'ended'
             return (
             <div key={s.id} className="row-card">
               {editId === s.id ? (
@@ -132,16 +167,16 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                 </div>
               ) : (
                 <div className="row-head">
-                  {/* open 場次左側可展開箭頭;closed 不顯示、不可展開 */}
-                  {s.status === 'open'
+                  {/* 未結束場次左側可展開箭頭;已結束不顯示、不可展開 */}
+                  {!ended
                     ? <button className="btn-sm so-caret" onClick={() => toggleExpand(s)}>{isOpen ? '▾' : '▸'}</button>
                     : <span className="so-caret-ph" aria-hidden="true" />}
                   <strong>{s.title}</strong>
                   <span className="muted">{s.session_date ?? '未設定日期'}</span>
-                  <span className="tag tag-pill" style={s.status === 'open'
+                  <span className="tag tag-pill" style={!ended
                     ? { background: 'rgba(63,179,107,.15)', color: 'var(--ok)' }
                     : { background: 'rgba(255,255,255,.08)', color: 'var(--dim)' }}>
-                    {s.status === 'open' ? '進行中' : '已結束'}</span>
+                    {SESSION_STATUS_LABEL[st] ?? st}</span>
                   <span className="tag tag-pill" style={s.is_public !== false
                     ? { background: 'rgba(245,197,24,.12)', color: 'var(--hazard)' }
                     : { background: 'rgba(255,255,255,.06)', color: 'var(--faint)' }}>
@@ -150,13 +185,13 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                   <span className="muted">上限 {s.capacity ?? '不限'}</span>
                   <span className="spacer" />
                   <button className="btn-sm" onClick={() => startEdit(s)}>編輯</button>
-                  <button className="btn-sm" onClick={() => toggleStatus(s)}>{s.status === 'open' ? '關閉場次' : '重新開啟'}</button>
+                  {statusButtons(s)}
                   <button className="btn-sm btn-danger" onClick={() => deleteSession(s)}>刪除</button>
                 </div>
               )}
 
-              {/* 展開:唯讀檢視本場名單(犯人列右側嵌 GuardAssign 指派/移除專屬獄卒)。僅 open 場次。 */}
-              {isOpen && s.status === 'open' && (
+              {/* 展開:唯讀檢視本場名單(犯人列右側嵌 GuardAssign 指派/移除專屬獄卒)。已結束場次不可展開。 */}
+              {isOpen && !ended && (
                 <div className="row-detail">
                   {!roster ? <p className="empty">讀取本場名單中…</p> : (<>
                     <div className="group-lbl">本場犯人 ({roster.inmates.length})<span className="ln" /></div>

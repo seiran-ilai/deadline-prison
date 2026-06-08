@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import { createBooking, cancelBooking } from '../bookingApi'
-import { sessionStatus, toSessionView, splitDate } from '../prison'
+import { toSessionView, splitDate } from '../prison'
 import AvatarInput from '../AvatarInput'
 import './prison-site.css'
 
@@ -11,6 +11,14 @@ const RULES = [
   ['03', '全程直播', '典獄長控台同步大螢幕計時,犯人進度公開可見。被看著,就趕得動。'],
   ['04', '刑滿釋放', '梯次結束即收尾放人。帶著趕完的稿離開——或自首下一場。'],
 ]
+
+// 場次狀態徽章(依 public_sessions 的 display_status;後端已過濾已結束場)
+const SESS_STATUS = {
+  booking:        { label: '預約中',   cls: 'booking' },  // 預約中(正向綠)
+  booking_paused: { label: '報名暫停', cls: 'paused' },   // 報名暫停(中性灰)
+  intake:         { label: '入場中',   cls: 'intake' },   // 入場中(中性灰)
+  serving:        { label: '服刑中',   cls: 'serving' },  // 服刑中(強調色)
+}
 
 const DiscordIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
@@ -324,24 +332,28 @@ export default function PrisonSite() {
             {loading ? <p style={{ color: 'var(--dim)' }}>調閱梯次中…</p>
               : sessions.length === 0 ? <p style={{ color: 'var(--dim)' }}>目前沒有開放收監的梯次</p>
                 : sessions.map(s => {
-                  const st = sessionStatus(s)
+                  const meta = SESS_STATUS[s.displayStatus] ?? SESS_STATUS.booking
                   const { dd, mm } = splitDate(s.dateISO)
-                  const pct = s.capacity > 0 ? Math.min(100, Math.round(s.booked / s.capacity * 100)) : 0
-                  const capTxt = s.capacity > 0 ? `已收監 ${s.booked} / ${s.capacity}` : `已收監 ${s.booked} ／ 不限`
-                  const tag = st === 'ended' ? '已結束' : st === 'full' ? '停止收監' : '報名中'
+                  // capacity 為 null → 不限人數(永不額滿);有值才算額滿與顯示 /總額
+                  const limited = s.capacity != null
+                  const full = limited && s.booked >= s.capacity
+                  const pct = limited && s.capacity > 0 ? Math.min(100, Math.round(s.booked / s.capacity * 100)) : 0
+                  const capTxt = limited ? `已報名 ${s.booked} / ${s.capacity}` : `已報名 ${s.booked} 人`
+                  const bookable = s.canBook && !full   // 可預約 = can_book 且未額滿
                   return (
-                    <div className={`sess ${st}`} key={s.id}>
+                    <div className={`sess ${meta.cls}`} key={s.id}>
                       <div className="when"><div className="d">{dd}</div><div className="m">{mm}</div></div>
                       <div className="meta">
                         <div className="batch">{s.batch}</div>
                         <h4>{s.title}</h4>
-                        <div className="cap">{capTxt}{s.capacity > 0 && <span className="gauge"><i style={{ width: `${pct}%` }} /></span>}</div>
+                        <div className="cap">{capTxt}{limited && <span className="gauge"><i style={{ width: `${pct}%` }} /></span>}</div>
                       </div>
                       <div className="act">
-                        <span className={`tag-status ${st}`}>{tag}</span>
-                        {st === 'ended' ? <button className="btn-book" disabled>已結案</button>
-                          : st === 'full' ? <button className="btn-book" disabled>已額滿</button>
-                            : <button className="btn-book" onClick={() => openModal(s)}>入監服刑</button>}
+                        <span className={`tag-status ${meta.cls}`}>{meta.label}</span>
+                        {bookable
+                          ? <button className="btn-book" onClick={() => openModal(s)}>入監服刑</button>
+                          // can_book 但額滿 → 已額滿;can_book=false → 顯示對應狀態文字(報名暫停/入場中/服刑中)
+                          : <button className="btn-book" disabled>{s.canBook ? '已額滿' : meta.label}</button>}
                       </div>
                     </div>
                   )

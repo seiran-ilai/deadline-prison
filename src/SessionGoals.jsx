@@ -5,6 +5,7 @@ import MessageBanner from './MessageBanner'
 import SessionStatus from './SessionStatus'
 import { computeProgress, goalStatusLabel } from './progress'
 import ProfileCard from './ProfileCard'
+import { normalizeStatus } from './warden/constants'
 
 // 同囚列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
 const PRESENCE_STYLE = {
@@ -44,13 +45,13 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       .select('id, session_id, state').eq('member_id', userId)
     let mine = null, sess = null
     if (si && si.length) {
-      const { data: openSess } = await supabase.from('sessions')
+      // 全撈 + normalizeStatus 過濾(過渡期 DB 仍可能有舊值,不用 .eq('status','open'))
+      const { data: rows } = await supabase.from('sessions')
         .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
-        .in('id', si.map(r => r.session_id)).eq('status', 'open')
-      if (openSess && openSess.length) {
-        sess = openSess[0]
-        mine = si.find(r => r.session_id === sess.id)
-      }
+        .in('id', si.map(r => r.session_id))
+      const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
+      sess = live[0] ?? null
+      if (sess) mine = si.find(r => r.session_id === sess.id)
     }
     setSession(sess); setMyInmate(mine)
     if (!mine) { setGoals([]); setActives([]); setStepsByMs({}); setLoading(false); return }
@@ -235,6 +236,23 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     )
   }
 
+  // 場次狀態(myInmate 存在代表我在這場)。狀態一律看 normalizeStatus。
+  // ended 為防呆分支:外層 SessionView 一般已擋掉已結束場次,保險起見顯示收尾卡。
+  const ds = normalizeStatus(session)
+  if (ds === 'ended') {
+    return (
+      <div className="sg-page">
+        <div className="card-panel">
+          <div className="head"><h2>本場已結束</h2></div>
+          <div className="body">
+            <p className="empty">本場服刑已結束,可至「服刑紀錄」查看本場成果</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  const isIntake = ds === 'intake'   // 等待室:本場目標仍可編輯,僅多一個提示徽章
+
   // 可挑選 = active 稿件中,尚未挑進本場的
   const goalIds = goals.map(g => g.manuscript_id)
   const available = actives.filter(m => !goalIds.includes(m.id))
@@ -293,6 +311,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         <div className="head">
           <h2>本場目標</h2>
           {goals.length > 0 && <span className="count">{goals.length} 項</span>}
+          {isIntake && <span className="hint-badge">等待開始服刑,可先挑選本場目標</span>}
           {goals.length > 5 && (
             <>
               <span className="spacer" />

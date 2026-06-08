@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { pomodoroState, PHASE_LABEL, fmt } from './pomodoro'
+import { normalizeStatus } from './warden/constants'
 
 // 計時器階段徽章配色(底色淡、文字濃)
 const PHASE_BADGE = {
@@ -33,10 +34,13 @@ export default function SessionStatus({ userId }) {
       .select('id, session_id, role_in_session').eq('member_id', userId)
     let mineRow = null, sess = null
     if (si && si.length) {
-      const { data: open } = await supabase.from('sessions')
-        .select('id, title, timer_started_at, timer_ended_at, total_rounds')
-        .in('id', si.map(r => r.session_id)).eq('status', 'open')
-      if (open && open.length) { sess = open[0]; mineRow = si.find(r => r.session_id === sess.id) }
+      // 全撈 + normalizeStatus 過濾(多撈 status 算 displayStatus 用)
+      const { data: rows } = await supabase.from('sessions')
+        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
+        .in('id', si.map(r => r.session_id))
+      const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
+      sess = live[0] ?? null
+      if (sess) mineRow = si.find(r => r.session_id === sess.id)
     }
     if (!mineRow) { setData({ session: null }); setLoading(false); return }
 
@@ -79,18 +83,24 @@ export default function SessionStatus({ userId }) {
   if (loading) return <div className="ses-timer waiting"><div className="st-sub">讀取本場狀態中…</div></div>
   const { session, role, hasGuard, hasInmates } = data
 
-  // 階段1:還沒報到進任何 open 場次 → 統一文字
+  // 階段1:還沒報到進任何未結束場次 → 統一文字
   if (!session) return <TimerWaiting text="等待身分核對" sub="尚未被報到進任何場次,請等典獄長報到" />
 
-  // 階段2/3:番茄鐘尚未開始,依本場身分顯示對應等待文字(依序判斷)
-  if (!session.timer_started_at) {
+  // 狀態一律看 normalizeStatus,不再用 timer_started_at 有無當狀態判斷
+  const ds = normalizeStatus(session)
+
+  // intake(等待室):番茄鐘尚未開始,依本場身分顯示對應等待文字
+  if (ds === 'intake') {
     if (role === 'guard') {
       return <TimerWaiting text={hasInmates ? '等待服刑開始' : '監管犯人配對中'} sub={`本場:${session.title}`} />
     }
     return <TimerWaiting text={hasGuard ? '等待服刑開始' : '等待配對專屬獄卒'} sub={`本場:${session.title}`} />
   }
 
-  // 階段4:番茄鐘已開始 → 顯示倒數
+  // ended:理論上犯人頁外層會擋,保險起見顯示收尾文字
+  if (ds === 'ended') return <TimerWaiting text="本場已結束" sub={`本場:${session.title}`} />
+
+  // serving:番茄鐘倒數(timer_started_at 只在此拿來算倒數)
   const N = session.total_rounds ?? 8
   const elapsed = Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000)
   const st = pomodoroState(elapsed, N, session.timer_ended_at)
