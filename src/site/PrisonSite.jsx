@@ -136,7 +136,7 @@ export default function PrisonSite() {
   async function loginWithDiscord() {
     await supabase.auth.signInWithOAuth({
       provider: 'discord',
-      options: { redirectTo: `${window.location.origin}/?intake=${sel.id}` },
+      options: { redirectTo: `${window.location.origin}/?intake=${sel.id}`, scopes: 'identify' },
     })
   }
 
@@ -197,7 +197,6 @@ export default function PrisonSite() {
             <a data-sec="wall" onClick={() => scrollTo('wall')}>犯人牆</a>
             <a data-sec="hall" onClick={() => scrollTo('hall')}>名人堂</a>
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
-            <button className="btn-serve" onClick={() => scrollTo('sessions')}>入監服刑</button>
           </div>
           <div className="nav-entries">
             <a className="nav-access" href="/app">ACCESS · 監獄系統</a>

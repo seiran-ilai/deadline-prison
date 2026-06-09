@@ -144,7 +144,7 @@ function App() {
   // 登入後導回目前的監所系統頁(/app 或 /warden),而非公開首頁
   async function signIn() {
     const redirectTo = window.location.origin + window.location.pathname  // 乾淨路徑,不帶 hash/query
-    await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo } })
+    await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo, scopes: 'identify' } })
   }
   async function signOut() {
     supabase.auth.signOut()           // 不 await,背景清 session
