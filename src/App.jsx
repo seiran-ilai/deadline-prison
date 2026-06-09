@@ -133,8 +133,14 @@ function App() {
   }, [profile?.role, myLive?.roleInSession])
 
   // 登入後導回目前的監所系統頁(/app 或 /warden),而非公開首頁
-  async function signIn() { await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo: window.location.href } }) }
-  async function signOut() { await supabase.auth.signOut() }
+  async function signIn() {
+    const redirectTo = window.location.origin + window.location.pathname  // 乾淨路徑,不帶 hash/query
+    await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo } })
+  }
+  async function signOut() {
+    await supabase.auth.signOut()
+    window.location.assign('/')   // 導回官網首頁,清掉 /app# 殘留
+  }
 
   // ⚠️ 測試專用：用 Email/密碼登入測試帳號（真實登入＝真實 RLS 權限）
   async function testSignIn(account) {
