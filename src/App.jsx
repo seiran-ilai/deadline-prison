@@ -66,6 +66,7 @@ function App() {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('session')
+  const [tabResolved, setTabResolved] = useState(false) // 落地分頁是否已決定:決定前遮 loading,避免用初始 tab 先渲染一次(閃過 session/booking)
   const [msg, setMsg] = useState('')
   const [myLive, setMyLive] = useState(null) // { sessionId, roleInSession, status } | null:我所在「未結束」場次(0 或 1)
   const [testError, setTestError] = useState(null)
@@ -126,10 +127,17 @@ function App() {
   // 依賴 myLive:首次 null 會先落 booking,輪詢抓到在場後自動帶到對的分頁 —— 即「不用重登就解鎖」。
   useEffect(() => {
     if (!profile) return
-    if (profile.role === 'warden') { setTab('warden'); return }
-    if (myLive?.roleInSession === 'guard') setTab('guardwork')
-    else if (myLive?.roleInSession === 'inmate') setTab('session')
-    else setTab('booking')
+    let alive = true
+    setTabResolved(false)
+    if (profile.role === 'warden') {
+      if (alive) { setTab('warden'); setTabResolved(true) }
+      return
+    }
+    const landing = myLive?.roleInSession === 'guard' ? 'guardwork'
+      : myLive?.roleInSession === 'inmate' ? 'session'
+      : 'booking'
+    if (alive) { setTab(landing); setTabResolved(true) }
+    return () => { alive = false }
   }, [profile?.role, myLive?.roleInSession])
 
   // 登入後導回目前的監所系統頁(/app 或 /warden),而非公開首頁
@@ -138,8 +146,8 @@ function App() {
     await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo } })
   }
   async function signOut() {
-    await supabase.auth.signOut()
-    window.location.assign('/')   // 導回官網首頁,清掉 /app# 殘留
+    supabase.auth.signOut()           // 不 await,背景清 session
+    window.location.replace('/')      // 立刻導回官網首頁,replace 不留 /app 在瀏覽歷史
   }
 
   // ⚠️ 測試專用：用 Email/密碼登入測試帳號（真實登入＝真實 RLS 權限）
@@ -185,6 +193,8 @@ function App() {
       </div>
     )
   }
+  // 落地分頁尚未決定前先遮 loading,避免用初始 tab 閃過 session/booking
+  if (!tabResolved) return <div className="admin"><div className="center-box"><p className="sub">核對身分中…</p></div></div>
 
   const isStaff = profile.role === 'guard' || profile.role === 'warden'
   // 互斥分頁:依「我目前未結束場次的本場身分」啟用「犯人服刑」/「獄卒作業」,跟著 myLive 輪詢即時重算。
