@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { normalizeStatus, SESSION_STATUS_LABEL } from './constants'
+import { normalizeStatus, SESSION_STATUS_LABEL, materializeResultMsg } from './constants'
 import GuardAssign from './GuardAssign'
 
 // 場次總覽(僅典獄長):列出所有場次、開新場、編輯(標題/日期)、五態狀態機、刪除。
@@ -108,6 +108,13 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
       setSessions(snapshot)   // 失敗回滾
       setMsg('狀態更新失敗,已還原:' + error.message)
       return
+    }
+    // 「開始入場」成功後自動帶入預約名單(bookings → session_inmates / booking_goals → session_goals)。
+    // 一律靠 RPC,不自行 insert;在別場未結束者會被跳過並回傳,逐筆提示。
+    if (newStatus === 'intake') {
+      const { data: skipped } = await supabase.rpc('materialize_session_bookings', { p_session: s.id })
+      setMsg(materializeResultMsg(skipped))
+      setRosterById(prev => { const n = { ...prev }; delete n[s.id]; return n })   // 失效快取,重新展開時重抓
     }
     reloadShared()   // 背景同步共用 sessions(ended 會從 SessionTab 下拉消失),不重抓本頁
   }

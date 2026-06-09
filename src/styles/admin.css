@@ -79,6 +79,14 @@
   white-space:nowrap; transition:.15s}
 .admin .tabs button:hover{color:var(--text); background:transparent}
 .admin .tabs button.on{color:var(--text); border-bottom-color:var(--hazard)}
+/* 互斥分頁未解鎖:灰掉(非 native disabled,點擊仍會跳提示) */
+.admin .tabs button.tab-disabled{color:var(--faint); opacity:.5; cursor:not-allowed}
+.admin .tabs button.tab-disabled:hover{color:var(--faint)}
+
+/* 分頁未解鎖提示卡 */
+.admin .locked-note{max-width:480px; margin:48px auto; padding:32px 28px; text-align:center;
+  background:var(--panel-2); border:1px solid var(--line); border-radius:var(--r)}
+.admin .locked-note p{color:var(--dim); margin:0 0 20px; line-height:1.7}
 
 /* ---- 子分頁 ---- */
 .admin .subtabs{display:flex; gap:8px; padding:14px 0 0; margin-bottom:4px;
@@ -131,8 +139,10 @@
 .admin .cand:hover{border-color:var(--line-2)}
 .admin .cand .id{font-family:var(--mono); color:var(--dim); font-size:12px}
 .admin .cand .nm{font-weight:500}
-.admin .cand .acts{margin-left:auto; display:flex; gap:6px}
+.admin .cand .acts{margin-left:auto; display:flex; gap:6px; align-items:center}
 .admin .cand .acts button{padding:6px 10px; font-size:12px}
+/* 已在本場的獄卒:綠框高亮 + 稍暗,標「已在場」 */
+.admin .cand.in-session{border-color:var(--ok); background:rgba(63,179,107,.08); opacity:.75}
 
 /* ---- 角色色票:犯人黃 / 獄卒綠 ---- */
 .admin .role-tag{font-size:11px; padding:2px 8px; border-radius:4px; font-weight:700; letter-spacing:.5px; white-space:nowrap}
