@@ -58,12 +58,14 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
   }
 
   async function addGoal(sessionId, manuscriptId) {
+    const title = msById[manuscriptId]?.title ?? '稿件'
     const optimistic = { id: 'tmp-' + manuscriptId, session_id: sessionId, manuscript_id: manuscriptId }
     setGoals(prev => [...prev, optimistic])   // 樂觀加入
     const { data, error } = await supabase.from('booking_goals')
       .insert({ user_id: userId, session_id: sessionId, manuscript_id: manuscriptId }).select().single()
     if (error) { setGoals(prev => prev.filter(g => g.id !== optimistic.id)); setMsg('加入失敗：' + error.message); return }
     setGoals(prev => prev.map(g => g.id === optimistic.id ? data : g))   // 換真 id
+    setMsg(`「${title}」已加入`)   // 成功回饋,避免使用者以為畫面莫名刷掉
   }
 
   async function removeGoal(goalId) {
