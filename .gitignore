@@ -32,3 +32,6 @@ dist-ssr
 # Claude Code skill 工具檔(本機用,不進版控)
 .agents/
 skills-lock.json
+
+# Office 暫存鎖定檔(開啟 xlsx/docx 時自動產生)
+~$*

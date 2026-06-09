@@ -192,7 +192,7 @@ export default function PrisonSite() {
         <nav>
           <a className="brand" onClick={() => scrollTo('top')}>死線<b>監獄</b></a>
           <div className="links">
-            <a data-sec="about" onClick={() => scrollTo('about')}>監獄介紹</a>
+            <a data-sec="about" onClick={() => scrollTo('about')}>服刑須知</a>
             <a data-sec="staff" onClick={() => scrollTo('staff')}>監獄人員</a>
             <a data-sec="wall" onClick={() => scrollTo('wall')}>犯人牆</a>
             <a data-sec="hall" onClick={() => scrollTo('hall')}>名人堂</a>
@@ -222,7 +222,6 @@ export default function PrisonSite() {
           </div>
           <div className="hero-cta">
             <button className="cta-main" onClick={() => scrollTo('sessions')}>入監服刑 ▸</button>
-            <button className="cta-ghost" onClick={() => scrollTo('about')}>服刑須知</button>
           </div>
           <div className="scroll-hint">▼ 向下了解服刑流程</div>
         </header>

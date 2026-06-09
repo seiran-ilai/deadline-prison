@@ -22,7 +22,7 @@
 .dp-site{
   background:var(--concrete-0); color:var(--text);
   font-family:var(--mono),var(--cjk); line-height:1.7;
-  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  -webkit-font-smoothing:antialiased; overflow-x:clip;
   min-height:100dvh; position:relative; scroll-behavior:smooth;
 }
 /* 鍵盤導覽:可聚焦元素的可見焦點環(滑鼠點擊不顯示) */

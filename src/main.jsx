@@ -27,3 +27,10 @@ createRoot(document.getElementById('root')).render(
     )}
   </StrictMode>,
 )
+
+// 通知載入動畫:React 已首次繪製。實際淡出時機(含最短 3 秒)由 splash.js 掌管。
+function signalAppPainted() {
+  if (typeof window.__dpAppPainted === 'function') window.__dpAppPainted()
+  else requestAnimationFrame(signalAppPainted) // splash.js 尚未就緒就再等一幀
+}
+requestAnimationFrame(() => requestAnimationFrame(signalAppPainted))
