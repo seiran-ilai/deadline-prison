@@ -114,7 +114,7 @@ export default function GuardWork({ userId }) {
     })
     setDone(next)
     const { error } = await supabase.from('manuscript_steps').update({ done: next }).eq('id', step.id)
-    if (error) { setDone(step.done); setMsg('子項目更新失敗,已還原:' + error.message) }
+    if (error) { setDone(step.done); setMsg('子項目更新失敗，已還原：' + error.message) }
   }
 
   function toggleExpand(goalId) {
@@ -168,7 +168,7 @@ export default function GuardWork({ userId }) {
 
       {!myInmate ? (
         <div className="card-panel"><div className="body">
-          <p className="empty" style={{ textAlign: 'center' }}>你目前不在任何服刑場次中,請等典獄長報到為本場獄卒</p>
+          <p className="empty" style={{ textAlign: 'center' }}>你目前不在任何服刑場次中，請等典獄長報到為本場獄卒</p>
         </div></div>
       ) : (
         <>
@@ -184,7 +184,7 @@ export default function GuardWork({ userId }) {
                 {/* 我看守的(綠框高亮、指派給我;保留目標代勾) */}
                 <div className="subgroup mine first">我看守的犯人 ({myInmates.length})<span className="ln" /></div>
                 {myInmates.length === 0 ? (
-                  <p className="empty">目前沒有指派給你的犯人(等典獄長指派專屬獄卒)</p>
+                  <p className="empty">目前沒有指派給你的犯人（等典獄長指派專屬獄卒）</p>
                 ) : myInmates.map(c => {
                   const status = presence(c)
                   const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
@@ -195,7 +195,7 @@ export default function GuardWork({ userId }) {
                           : (c.profile?.game_name ?? c.profile?.display_name ?? '?')[0]}
                       </div>
                       <div>
-                        <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}<span className="tag-mine">指派給我</span></div>
+                        <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '（未知）'}<span className="tag-mine">指派給我</span></div>
                         <div className="in-no">No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</div>
                       </div>
                       <span className="spacer" />
@@ -210,7 +210,7 @@ export default function GuardWork({ userId }) {
                           return (
                             <div key={g.id} style={{ width: '100%', margin: '4px 0' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <span style={{ flex: '0 0 150px', fontSize: 14 }}>{g.manuscript?.title ?? '(保密作業)'}</span>
+                                <span style={{ flex: '0 0 150px', fontSize: 14 }}>{g.manuscript?.title ?? '（保密作業）'}</span>
                                 <div style={{ flex: 1, minWidth: 140 }}><ProgressBar progress={prog} /></div>
                                 <button className="btn-sm" onClick={() => toggleExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
                               </div>
@@ -253,7 +253,7 @@ export default function GuardWork({ userId }) {
                                 : (c.profile?.game_name ?? c.profile?.display_name ?? '?')[0]}
                             </div>
                             <div>
-                              <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</div>
+                              <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '（未知）'}</div>
                               <div className="in-no">No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</div>
                             </div>
                             <span className="spacer" />
@@ -282,7 +282,7 @@ export default function GuardWork({ userId }) {
                         {gd.profile?.avatar_url ? <img src={gd.profile.avatar_url} alt="" />
                           : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
                       </div>
-                      <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}{gd.member_id === userId ? ' · 你' : ''}</div>
+                      <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '（未知）'}{gd.member_id === userId ? ' · 你' : ''}</div>
                       <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
                     </div>
                   ))}

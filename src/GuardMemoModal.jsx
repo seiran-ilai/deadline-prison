@@ -74,7 +74,7 @@ export default function GuardMemoModal({ userId, initial, preset, onClose, onSav
       ({ error } = await supabase.from('guard_memos').insert({ ...payload, guard_id: userId }))
     }
     setSaving(false)
-    if (error) { setErr('儲存失敗:' + error.message); return }
+    if (error) { setErr('儲存失敗：' + error.message); return }
     onSaved()
   }
 
@@ -86,7 +86,7 @@ export default function GuardMemoModal({ userId, initial, preset, onClose, onSav
         <h3>{initial ? '編輯 MEMO' : '新增 MEMO'}</h3>
 
         <label>內容
-          <textarea rows={3} value={content} onChange={e => setContent(e.target.value)} placeholder="例:提醒犯人交稿前先存檔" />
+          <textarea rows={3} value={content} onChange={e => setContent(e.target.value)} placeholder="例：提醒犯人交稿前先存檔" />
         </label>
 
         <div className="field">
@@ -98,7 +98,7 @@ export default function GuardMemoModal({ userId, initial, preset, onClose, onSav
         </div>
 
         {scope === 'session' && (
-          <label>場次(進行中 / 預約中)
+          <label>場次（進行中 / 預約中）
             <select value={sessionId} onChange={e => setSessionId(e.target.value)}>
               <option value="">— 選一個場次 —</option>
               {sessions.map(s => <option key={s.id} value={s.id}>{s.title}{s.session_date ? `(${String(s.session_date).slice(0, 10)})` : ''}</option>)}
@@ -106,7 +106,7 @@ export default function GuardMemoModal({ userId, initial, preset, onClose, onSav
           </label>
         )}
 
-        <label>綁定對象(選填)
+        <label>綁定對象（選填）
           <select value={targetId} onChange={e => setTargetId(e.target.value)}>
             <option value="">— 不綁定 —</option>
             {prisoners.map(p => <option key={p.id} value={p.id}>{pName(p)}</option>)}

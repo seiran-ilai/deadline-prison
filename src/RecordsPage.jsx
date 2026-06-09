@@ -13,7 +13,7 @@ const byDateDesc = (a, b) => dateKey(b.session) - dateKey(a.session)
 const sessionDate = (s) => (s?.session_date ? String(s.session_date).slice(0, 10) : '未定')
 const statusLabel = (s) => (s?.status === 'open' ? '進行中' : '已結束')
 const roleInSessionLabel = (r) => (r === 'guard' ? '獄卒' : '犯人')
-const guardName = (p) => p?.game_name ?? p?.display_name ?? '(未知)'
+const guardName = (p) => p?.game_name ?? p?.display_name ?? '（未知）'
 
 // 犯人視角:我參加過的每一場 + 該場專屬獄卒 + 我挑的目標稿名
 async function loadMember(userId) {
@@ -50,7 +50,7 @@ async function loadMember(userId) {
   }
   const goalsBySi = {}
   for (const g of goals ?? [])
-    (goalsBySi[g.session_inmate_id] ??= []).push(titleById[g.manuscript_id] ?? '(稿件已不存在)')
+    (goalsBySi[g.session_inmate_id] ??= []).push(titleById[g.manuscript_id] ?? '（稿件已不存在）')
 
   // 收到的探監(visits inmate_id=我,本場;新→舊)
   const { data: visits } = await supabase.from('visits')
@@ -195,8 +195,8 @@ export default function RecordsPage({ userId, role }) {
             <div className="rec-stat-lbl">入監次數</div>
           </div>
           <div className="rec-stat">
-            <div className="rec-stat-num" title="依場次規劃輪數估算,非實際工時">{fmtRounds(summary.total_rounds)}</div>
-            <div className="rec-stat-lbl">累計服刑時數(估算)</div>
+            <div className="rec-stat-num" title="依場次規劃輪數估算，非實際工時">{fmtRounds(summary.total_rounds)}</div>
+            <div className="rec-stat-lbl">累計服刑時數（估算）</div>
           </div>
           <div className="rec-stat">
             <div className="rec-stat-num">{summary.visits_received ?? 0}</div>
@@ -212,10 +212,10 @@ export default function RecordsPage({ userId, role }) {
       )}
       {role === 'member' && (
         <p className="rec-topguards">
-          最常看守你的獄卒:
+          最常看守你的獄卒：
           {topGuards.length === 0
             ? ' —'
-            : ` ${topGuards.map(g => g.guard_name).join('、')}(各 ${topGuards[0]?.times ?? 0} 次)`}
+            : ` ${topGuards.map(g => g.guard_name).join('、')}（各 ${topGuards[0]?.times ?? 0} 次）`}
         </p>
       )}
 

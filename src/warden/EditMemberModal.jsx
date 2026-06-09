@@ -14,7 +14,7 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
     }).eq('id', m.id)
     if (error) {
       // 觸發器 protect_role_column:非 warden 改 role 會在這裡被擋
-      setMsg('儲存失敗:' + error.message + '(若是改身分,僅典獄長可變更)')
+      setMsg('儲存失敗：' + error.message + '（若是改身分，僅典獄長可變更）')
       return
     }
     // 編號變動才另外呼叫 set_inmate_no(走唯一索引;撞號時 RPC raise,把訊息顯示在錯誤 banner)。
@@ -24,15 +24,15 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
     const newNo = raw === '' ? null : Number(raw)
     if (newNo !== origNo) {
       if (newNo == null || !Number.isInteger(newNo) || newNo <= 0) {
-        setMsg('儲存失敗:編號需為正整數')
+        setMsg('儲存失敗：編號需為正整數')
         return
       }
       const { error: noErr } = await supabase.rpc('set_inmate_no', { target_id: m.id, new_no: newNo })
-      if (noErr) { setMsg('儲存失敗:' + noErr.message); return }
+      if (noErr) { setMsg('儲存失敗：' + noErr.message); return }
     }
     const roleChanged = m.role !== m._origRole
     setMsg(roleChanged
-      ? `已儲存。已將身分變更為「${ROLE_LABEL[m.role] ?? m.role}」,該使用者需「重新登入」才會生效`
+      ? `已儲存。已將身分變更為「${ROLE_LABEL[m.role] ?? m.role}」，該使用者需「重新登入」才會生效`
       : '已儲存犯人資料')
     setMember(null)
     reloadShared()
@@ -64,7 +64,7 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
           </select>
         </label>
         {member.role !== member._origRole && (
-          <p className="warn">⚠️ 變更身分後,該使用者需重新登入才會生效</p>
+          <p className="warn">⚠️ 變更身分後，該使用者需重新登入才會生效</p>
         )}
         <div className="modal-acts">
           <button onClick={() => setMember(null)}>取消</button>

@@ -70,9 +70,9 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     if (newDate) payload.session_date = newDate
     payload.capacity = capValue(newCap)
     const { data, error } = await supabase.from('sessions').insert(payload).select().single()
-    if (error) { setMsg('開場失敗:' + error.message); return }
+    if (error) { setMsg('開場失敗：' + error.message); return }
     setSessions(prev => [data, ...prev])   // 新場插入頂端,不整頁重抓
-    setMsg('已開場:' + newTitle); setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true)
+    setMsg('已開場：' + newTitle); setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true)
     reloadShared()   // 背景同步共用清單
   }
 
@@ -89,7 +89,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     setSessions(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))   // 樂觀更新
     cancelEdit(); setMsg('已更新場次')
     const { error } = await supabase.from('sessions').update(patch).eq('id', id)
-    if (error) { setSessions(snapshot); setMsg('編輯失敗,已還原:' + error.message); return }
+    if (error) { setSessions(snapshot); setMsg('編輯失敗，已還原：' + error.message); return }
     reloadShared()
   }
 
@@ -106,7 +106,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     const { error } = await supabase.rpc('set_session_status', { p_session: s.id, p_new_status: newStatus })
     if (error) {
       setSessions(snapshot)   // 失敗回滾
-      setMsg('狀態更新失敗,已還原:' + error.message)
+      setMsg('狀態更新失敗，已還原：' + error.message)
       return
     }
     // 「開始入場」成功後自動帶入預約名單(bookings → session_inmates / booking_goals → session_goals)。
@@ -140,8 +140,8 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
         </>)
       case 'serving':
         return (<>
-          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'ended', '已結束服刑', '確定結束本場服刑?結束後不可重開')}>結束服刑</button>
-          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'intake', '已退回入場', '將清掉番茄鐘計時、退回入場狀態,全場回到等待')}>退回入場(清番茄鐘)</button>
+          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'ended', '已結束服刑', '確定結束本場服刑？結束後不可重開')}>結束服刑</button>
+          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'intake', '已退回入場', '將清掉番茄鐘計時、退回入場狀態，全場回到等待')}>退回入場（清番茄鐘）</button>
         </>)
       default:   // ended:不顯示狀態機按鈕
         return <span className="muted">已結束</span>
@@ -149,13 +149,13 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   }
 
   async function deleteSession(s) {
-    if (!window.confirm(`確定刪除場次「${s.title}」?此動作無法復原,本場名單與目標也會一併移除`)) return
+    if (!window.confirm(`確定刪除場次「${s.title}」？此動作無法復原，本場名單與目標也會一併移除`)) return
     const snapshot = sessions
     setSessions(prev => prev.filter(x => x.id !== s.id))   // 樂觀移除
     if (expandedId === s.id) setExpandedId(null)           // 收掉可能展開中的該場
     setMsg('已刪除場次')
     const { error } = await supabase.from('sessions').delete().eq('id', s.id)
-    if (error) { setSessions(snapshot); setMsg('刪除失敗,已還原:' + error.message); return }
+    if (error) { setSessions(snapshot); setMsg('刪除失敗，已還原：' + error.message); return }
     reloadShared()
   }
 
@@ -165,9 +165,9 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
 
       {/* 開新場次(重用開場流程) */}
       <div className="toolbar">
-        <input className="inp" placeholder="場次名(如 6/14 晚場)" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+        <input className="inp" placeholder="場次名（如 6/14 晚場）" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
         <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
-        <input type="number" min="1" placeholder="人數上限(空=不限)" value={newCap} onChange={e => setNewCap(e.target.value)} style={{ width: 160 }} />
+        <input type="number" min="1" placeholder="人數上限（空=不限）" value={newCap} onChange={e => setNewCap(e.target.value)} style={{ width: 160 }} />
         <label><input type="checkbox" checked={newPublic} onChange={e => setNewPublic(e.target.checked)} />對外公開</label>
         <button className="btn-pri" onClick={openNew}>開新場次</button>
       </div>
@@ -185,7 +185,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                 <div className="row-head">
                   <input className="inp" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                   <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
-                  <input type="number" min="1" placeholder="上限(空=不限)" value={editCap} onChange={e => setEditCap(e.target.value)} style={{ width: 130 }} />
+                  <input type="number" min="1" placeholder="上限（空=不限）" value={editCap} onChange={e => setEditCap(e.target.value)} style={{ width: 130 }} />
                   <label><input type="checkbox" checked={editPublic} onChange={e => setEditPublic(e.target.checked)} />對外公開</label>
                   <button onClick={() => saveEdit(s.id)}>儲存</button>
                   <button onClick={cancelEdit}>取消</button>
@@ -228,7 +228,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                             : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
                         </div>
                         <div>
-                          <div className="in-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '(未知)'}</div>
+                          <div className="in-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'}</div>
                           <div className="in-no">No.{r.profile?.inmate_no != null ? String(r.profile.inmate_no).padStart(4, '0') : '----'}</div>
                         </div>
                         <span className="spacer" />
@@ -246,7 +246,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                                 ? <img src={r.profile.avatar_url} alt="" />
                                 : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
                             </div>
-                            <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '(未知)'}</div>
+                            <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'}</div>
                             <span className="role-tag guard">{r.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
                           </div>
                         ))}

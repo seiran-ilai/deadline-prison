@@ -40,7 +40,7 @@ export default function BookingsTab({ setMsg }) {
   const bookedCount = (sid) => (bySession[sid] ?? []).filter(b => b.status !== 'cancelled').length
 
   async function setStatus(b, status) {
-    if (status === 'cancelled' && !window.confirm('確定將這筆預約改為「已取消」?')) return
+    if (status === 'cancelled' && !window.confirm('確定將這筆預約改為「已取消」？')) return
     // 樂觀更新:就地把該筆 booking 的 status 改成目標值,bookedCount 由 bySession 衍生會自動跟著對。
     const snapshot = bySession
     setBySession(prev => ({
@@ -48,7 +48,7 @@ export default function BookingsTab({ setMsg }) {
       [b.session_id]: (prev[b.session_id] ?? []).map(x => x.id === b.id ? { ...x, status } : x),
     }))
     const { error } = await supabase.from('bookings').update({ status }).eq('id', b.id)
-    if (error) { setBySession(snapshot); setMsg('更新狀態失敗,已還原:' + error.message); return }
+    if (error) { setBySession(snapshot); setMsg('更新狀態失敗，已還原：' + error.message); return }
     setMsg('已更新預約狀態')
   }
 
@@ -66,7 +66,7 @@ export default function BookingsTab({ setMsg }) {
     })
     setEditing(null)
     const { error } = await supabase.from('bookings').update({ game_name, avatar_url }).eq('id', e.id)
-    if (error) { setBySession(snapshot); setMsg('更新預約資料失敗,已還原:' + error.message); return }
+    if (error) { setBySession(snapshot); setMsg('更新預約資料失敗，已還原：' + error.message); return }
     setMsg('已更新預約暱稱/頭像')
   }
 
@@ -99,9 +99,9 @@ export default function BookingsTab({ setMsg }) {
                         <div key={b.id} className="sub-row">
                           {b.avatar_url && <img className="avatar" src={b.avatar_url} alt="" />}
                           <strong>{b.dc_name}</strong>
-                          {b.game_name && <span className="muted">暱稱:{b.game_name}</span>}
+                          {b.game_name && <span className="muted">暱稱：{b.game_name}</span>}
                           <span className="faint">DC:{b.dc_id}</span>
-                          {b.note && <span className="muted">備註:{b.note}</span>}
+                          {b.note && <span className="muted">備註：{b.note}</span>}
                           <span className="tag tag-pill" style={{ background: st.bg, color: st.color }}>{st.label}</span>
                           <span className="faint">{new Date(b.created_at).toLocaleString()}</span>
                           <span className="spacer" />

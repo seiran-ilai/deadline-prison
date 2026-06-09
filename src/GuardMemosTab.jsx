@@ -17,7 +17,7 @@ export default function GuardMemosTab({ userId }) {
     const { data: rows, error } = await supabase.from('guard_memos')
       .select('id, content, scope, session_id, target_prisoner_id, created_at')
       .eq('guard_id', userId).order('created_at', { ascending: false })
-    if (error) { setMemos([]); setLoading(false); setMsg('讀取失敗:' + error.message); return }
+    if (error) { setMemos([]); setLoading(false); setMsg('讀取失敗：' + error.message); return }
     const list = rows ?? []
     setMemos(list)
     // 解析場次標題 + 對象暱稱(分開查再合併)
@@ -38,9 +38,9 @@ export default function GuardMemosTab({ userId }) {
   useEffect(() => { load() }, [load])
 
   async function remove(memo) {
-    if (!window.confirm('確定刪除這條 MEMO?所有場次的完成紀錄也會一併移除')) return
+    if (!window.confirm('確定刪除這條 MEMO？所有場次的完成紀錄也會一併移除')) return
     const { error } = await supabase.from('guard_memos').delete().eq('id', memo.id)
-    if (error) { setMsg('刪除失敗:' + error.message); return }
+    if (error) { setMsg('刪除失敗：' + error.message); return }
     setMsg('已刪除'); load()
   }
 
@@ -57,7 +57,7 @@ export default function GuardMemosTab({ userId }) {
         <span className="memo-content">{m.content}</span>
       </div>
       <div className="memo-row-meta">
-        {m.target_prisoner_id && <span className="faint">對象:{prisonerName[m.target_prisoner_id] ?? '(已不存在)'}</span>}
+        {m.target_prisoner_id && <span className="faint">對象：{prisonerName[m.target_prisoner_id] ?? '（已不存在）'}</span>}
         <span className="spacer" />
         <button className="btn-sm" onClick={() => setModal({ initial: m })}>編輯</button>
         <button className="btn-sm btn-danger" onClick={() => remove(m)}>刪除</button>
@@ -74,7 +74,7 @@ export default function GuardMemosTab({ userId }) {
       {msg && <div className="banner ok" style={{ marginTop: 10 }}>{msg}<button onClick={() => setMsg('')}>✕</button></div>}
 
       {loading ? <p className="empty">載入中…</p> : memos.length === 0 ? (
-        <p className="empty">還沒有任何 MEMO,點右上「＋ 新增 MEMO」建立。</p>
+        <p className="empty">還沒有任何 MEMO，點右上「＋ 新增 MEMO」建立。</p>
       ) : (
         <>
           <div className="group-lbl">每場 MEMO ({everyMemos.length})<span className="ln" /></div>
@@ -82,7 +82,7 @@ export default function GuardMemosTab({ userId }) {
 
           {Object.keys(bySession).map(sid => (
             <div key={sid}>
-              <div className="group-lbl">指定場:{sessionTitle[sid] ?? '(場次已刪除)'} ({bySession[sid].length})<span className="ln" /></div>
+              <div className="group-lbl">指定場：{sessionTitle[sid] ?? '（場次已刪除）'} ({bySession[sid].length})<span className="ln" /></div>
               {bySession[sid].map(m => <MemoRow key={m.id} m={m} />)}
             </div>
           ))}

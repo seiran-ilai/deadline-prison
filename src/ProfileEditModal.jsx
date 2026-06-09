@@ -16,7 +16,7 @@ export default function ProfileEditModal({ userId, initial, onClose, onSaved }) 
     const patch = { game_name: gameName.trim() || null, avatar_url: avatarUrl.trim() || null }
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
     setSaving(false)
-    if (error) { setErr('儲存失敗:' + error.message); return }
+    if (error) { setErr('儲存失敗：' + error.message); return }
     onSaved(patch)
   }
 

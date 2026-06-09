@@ -86,7 +86,7 @@ export default function SessionStatus({ userId }) {
   const { session, role, hasGuard, hasInmates } = data
 
   // 階段1:還沒報到進任何未結束場次 → 統一文字
-  if (!session) return <TimerWaiting text="等待身分核對" sub="尚未被報到進任何場次,請等典獄長報到" />
+  if (!session) return <TimerWaiting text="等待身分核對" sub="尚未被報到進任何場次，請等典獄長報到" />
 
   // 狀態一律看 normalizeStatus,不再用 timer_started_at 有無當狀態判斷
   const ds = normalizeStatus(session)
@@ -94,20 +94,20 @@ export default function SessionStatus({ userId }) {
   // intake(等待室):番茄鐘尚未開始,依本場身分顯示對應等待文字
   if (ds === 'intake') {
     if (role === 'guard') {
-      return <TimerWaiting text={hasInmates ? '等待服刑開始' : '監管犯人配對中'} sub={`本場:${session.title}`} />
+      return <TimerWaiting text={hasInmates ? '等待服刑開始' : '監管犯人配對中'} sub={`本場：${session.title}`} />
     }
-    return <TimerWaiting text={hasGuard ? '等待服刑開始' : '等待配對專屬獄卒'} sub={`本場:${session.title}`} />
+    return <TimerWaiting text={hasGuard ? '等待服刑開始' : '等待配對專屬獄卒'} sub={`本場：${session.title}`} />
   }
 
   // ended:理論上犯人頁外層會擋,保險起見顯示收尾文字
-  if (ds === 'ended') return <TimerWaiting text="本場已結束" sub={`本場:${session.title}`} />
+  if (ds === 'ended') return <TimerWaiting text="本場已結束" sub={`本場：${session.title}`} />
 
   // serving:番茄鐘倒數(timer_started_at 只在此拿來算倒數)
   const N = session.total_rounds ?? 8
   const elapsed = Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000)
   const st = pomodoroState(elapsed, N, session.timer_ended_at)
   if (st.ended) {
-    return <TimerWaiting text="🔓 本場服刑結束" sub={`本場:${session.title} · 共 ${N} 輪 已全部完成`} />
+    return <TimerWaiting text="🔓 本場服刑結束" sub={`本場：${session.title} · 共 ${N} 輪 已全部完成`} />
   }
   const badge = PHASE_BADGE[st.phase] ?? PHASE_BADGE.focus
   return (

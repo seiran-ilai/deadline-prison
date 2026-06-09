@@ -32,13 +32,13 @@ export default function GuardAssign({ sessionInmateId, guardRoster, setMsg }) {
     if (!pick) return
     const { error } = await supabase.from('inmate_guards')
       .insert({ session_inmate_id: sessionInmateId, guard_id: pick })
-    if (error) { setMsg?.('指派失敗:' + error.message); return }
+    if (error) { setMsg?.('指派失敗：' + error.message); return }
     setPick(''); load()
   }
 
   async function removeAssign(inmateGuardId) {
     const { error } = await supabase.from('inmate_guards').delete().eq('id', inmateGuardId)
-    if (error) { setMsg?.('移除指派失敗:' + error.message); return }
+    if (error) { setMsg?.('移除指派失敗：' + error.message); return }
     load()
   }
 
@@ -62,7 +62,7 @@ export default function GuardAssign({ sessionInmateId, guardRoster, setMsg }) {
           {options.map(g => <option key={g.id} value={g.member_id}>{g.profile?.game_name ?? g.profile?.display_name}</option>)}
         </select>
         <button className="btn-sm" onClick={assignGuard}>指派</button>
-        {(guardRoster ?? []).length === 0 && <span className="faint">(本場尚無獄卒可指派)</span>}
+        {(guardRoster ?? []).length === 0 && <span className="faint">（本場尚無獄卒可指派）</span>}
       </div>
     </div>
   )

@@ -31,7 +31,7 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember }
   const MemberCard = (p) => {
     const roleClass = p.role === 'warden' ? 'warden' : p.role === 'guard' ? 'guard' : 'member'
     const isStaffCard = roleClass === 'guard' || roleClass === 'warden'
-    const name = p.game_name ?? p.display_name ?? '(未命名)'
+    const name = p.game_name ?? p.display_name ?? '（未命名）'
     return (
       <div key={p.id} className={`ov-card${isStaffCard ? ' staff' : ''}`}>
         <div className="ov-av">

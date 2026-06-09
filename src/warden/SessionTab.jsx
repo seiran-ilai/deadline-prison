@@ -8,9 +8,9 @@ import GuardAssign from './GuardAssign'
 
 // 非 serving 狀態時,控制條番茄鐘區的提示(實際狀態機按鈕在「場次總覽」分頁)
 const TIMER_HINT = {
-  booking: '場次預約中,尚未開始入場',
-  booking_paused: '已停止預約,尚未開始入場',
-  intake: '已開始入場,於「場次總覽」按『開始服刑』啟動番茄鐘',
+  booking: '場次預約中，尚未開始入場',
+  booking_paused: '已停止預約，尚未開始入場',
+  intake: '已開始入場，於「場次總覽」按『開始服刑』啟動番茄鐘',
   ended: '本場已結束',
 }
 
@@ -67,7 +67,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     }
     const gByInmate = {}
     for (const g of goals ?? [])
-      (gByInmate[g.session_inmate_id] ??= []).push({ ...g, title: msById[g.manuscript_id]?.title ?? '(未知稿件)', is_done: msById[g.manuscript_id]?.is_done })
+      (gByInmate[g.session_inmate_id] ??= []).push({ ...g, title: msById[g.manuscript_id]?.title ?? '（未知稿件）', is_done: msById[g.manuscript_id]?.is_done })
     const mByMember = {}
     for (const m of (ms ?? []).filter(x => x.status === 'active'))
       (mByMember[m.member_id] ??= []).push(m)
@@ -106,7 +106,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       session_id: currentSession, inmate_id: vForm.inmate_id,
       visitor_name: vForm.visitor_name.trim(), message: vForm.message.trim(),
     })
-    if (error) { setMsg('登錄探監失敗:' + error.message); return }
+    if (error) { setMsg('登錄探監失敗：' + error.message); return }
     setMsg('已登錄探監'); setVForm({ inmate_id: '', visitor_name: '', message: '' }); loadVisits(currentSession)
   }
 
@@ -115,14 +115,14 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     const { error } = await supabase.from('visits')
       .update({ visitor_name: editingVisit.visitor_name.trim(), message: editingVisit.message.trim() })
       .eq('id', editingVisit.id)   // updated_at 由觸發器自動更新
-    if (error) { setMsg('更新探監失敗:' + error.message); return }
+    if (error) { setMsg('更新探監失敗：' + error.message); return }
     setMsg('已更新探監'); setEditingVisit(null); loadVisits(currentSession)
   }
 
   async function deleteVisit(id) {
-    if (!window.confirm('確定刪除這筆探監?')) return
+    if (!window.confirm('確定刪除這筆探監？')) return
     const { error } = await supabase.from('visits').delete().eq('id', id)
-    if (error) { setMsg('刪除探監失敗:' + error.message); return }
+    if (error) { setMsg('刪除探監失敗：' + error.message); return }
     setMsg('已刪除探監'); loadVisits(currentSession)
   }
 
@@ -131,13 +131,13 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     if (!mid) return
     const { error } = await supabase.from('session_goals')
       .insert({ session_inmate_id: sessionInmateId, manuscript_id: mid })
-    if (error) { setMsg('加入目標失敗:' + error.message); return }
+    if (error) { setMsg('加入目標失敗：' + error.message); return }
     setPickGoal({ ...pickGoal, [sessionInmateId]: '' }); loadGoals()
   }
 
   async function removeInmateGoal(goalId) {
     const { error } = await supabase.from('session_goals').delete().eq('id', goalId)
-    if (error) { setMsg('移除目標失敗:' + error.message); return }
+    if (error) { setMsg('移除目標失敗：' + error.message); return }
     loadGoals()
   }
 
@@ -146,9 +146,9 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   }
 
   async function removeFromSession(sessionInmateId) {
-    if (!window.confirm('確定將這位犯人移出本場?')) return
+    if (!window.confirm('確定將這位犯人移出本場？')) return
     const { error } = await supabase.from('session_inmates').delete().eq('id', sessionInmateId)
-    if (error) { setMsg('移出失敗:' + error.message); return }
+    if (error) { setMsg('移出失敗：' + error.message); return }
     setMsg('已移出本場'); loadRoster(currentSession)  // 本場目標靠 cascade 自動清
   }
 
@@ -162,7 +162,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     setDone(next)
     // 2) 背景寫 DB;失敗則回滾畫面並提示(避免畫面與 DB 不一致)
     const { error } = await supabase.from('manuscript_steps').update({ done: next }).eq('id', step.id)
-    if (error) { setDone(step.done); setMsg('子項目更新失敗,已還原:' + error.message) }
+    if (error) { setDone(step.done); setMsg('子項目更新失敗，已還原：' + error.message) }
   }
 
   function toggleGoalExpand(goalId) {
@@ -210,8 +210,8 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       })
       if (error) {
         errs.push(error.message?.includes('無法加入本場')
-          ? `「${nameOf(p)} 還在其他未結束場次進行中,無法加入本場」`
-          : `${nameOf(p)} 加入失敗:${error.message}`)
+          ? `「${nameOf(p)} 還在其他未結束場次進行中，無法加入本場」`
+          : `${nameOf(p)} 加入失敗：${error.message}`)
         continue
       }
       ok++
@@ -225,7 +225,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   async function rematerialize() {
     if (!currentSession) return
     const { data: skipped, error } = await supabase.rpc('materialize_session_bookings', { p_session: currentSession })
-    if (error) { setMsg('帶入失敗:' + error.message); return }
+    if (error) { setMsg('帶入失敗：' + error.message); return }
     setMsg(materializeResultMsg(skipped))
     loadRoster(currentSession)
   }
@@ -295,7 +295,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               )}
 
               {staffCandidates.length === 0 ? (
-                <p className="empty">沒有可加入的獄卒(沒有符合的 staff,或搜尋無結果)</p>
+                <p className="empty">沒有可加入的獄卒（沒有符合的 staff，或搜尋無結果）</p>
               ) : staffCandidates.map(p => {
                 const inSession = guardMemberIds.includes(p.id)
                 return (
@@ -311,7 +311,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                   </div>
                 )
               })}
-              <div className="note">候選為全域獄卒 / 典獄長;犯人由「開始入場」自動帶入,或用右側「重新帶入預約名單」補帶。</div>
+              <div className="note">候選為全域獄卒 / 典獄長；犯人由「開始入場」自動帶入，或用右側「重新帶入預約名單」補帶。</div>
             </>)}
           </div>
         </div>
@@ -431,7 +431,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               <input className="inp" placeholder="探監者名字" value={vForm.visitor_name}
                 onChange={e => setVForm({ ...vForm, visitor_name: e.target.value })} />
               <div className="visit-msg-field">
-                <textarea className="inp" rows={2} maxLength={80} placeholder="廣播內容(最多 80 字)"
+                <textarea className="inp" rows={2} maxLength={80} placeholder="廣播內容（最多 80 字）"
                   value={vForm.message} onChange={e => setVForm({ ...vForm, message: e.target.value })} />
                 <span className="visit-count">{vForm.message.length} / 80</span>
               </div>
@@ -444,7 +444,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               <div className="visit-list">
                 {visits.map(v => {
                   const ip = profByMember[v.inmate_id]
-                  const inmateName = ip?.game_name ?? ip?.display_name ?? '(已離場)'
+                  const inmateName = ip?.game_name ?? ip?.display_name ?? '（已離場）'
                   const isEditing = editingVisit?.id === v.id
                   return (
                     <div key={v.id} className="visit-row">
@@ -497,7 +497,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               </div>
               {available.length === 0 ? (
                 <div className="goal-modal-empty">
-                  <p className="warn">沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
+                  <p className="warn">沒有可挑的 active 稿件（都挑進來了，或先到「我的稿件」新增）</p>
                   {onGoToManuscripts && (
                     <button className="btn-pri" onClick={() => { setGoalModalInmate(null); onGoToManuscripts() }}>前往我的稿件</button>
                   )}

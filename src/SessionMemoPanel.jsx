@@ -23,7 +23,7 @@ export default function SessionMemoPanel({ userId, session }) {
       .eq('guard_id', userId)
       .or(`scope.eq.every,and(scope.eq.session,session_id.eq.${sessionId})`)
       .order('created_at', { ascending: false })
-    if (error) { setMemos([]); setLoading(false); setMsg('讀取失敗:' + error.message); return }
+    if (error) { setMemos([]); setLoading(false); setMsg('讀取失敗：' + error.message); return }
     const list = rows ?? []
     setMemos(list)
     // 本場完成狀態
@@ -59,7 +59,7 @@ export default function SessionMemoPanel({ userId, session }) {
     }
     if (error) {
       const rollback = new Set(checked); setChecked(rollback)   // 還原
-      setMsg('更新完成狀態失敗:' + error.message)
+      setMsg('更新完成狀態失敗：' + error.message)
     }
   }
 
@@ -73,7 +73,7 @@ export default function SessionMemoPanel({ userId, session }) {
       <div className="body">
         {msg && <div className="banner err" style={{ marginBottom: 10 }}>{msg}<button onClick={() => setMsg('')}>✕</button></div>}
         {loading ? <p className="empty">載入中…</p> : memos.length === 0 ? (
-          <p className="empty">本場尚無確認項,點右上「＋ 新增」建立。</p>
+          <p className="empty">本場尚無確認項，點右上「＋ 新增」建立。</p>
         ) : memos.map(m => {
           const done = checked.has(m.id)
           return (
@@ -83,7 +83,7 @@ export default function SessionMemoPanel({ userId, session }) {
                 <span className={done ? 'done-text' : ''}>{m.content}</span>
                 <div className="memo-check-meta">
                   <span className={`role-tag ${m.scope === 'every' ? 'warden' : 'guard'}`}>{m.scope === 'every' ? '每場' : '本場'}</span>
-                  {m.target_prisoner_id && <span className="faint">對象:{prisonerName[m.target_prisoner_id] ?? '(已不存在)'}</span>}
+                  {m.target_prisoner_id && <span className="faint">對象：{prisonerName[m.target_prisoner_id] ?? '（已不存在）'}</span>}
                 </div>
               </div>
             </div>

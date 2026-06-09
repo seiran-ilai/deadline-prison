@@ -28,9 +28,9 @@ export default function AvatarInput({ value, onChange, userId }) {
     if (!file) return
     setErr('')
     // 明確不接受 gif,其餘非允許型別也擋下
-    if (file.type === 'image/gif') { setErr('不支援 GIF,請改用 PNG / JPG / WebP'); e.target.value = ''; return }
+    if (file.type === 'image/gif') { setErr('不支援 GIF，請改用 PNG / JPG / WebP'); e.target.value = ''; return }
     if (!ACCEPT.includes(file.type)) { setErr('請選擇 PNG / JPG / WebP 圖片'); e.target.value = ''; return }
-    if (file.size > MAX_BYTES) { setErr('檔案過大,上限 5MB'); e.target.value = ''; return }
+    if (file.size > MAX_BYTES) { setErr('檔案過大，上限 5MB'); e.target.value = ''; return }
     // 合法 → 開裁切 modal(重置裁切狀態)
     setCrop({ x: 0, y: 0 }); setZoom(1); setCroppedAreaPixels(null)
     setCropSrc(URL.createObjectURL(file))
@@ -74,7 +74,7 @@ export default function AvatarInput({ value, onChange, userId }) {
         .upload(path, blob, { cacheControl: '3600', upsert: false, contentType: 'image/jpeg' })
       if (error) {
         setUploading(false)
-        setErr('上傳失敗:' + error.message + '(若是 Bucket not found,請先執行 avatars bucket 的 SQL)')
+        setErr('上傳失敗：' + error.message + '（若是 Bucket not found，請先執行 avatars bucket 的 SQL)')
         return
       }
       const { data } = supabase.storage.from('avatars').getPublicUrl(path)
@@ -103,7 +103,7 @@ export default function AvatarInput({ value, onChange, userId }) {
         ) : (
           <label className="ai-file">
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleFile} disabled={uploading} />
-            <span>{uploading ? '上傳中…' : '📁 選擇圖片上傳(將裁切為正方)'}</span>
+            <span>{uploading ? '上傳中…' : '📁 選擇圖片上傳（將裁切為正方）'}</span>
           </label>
         )}
         {err && <p className="ai-err">{err}</p>}

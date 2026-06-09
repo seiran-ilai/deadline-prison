@@ -51,11 +51,11 @@ function deadlineInfo(dueDate, pct) {
   const diffDays = Math.round((due - today) / 86400000)
   const complete = pct >= 1
   if (diffDays < 0) {
-    if (complete) return { text: `截止日:${dueDate}`, tone: 'muted' }
+    if (complete) return { text: `截止日：${dueDate}`, tone: 'muted' }
     return { text: `死線已破 · 逾期 ${-diffDays} 天`, tone: 'danger' }
   }
   if (diffDays <= 3) {
-    if (complete) return { text: `截止日:${dueDate}`, tone: 'muted' }
+    if (complete) return { text: `截止日：${dueDate}`, tone: 'muted' }
     return { text: diffDays === 0 ? '死線今天' : `死線還剩 ${diffDays} 天`, tone: 'warn' }
   }
   return { text: `還剩 ${diffDays} 天`, tone: 'muted' }   // 一般(> 3 天):低調
@@ -94,7 +94,7 @@ export default function ManuscriptManager({ userId }) {
       .select('id, title, priority, due_date, target_date, status, visibility, is_done, created_at')
       .eq('member_id', userId).eq('status', view)
       .order('priority').order('created_at')
-    if (error) { setMsg('載入失敗:' + error.message); return }
+    if (error) { setMsg('載入失敗：' + error.message); return }
     setManuscripts(ms ?? [])
     const ids = (ms ?? []).map(m => m.id)
     if (ids.length === 0) { setStepsByMs({}); return }
@@ -118,7 +118,7 @@ export default function ManuscriptManager({ userId }) {
       target_date: form.target_date || null,
       visibility: form.visibility,
     })
-    if (error) { setMsg('新增失敗:' + error.message); return }
+    if (error) { setMsg('新增失敗：' + error.message); return }
     setForm(blankForm); setMsg('已新增稿件'); load()
   }
 
@@ -131,22 +131,22 @@ export default function ManuscriptManager({ userId }) {
       target_date: editing.target_date || null,
       visibility: editing.visibility,
     }).eq('id', editing.id)
-    if (error) { setMsg('更新失敗:' + error.message); return }
+    if (error) { setMsg('更新失敗：' + error.message); return }
     setEditing(null); setMsg('已更新'); load()
   }
 
   async function deleteManuscript(id) {
-    if (!window.confirm('確定刪除這本稿件嗎?子項目也會一起刪除')) return
+    if (!window.confirm('確定刪除這本稿件嗎？子項目也會一起刪除')) return
     // 先刪子項目,再刪稿件(避免外鍵殘留)
     await supabase.from('manuscript_steps').delete().eq('manuscript_id', id)
     const { error } = await supabase.from('manuscripts').delete().eq('id', id)
-    if (error) { setMsg('刪除失敗:' + error.message); return }
+    if (error) { setMsg('刪除失敗：' + error.message); return }
     setMsg('已刪除稿件'); load()
   }
 
   async function setStatus(id, status) {
     const { error } = await supabase.from('manuscripts').update({ status }).eq('id', id)
-    if (error) { setMsg('操作失敗:' + error.message); return }
+    if (error) { setMsg('操作失敗：' + error.message); return }
     setMsg(status === 'archived' ? '已封存' : '已取回'); load()
   }
 
@@ -154,7 +154,7 @@ export default function ManuscriptManager({ userId }) {
   async function toggleStep(step) {
     const { error } = await supabase.from('manuscript_steps')
       .update({ done: !step.done }).eq('id', step.id)
-    if (error) { setMsg('更新失敗:' + error.message); return }
+    if (error) { setMsg('更新失敗：' + error.message); return }
     load()
   }
 
@@ -165,21 +165,21 @@ export default function ManuscriptManager({ userId }) {
     const nextOrder = existing.length ? Math.max(...existing.map(s => s.sort_order ?? 0)) + 1 : 0
     const { error } = await supabase.from('manuscript_steps')
       .insert({ manuscript_id: mid, title, sort_order: nextOrder })
-    if (error) { setMsg('新增子項目失敗:' + error.message); return }
+    if (error) { setMsg('新增子項目失敗：' + error.message); return }
     setNewStep({ ...newStep, [mid]: '' }); load()
   }
 
   async function deleteStep(stepId) {
-    if (!window.confirm('確定刪除這個子項目嗎?')) return
+    if (!window.confirm('確定刪除這個子項目嗎？')) return
     const { error } = await supabase.from('manuscript_steps').delete().eq('id', stepId)
-    if (error) { setMsg('刪除失敗:' + error.message); return }
+    if (error) { setMsg('刪除失敗：' + error.message); return }
     load()
   }
 
   // 無子項目稿件:直接勾選整本完成(寫 manuscripts.is_done)
   async function toggleManuscriptDone(m) {
     const { error } = await supabase.from('manuscripts').update({ is_done: !m.is_done }).eq('id', m.id)
-    if (error) { setMsg('更新失敗:' + error.message); return }
+    if (error) { setMsg('更新失敗：' + error.message); return }
     load()
   }
 
@@ -223,7 +223,7 @@ export default function ManuscriptManager({ userId }) {
         <div className="panel">
           <strong>新增稿件</strong>
           <div className="panel-form">
-            <input className="inp" style={{ flex: '1 1 180px' }} placeholder="稿件名(必填)"
+            <input className="inp" style={{ flex: '1 1 180px' }} placeholder="稿件名（必填）"
               value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
             <label>優先序
               <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}>
@@ -281,8 +281,8 @@ export default function ManuscriptManager({ userId }) {
             <div style={{ margin: '10px 0' }}><ProgressBar progress={prog} /></div>
 
             <div className="faint" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              {m.due_date && <span>截止日:{m.due_date}</span>}
-              {m.target_date && <span>目標日:{m.target_date}</span>}
+              {m.due_date && <span>截止日：{m.due_date}</span>}
+              {m.target_date && <span>目標日：{m.target_date}</span>}
             </div>
 
             {/* 子項目 */}

@@ -24,9 +24,9 @@ export default function ProfileCard({ userId, variant = 'row', label, footer, ed
 
   if (!profile) return null
 
-  const name = profile.game_name || profile.display_name || '(未命名)'
+  const name = profile.game_name || profile.display_name || '（未命名）'
   const roleClass = profile.role === 'warden' ? 'warden' : profile.role === 'guard' ? 'guard' : 'member'
-  const init = name !== '(未命名)' ? name[0]
+  const init = name !== '（未命名）' ? name[0]
     : (profile.inmate_no != null ? String(profile.inmate_no).padStart(2, '0').slice(-2) : '?')
   const roleLabel = ROLE_LABEL[profile.role] ?? profile.role
 

@@ -48,7 +48,7 @@ export default function ProfilePage({ userId, role, onSaved }) {
     if (role === 'member') { patch.on_wall = onWall; patch.on_leaderboard = onLeaderboard }   // 獄方一律公開,不寫這兩欄
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
     setSaving(false)
-    if (error) { setErr('儲存失敗:' + error.message); return }
+    if (error) { setErr('儲存失敗：' + error.message); return }
     setSaved(true)
     onSaved?.(patch)
   }
@@ -69,11 +69,11 @@ export default function ProfilePage({ userId, role, onSaved }) {
           </label>
           <label className="pf-label">
             <span className="pf-label-row">
-              {isStaff ? '個人介紹(官網人員牆用)' : '自我介紹(犯人牆用)'}
+              {isStaff ? '個人介紹（官網人員牆用）' : '自我介紹（犯人牆用）'}
               <span className="pf-count">{bio.length} / 100</span>
             </span>
             <textarea rows={4} maxLength={100} value={bio} onChange={e => { setBio(e.target.value); setSaved(false) }}
-              placeholder={isStaff ? '寫一句介紹,顯示在官網人員牆上' : '寫一句自我介紹,公開時顯示在犯人牆上'} />
+              placeholder={isStaff ? '寫一句介紹，顯示在官網人員牆上' : '寫一句自我介紹，公開時顯示在犯人牆上'} />
           </label>
           {role === 'member' && (
             <>
@@ -85,7 +85,7 @@ export default function ProfilePage({ userId, role, onSaved }) {
                 <input type="checkbox" checked={onLeaderboard} onChange={e => { setOnLeaderboard(e.target.checked); setSaved(false) }} />
                 排行榜顯示我的名字
               </label>
-              <p className="pf-hint">關閉時,你的次數仍會計入排行榜,但名字顯示為〔機密犯人〕。</p>
+              <p className="pf-hint">關閉時，你的次數仍會計入排行榜，但名字顯示為〔機密犯人〕。</p>
             </>
           )}
           {err && <p className="warn">{err}</p>}

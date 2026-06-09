@@ -20,22 +20,22 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
 
   // 提早結束:serving → ended(走場次狀態機,不直接動 timer_*)
   async function endTimer() {
-    if (!window.confirm('確定結束本場服刑?結束後不可重開')) return
+    if (!window.confirm('確定結束本場服刑？結束後不可重開')) return
     setBusy(true)
     try {
       const { error } = await supabase.rpc('set_session_status', { p_session: sessionId, p_new_status: 'ended' })
-      if (error) { setMsg('結束失敗:' + error.message); return }
+      if (error) { setMsg('結束失敗：' + error.message); return }
       setMsg('已結束服刑'); reloadShared()
     } finally { setBusy(false) }
   }
 
   // 退回入場:serving → intake(後端轉 intake 時會自動清掉番茄鐘計時)
   async function resetTimer() {
-    if (!window.confirm('將清掉番茄鐘計時、退回入場狀態,全場回到等待')) return
+    if (!window.confirm('將清掉番茄鐘計時、退回入場狀態，全場回到等待')) return
     setBusy(true)
     try {
       const { error } = await supabase.rpc('set_session_status', { p_session: sessionId, p_new_status: 'intake' })
-      if (error) { setMsg('退回入場失敗:' + error.message); return }
+      if (error) { setMsg('退回入場失敗：' + error.message); return }
       setMsg('已退回入場'); reloadShared()
     } finally { setBusy(false) }
   }
@@ -47,8 +47,8 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
     setBusy(true)
     try {
       const { error } = await supabase.from('sessions').update({ total_rounds: next }).eq('id', sessionId)
-      if (error) { setMsg('調整輪數失敗:' + error.message); return }
-      setMsg(`已${delta > 0 ? '+' : '−'}1 輪,現為 ${next} 輪`); reloadShared()
+      if (error) { setMsg('調整輪數失敗：' + error.message); return }
+      setMsg(`已${delta > 0 ? '+' : '−'}1 輪，現為 ${next} 輪`); reloadShared()
     } finally { setBusy(false) }
   }
 
@@ -91,11 +91,11 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
         <>
           <div className="seg">
             <span className="lbl">番茄鐘</span>
-            <div className="row timer-state"><span className="ended">🔓 本場服刑結束(收尾中,請按下方『結束服刑』)</span></div>
+            <div className="row timer-state"><span className="ended">🔓 本場服刑結束（收尾中，請按下方『結束服刑』）</span></div>
           </div>
           <div className="go">
             <button className="btn-danger btn-sm" disabled={busy} onClick={endTimer}>{busy ? '處理中…' : '結束服刑'}</button>
-            <button className="btn-danger btn-sm" disabled={busy} onClick={resetTimer}>{busy ? '處理中…' : '退回入場(清番茄鐘)'}</button>
+            <button className="btn-danger btn-sm" disabled={busy} onClick={resetTimer}>{busy ? '處理中…' : '退回入場（清番茄鐘）'}</button>
           </div>
         </>
       )}

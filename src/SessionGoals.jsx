@@ -173,7 +173,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     if (!mid) return
     const { error } = await supabase.from('session_goals')
       .insert({ session_inmate_id: myInmate.id, manuscript_id: mid })
-    if (error) { setMsg('加入失敗:' + error.message); return }
+    if (error) { setMsg('加入失敗：' + error.message); return }
     setPick(''); setMsg('已加入本場'); load(true)  // 背景刷新,modal 保持開著可連續挑
   }
 
@@ -185,7 +185,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     const { error } = await supabase.from('session_goals').delete().eq('id', goalId)
     if (error) {
       setGoals(snapshot)   // 失敗回滾:把該筆加回,避免畫面與後端不一致
-      setMsg('取消失敗,已還原:' + error.message)
+      setMsg('取消失敗，已還原：' + error.message)
       return
     }
     setMsg('已移出本場')
@@ -201,7 +201,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     setDone(next)
     // 2) 背景寫 DB;失敗則回滾畫面並提示(避免畫面與 DB 不一致)
     const { error } = await supabase.from('manuscript_steps').update({ done: next }).eq('id', step.id)
-    if (error) { setDone(step.done); setMsg('子項目更新失敗,已還原:' + error.message) }
+    if (error) { setDone(step.done); setMsg('子項目更新失敗，已還原：' + error.message) }
   }
 
   // 無子項目稿件:大項本身就是完成勾選(寫 manuscripts.is_done;樂觀更新,與子項目同一條完成度邏輯)
@@ -211,7 +211,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       g.id === goal.id ? { ...g, manuscript: { ...g.manuscript, is_done: val } } : g))
     setDone(next)
     const { error } = await supabase.from('manuscripts').update({ is_done: next }).eq('id', goal.manuscript_id)
-    if (error) { setDone(!next); setMsg('更新失敗,已還原:' + error.message) }
+    if (error) { setDone(!next); setMsg('更新失敗，已還原：' + error.message) }
   }
 
   function toggleExpand(manuscriptId) {
@@ -247,7 +247,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         <div className="card-panel">
           <div className="head"><h2>本場已結束</h2></div>
           <div className="body">
-            <p className="empty">本場服刑已結束,可至「服刑紀錄」查看本場成果</p>
+            <p className="empty">本場服刑已結束，可至「服刑紀錄」查看本場成果</p>
           </div>
         </div>
       </div>
@@ -282,7 +282,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
                 <div className="id-lbl">專屬獄卒</div>
                 <div className="id-no">{' '}</div>
                 <div className="id-nm">
-                  {g.profile?.game_name ?? g.profile?.display_name ?? '(未知)'}
+                  {g.profile?.game_name ?? g.profile?.display_name ?? '（未知）'}
                   <span className="role-tag guard">{g.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
                 </div>
                 <div className="id-watch">👁 正在看著你服刑</div>
@@ -313,7 +313,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         <div className="head">
           <h2>本場目標</h2>
           {goals.length > 0 && <span className="count">{goals.length} 項</span>}
-          {isIntake && <span className="hint-badge">等待開始服刑,可先挑選本場目標</span>}
+          {isIntake && <span className="hint-badge">等待開始服刑，可先挑選本場目標</span>}
           {goals.length > 5 && (
             <>
               <span className="spacer" />
@@ -325,7 +325,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         </div>
         <div className="body">
           {goals.length === 0 ? (
-            <p className="empty">還沒挑本場目標,點下方按鈕加入要推進的稿件</p>
+            <p className="empty">還沒挑本場目標，點下方按鈕加入要推進的稿件</p>
           ) : (
           <div className={`cap-list${showAllGoals ? '' : ' capped'}`}>
           {goals.map(g => {
@@ -342,7 +342,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
                       onChange={() => toggleManuscriptDone(g)} title="標記整本完成" />
                   )}
                   <span className="chip" style={{ background: p.bg }}>{p.label}</span>
-                  <strong className={!prog.hasSteps && g.manuscript?.is_done ? 'done-text' : ''}>{g.manuscript?.title ?? '(稿件已不存在)'}</strong>
+                  <strong className={!prog.hasSteps && g.manuscript?.is_done ? 'done-text' : ''}>{g.manuscript?.title ?? '（稿件已不存在）'}</strong>
                   <span className="spacer" />
                   {/* 有子項目才需要展開;無子項目大項已可直接勾,不顯示展開 */}
                   {prog.hasSteps && (
@@ -397,7 +397,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
                 : (myProfile?.game_name ?? myProfile?.display_name ?? '你')[0]}
             </div>
             <div>
-              <div className="in-nm">{myProfile?.game_name ?? myProfile?.display_name ?? '(未命名)'}</div>
+              <div className="in-nm">{myProfile?.game_name ?? myProfile?.display_name ?? '（未命名）'}</div>
               <div className="in-no">No.{myProfile?.inmate_no != null ? String(myProfile.inmate_no).padStart(4, '0') : '----'} · 你</div>
             </div>
             <span className="in-prog">目標 {goals.filter(g => computeProgress({ steps: stepsByMs[g.manuscript_id] ?? [], isDone: g.manuscript?.is_done }).complete).length}/{goals.length}</span>
@@ -414,7 +414,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
                     : (c.profile?.game_name ?? c.profile?.display_name ?? '?')[0]}
                 </div>
                 <div>
-                  <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '(未知)'}</div>
+                  <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '（未知）'}</div>
                   <div className="in-no">No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</div>
                 </div>
                 <span className="spacer" />
@@ -452,7 +452,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
                       ? <img src={gd.profile.avatar_url} alt="" />
                       : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
                   </div>
-                  <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '(未知)'}</div>
+                  <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '（未知）'}</div>
                   <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
                 </div>
               ))}
@@ -472,7 +472,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
             </div>
             {available.length === 0 ? (
               <div className="goal-modal-empty">
-                <p className="warn">沒有可挑的 active 稿件(都挑進來了,或先到「我的稿件」新增)</p>
+                <p className="warn">沒有可挑的 active 稿件（都挑進來了，或先到「我的稿件」新增）</p>
                 {onGoToManuscripts && (
                   <button className="btn-pri" onClick={() => { setGoalModalOpen(false); onGoToManuscripts() }}>前往我的稿件</button>
                 )}

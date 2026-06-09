@@ -49,11 +49,11 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
 
   async function cancel(s) {
     const b = myBookings.find(x => x.session_id === s.id)
-    if (!b || !window.confirm(`確定取消「${s.title}」的預約?`)) return
+    if (!b || !window.confirm(`確定取消「${s.title}」的預約？`)) return
     const snapshot = myBookings
     setMyBookings(prev => prev.filter(x => x.session_id !== s.id))   // 樂觀移除
     const r = await cancelBooking(b.id)
-    if (!r.ok) { setMyBookings(snapshot); setMsg('取消失敗,已還原：' + (r.error ?? '')); return }
+    if (!r.ok) { setMyBookings(snapshot); setMsg('取消失敗，已還原：' + (r.error ?? '')); return }
     setMsg('已取消預約')
   }
 
@@ -70,7 +70,7 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
     const snapshot = goals
     setGoals(prev => prev.filter(g => g.id !== goalId))   // 樂觀移除
     const { error } = await supabase.from('booking_goals').delete().eq('id', goalId)
-    if (error) { setGoals(snapshot); setMsg('移除失敗,已還原：' + error.message) }
+    if (error) { setGoals(snapshot); setMsg('移除失敗，已還原：' + error.message) }
   }
 
   if (loading) return <p className="empty">讀取已預約場次中…</p>
@@ -100,12 +100,12 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
             <div className="body">
               <div className="subgroup first">預排任務（{sg.length}）<span className="ln" /></div>
               {sg.length === 0 ? (
-                <p className="empty">還沒預排任務,點下方按鈕從你的稿件挑選</p>
+                <p className="empty">還沒預排任務，點下方按鈕從你的稿件挑選</p>
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
                   {sg.map(g => (
                     <span key={g.id} className="chip" style={{ background: 'rgba(245,197,24,.15)', color: 'var(--hazard)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      {msById[g.manuscript_id]?.title ?? '(稿件已不存在)'}
+                      {msById[g.manuscript_id]?.title ?? '（稿件已不存在）'}
                       <button onClick={() => removeGoal(g.id)} style={{ border: 'none', background: 'none', color: 'inherit', padding: 0, minHeight: 'auto', cursor: 'pointer' }}>✕</button>
                     </span>
                   ))}
@@ -130,7 +130,7 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
               </div>
               {available.length === 0 ? (
                 <div className="goal-modal-empty">
-                  <p className="warn">沒有可挑的 active 稿件(都排進來了,或先到「我的稿件」新增)</p>
+                  <p className="warn">沒有可挑的 active 稿件（都排進來了，或先到「我的稿件」新增）</p>
                   {onGoToManuscripts && <button className="btn-pri" onClick={() => { setPickFor(null); onGoToManuscripts() }}>前往我的稿件</button>}
                 </div>
               ) : (
