@@ -130,6 +130,9 @@ export default function GuardWork({ userId }) {
     return goalStatusLabel(done, goals.length)
   }
 
+  // 防呆:userId 尚未就緒(首次登入流程)時不掛載
+  if (!userId) return null
+
   return (
     <div>
       {/* 獄卒端子分頁:服刑作業 / MEMO·確認項 */}

@@ -80,6 +80,8 @@ export default function SessionStatus({ userId }) {
     return () => clearInterval(t)
   }, [])
 
+  // 防呆:userId 尚未就緒(首次登入流程)時不掛載狀態卡
+  if (!userId) return null
   if (loading) return <div className="ses-timer waiting"><div className="st-sub">讀取本場狀態中…</div></div>
   const { session, role, hasGuard, hasInmates } = data
 

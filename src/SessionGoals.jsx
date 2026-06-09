@@ -220,6 +220,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       : [...prev, manuscriptId])
   }
 
+  // 防呆:userId 尚未就緒(首次登入流程)時不掛載
+  if (!userId) return null
   if (loading) return (
     <div>
       <SessionStatus userId={userId} />

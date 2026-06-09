@@ -30,6 +30,8 @@ function SessionView({ userId, onGoToManuscripts }) {
     load()
     return () => { alive = false }
   }, [userId])
+  // 防呆:userId 尚未就緒(首次登入流程)時不掛載任何場次查詢
+  if (!userId) return null
   if (roleInSession === undefined) return <p style={{ color: '#888' }}>讀取本場身分中…</p>
   return roleInSession === 'guard' ? <GuardWork userId={userId} /> : <SessionGoals userId={userId} onGoToManuscripts={onGoToManuscripts} />
 }
