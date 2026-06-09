@@ -23,8 +23,10 @@
   background:var(--concrete-0); color:var(--text);
   font-family:var(--mono),var(--cjk); line-height:1.7;
   -webkit-font-smoothing:antialiased; overflow-x:hidden;
-  min-height:100vh; position:relative; scroll-behavior:smooth;
+  min-height:100dvh; position:relative; scroll-behavior:smooth;
 }
+/* 鍵盤導覽:可聚焦元素的可見焦點環(滑鼠點擊不顯示) */
+.dp-site a:focus-visible,.dp-site button:focus-visible,.dp-modal button:focus-visible,.dp-modal input:focus-visible{outline:2px solid var(--hazard); outline-offset:2px}
 /* 水泥噪點 + 垂直鋼欄杆 */
 .dp-site::before{
   content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
@@ -64,6 +66,7 @@
   transition:transform .12s, background .2s;
 }
 .dp-site .btn-serve:hover{background:#fff; transform:translateY(-1px)}
+.dp-site .btn-serve:active{transform:translateY(1px)}
 /* 導覽列額外入口:監獄系統 / Discord */
 .dp-site nav .nav-entries{display:flex; align-items:center; gap:14px}
 .dp-site .nav-access{
@@ -95,7 +98,7 @@
 .dp-site .reveal.in{opacity:1; transform:none}
 
 /* HERO */
-.dp-site .hero{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:120px 28px 80px; max-width:1180px; margin:0 auto; position:relative}
+.dp-site .hero{min-height:100dvh; display:flex; flex-direction:column; justify-content:center; padding:120px 28px 80px; max-width:1180px; margin:0 auto; position:relative}
 .dp-site .hero::before{content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; background:radial-gradient(640px 420px at var(--sx,30%) 35%,rgba(245,197,24,.10),transparent 70%); animation:dp-sweep 14s ease-in-out infinite alternate}
 @keyframes dp-sweep{from{--sx:22%}to{--sx:74%}}
 .dp-site .intake{font-family:var(--mono); font-size:12px; letter-spacing:3px; color:var(--hazard); border:1px solid var(--hazard-deep); display:inline-flex; gap:10px; align-items:center; padding:7px 14px; margin-bottom:30px; width:fit-content}
@@ -105,15 +108,18 @@
 .dp-site .hero h1 .glow{color:var(--hazard)}
 .dp-site .hero .ensign{font-family:var(--stamp); font-size:clamp(20px,4vw,40px); color:var(--steel-2); letter-spacing:6px; margin:6px 0 30px}
 .dp-site .hero .ensign .no{color:var(--text); border-bottom:3px solid var(--hazard); padding-bottom:2px}
-.dp-site .hero .place-hero{font-family:var(--mono); font-size:13px; color:var(--dim); letter-spacing:1px; margin:-18px 0 26px}
-.dp-site .hero .place-hero b{color:var(--text); font-weight:700}
-.dp-site .hero .tag{font-size:clamp(15px,2vw,19px); color:var(--text); max-width:44ch; margin-bottom:14px}
+.dp-site .hero .tag{font-size:clamp(15px,2vw,19px); color:var(--text); max-width:44ch; margin:6px 0 28px}
 .dp-site .hero .tag b{color:var(--hazard); font-weight:700}
-.dp-site .hero .crime{font-family:var(--mono); font-size:13px; color:var(--dim); letter-spacing:1px; margin-bottom:40px; display:flex; flex-wrap:wrap; gap:6px 26px}
-.dp-site .hero .crime span b{color:var(--text)}
+/* 拘留登記卡:把散落的罪名/刑期/保釋收成一張正式紀錄,作 hero 視覺錨點 */
+.dp-site .hero .crime{display:grid; grid-template-columns:repeat(3,auto); width:fit-content; max-width:100%; margin-bottom:42px; border:1px solid var(--line); border-left:3px solid var(--hazard); background:rgba(255,255,255,.02)}
+.dp-site .hero .crime span{display:flex; flex-direction:column; gap:7px; padding:13px 24px 14px; border-right:1px solid var(--line)}
+.dp-site .hero .crime span:last-child{border-right:none}
+.dp-site .hero .crime em{font-family:var(--mono); font-style:normal; font-size:11px; letter-spacing:3px; color:var(--faint); text-transform:uppercase}
+.dp-site .hero .crime b{font-family:var(--cjk); font-weight:700; font-size:16px; letter-spacing:.5px; color:var(--text)}
 .dp-site .hero-cta{display:flex; gap:16px; flex-wrap:wrap; align-items:center}
 .dp-site .cta-main{font-family:var(--cond); font-size:24px; letter-spacing:3px; background:var(--hazard); color:#0a0a0a; border:none; cursor:pointer; padding:15px 36px; clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); transition:transform .12s, background .2s}
 .dp-site .cta-main:hover{background:#fff; transform:translate(-1px,-1px) scale(1.02)}
+.dp-site .cta-main:active{transform:translateY(1px) scale(.99)}
 .dp-site .cta-ghost{font-family:var(--cond); font-size:21px; letter-spacing:3px; color:var(--dim); border:1px solid var(--steel); padding:14px 26px; cursor:pointer; background:transparent; transition:color .2s,border-color .2s}
 .dp-site .cta-ghost:hover{color:var(--text); border-color:var(--steel-2)}
 .dp-site .scroll-hint{position:absolute; bottom:26px; left:28px; font-family:var(--mono); font-size:11px; letter-spacing:3px; color:var(--faint); animation:dp-nudge 2s ease-in-out infinite}
@@ -154,7 +160,8 @@
 .dp-site .halls{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px}
 .dp-site .hall-board{background:var(--panel); border:1px solid var(--line); padding:24px 22px}
 .dp-site .hall-head{display:flex; align-items:center; gap:10px; font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--line)}
-.dp-site .hall-head .hall-icon{font-size:22px; filter:saturate(.9)}
+.dp-site .hall-head .hall-icon{display:inline-flex; align-items:center; color:var(--hazard)}
+.dp-site .hall-head .hall-icon svg{display:block}
 .dp-site .hall-head .hall-sub{margin-left:auto; font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--faint)}
 .dp-site .hall-list{list-style:none; display:flex; flex-direction:column}
 .dp-site .hall-row{display:flex; align-items:center; gap:14px; padding:11px 8px; border-bottom:1px solid var(--line)}
@@ -196,6 +203,7 @@
 .dp-site .tag-status.serving{color:var(--alarm); border:1px solid var(--alarm)}
 .dp-site .btn-book{font-family:var(--cond); font-size:19px; letter-spacing:2px; display:block; width:148px; background:var(--hazard); color:#0a0a0a; border:none; cursor:pointer; padding:11px 0; clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); transition:transform .12s, background .2s}
 .dp-site .btn-book:hover{background:#fff; transform:translateY(-1px)}
+.dp-site .btn-book:not(:disabled):active{transform:translateY(1px)}
 .dp-site .btn-book:disabled{background:var(--concrete-3); color:var(--faint); cursor:not-allowed; transform:none}
 
 /* 頁尾 */
@@ -258,12 +266,28 @@
   background:transparent; border:1px solid var(--steel); color:var(--dim)}
 
 @media(max-width:720px){
-  .dp-site nav .links{display:none}
-  .dp-site nav .nav-entries{margin-left:auto}
+  /* 手機收掉次要區段連結,但保留主 CTA「入監服刑」可達 */
+  .dp-site nav{gap:14px}
+  .dp-site nav .links{margin-left:auto; gap:0}
+  .dp-site nav .links a{display:none}
+  .dp-site .btn-serve{font-size:16px; padding:7px 14px}
   .dp-site .place{margin:-12px 0 36px}
+  /* 拘留卡在窄螢幕改直向堆疊,避免三欄擠壓溢出 */
+  .dp-site .hero .crime{grid-template-columns:1fr; width:100%}
+  .dp-site .hero .crime span{flex-direction:row; align-items:baseline; justify-content:space-between; border-right:none; border-bottom:1px solid var(--line); padding:12px 18px}
+  .dp-site .hero .crime span:last-child{border-bottom:none}
   .dp-site .sess{grid-template-columns:78px 1fr; gap:16px}
   .dp-site .sess .act{grid-column:1/-1; text-align:left}
   .dp-site .btn-book{width:100%}
   .dp-site section{padding:72px 22px}
   .dp-site .hero{padding:90px 22px 70px}
+}
+
+/* 尊重系統減動偏好:停掉掃光/閃爍/下沉等持續動畫,並確保進場內容直接顯示 */
+@media (prefers-reduced-motion: reduce){
+  .dp-site *,.dp-site *::before,.dp-site *::after{
+    animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important; scroll-behavior:auto !important;
+  }
+  .dp-site .reveal{opacity:1 !important; transform:none !important}
 }
