@@ -6,6 +6,7 @@ import GuardWork from './GuardWork'
 import WardenPanel from './warden/WardenPanel'
 import ProfilePage from './ProfilePage'
 import RecordsPage from './RecordsPage'
+import MyBookings from './MyBookings'
 import { normalizeStatus } from './warden/constants'
 import './styles/admin.css'
 
@@ -80,9 +81,25 @@ function App() {
   }, [user])
 
   // 登入後依身分決定預設落地分頁:典獄長→主控台,其餘→本次服刑/獄卒作業
+  // 登入後預設落地分頁:
+  //  典獄長 → 主控台;其餘 → 已報到進某「未結束」場次 → 本次服刑/獄卒作業(session),否則 → 已預約場次。
+  //  (serving / intake 的精確區分待分頁拆分時細調)
   useEffect(() => {
     if (!profile) return
-    setTab(profile.role === 'warden' ? 'warden' : 'session')
+    if (profile.role === 'warden') { setTab('warden'); return }
+    let alive = true
+    ;(async () => {
+      const { data: si } = await supabase.from('session_inmates')
+        .select('session_id').eq('member_id', user.id)
+      let landing = 'booking'
+      if (si && si.length) {
+        const { data: rows } = await supabase.from('sessions')
+          .select('id, status, timer_started_at').in('id', si.map(r => r.session_id))
+        if ((rows ?? []).some(s => normalizeStatus(s) !== 'ended')) landing = 'session'
+      }
+      if (alive) setTab(landing)
+    })()
+    return () => { alive = false }
   }, [profile?.role])
 
   // 登入後導回目前的監所系統頁(/app 或 /warden),而非公開首頁
@@ -139,10 +156,10 @@ function App() {
   //  獄卒   → 獄卒作業 / 我的稿件
   //  犯人   → 本次服刑 / 我的稿件
   const tabs = profile.role === 'warden'
-    ? [{ k: 'warden', label: '典獄長主控台' }, { k: 'me', label: '我的稿件' }, { k: 'session', label: '本次服刑' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
+    ? [{ k: 'warden', label: '典獄長主控台' }, { k: 'session', label: '本次服刑' }, { k: 'booking', label: '已預約場次' }, { k: 'me', label: '我的稿件' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
     : profile.role === 'guard'
-      ? [{ k: 'session', label: '獄卒作業' }, { k: 'me', label: '我的稿件' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
-      : [{ k: 'session', label: '本次服刑' }, { k: 'me', label: '我的稿件' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
+      ? [{ k: 'session', label: '獄卒作業' }, { k: 'booking', label: '已預約場次' }, { k: 'me', label: '我的稿件' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
+      : [{ k: 'session', label: '本次服刑' }, { k: 'booking', label: '已預約場次' }, { k: 'me', label: '我的稿件' }, { k: 'records', label: '服刑紀錄' }, { k: 'profile', label: '個人資料' }]
   // 防呆:tab 不在當前身分的分頁清單時,落回第一個
   const activeTab = tabs.some(t => t.k === tab) ? tab : tabs[0].k
   return (
@@ -162,6 +179,7 @@ function App() {
       </div>
       <div className="page">
         {activeTab === 'session' && <SessionView userId={user.id} onGoToManuscripts={() => setTab('me')} />}
+        {activeTab === 'booking' && <MyBookings userId={user.id} onGoToManuscripts={() => setTab('me')} />}
         {activeTab === 'me' && (
           <div className="ms-page">
             <p className="muted" style={{ marginBottom: 4 }}>📍 我的稿件 · 遊戲暱稱:{profile.game_name ?? '(未設定)'}</p>
