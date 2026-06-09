@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
-import { createBooking, cancelBooking } from './bookingApi'
+import { cancelBooking } from './bookingApi'
 import MessageBanner from './MessageBanner'
 
 // 已預約場次（犯人/獄卒自己的視角）。全程樂觀更新,不整頁重抓。
 //  - 我的預約：我預約且未結束的場次（public_sessions 已排除 ended），可預排任務、可取消。
-//  - 可預約場次：can_book 且未額滿、我尚未預約的開放場次，可直接預約。
+//  - 不提供站內預約入口，要預約新場次一律導往官網（href="/"）。
 const STATUS_PILL = {
   booking: { label: '預約中', bg: 'rgba(63,179,107,.15)', color: 'var(--ok)' },
   booking_paused: { label: '停止預約', bg: 'rgba(255,255,255,.08)', color: 'var(--dim)' },
@@ -20,19 +20,16 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
   const [goals, setGoals] = useState([])            // 我的 booking_goals
   const [actives, setActives] = useState([])        // 我的 active 稿件
   const [msById, setMsById] = useState({})          // manuscript_id -> {title}
-  const [profile, setProfile] = useState(null)      // 自己的 game_name/avatar（預約展示值）
   const [pickFor, setPickFor] = useState(null)      // 開著「預排任務」modal 的 session_id
-  const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: pub }, { data: bks }, { data: bg }, { data: ms }, { data: prof }] = await Promise.all([
+    const [{ data: pub }, { data: bks }, { data: bg }, { data: ms }] = await Promise.all([
       supabase.rpc('public_sessions'),
       supabase.from('bookings').select('id, session_id, status').eq('user_id', userId),
       supabase.from('booking_goals').select('id, session_id, manuscript_id').eq('user_id', userId),
       supabase.from('manuscripts').select('id, title, status').eq('member_id', userId).order('priority').order('created_at'),
-      supabase.from('profiles').select('game_name, avatar_url').eq('id', userId).maybeSingle(),
     ])
     setSessions(pub ?? [])
     setMyBookings((bks ?? []).filter(b => b.status !== 'cancelled'))
@@ -40,7 +37,6 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
     const m = {}; for (const x of ms ?? []) m[x.id] = x
     setMsById(m)
     setActives((ms ?? []).filter(x => x.status === 'active'))
-    setProfile(prof ?? null)
     setLoading(false)
   }, [userId])
 
@@ -50,25 +46,6 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
   const goalsBySession = {}
   for (const g of goals) (goalsBySession[g.session_id] ??= []).push(g)
   const mySessions = sessions.filter(s => bookedIds.has(s.id))
-  const openSessions = sessions.filter(s =>
-    !bookedIds.has(s.id) && s.can_book === true &&
-    (s.capacity == null || (s.booked ?? 0) < s.capacity))
-
-  async function book(s) {
-    setBusy(true); setMsg('')
-    const optimistic = { id: 'tmp-' + s.id, session_id: s.id, status: 'pending' }
-    setMyBookings(prev => [...prev, optimistic])   // 樂觀:立刻移到「我的預約」
-    const r = await createBooking(s.id, { game_name: profile?.game_name ?? null, avatar_url: profile?.avatar_url ?? null })
-    setBusy(false)
-    if (!r.ok) {
-      setMyBookings(prev => prev.filter(b => b.id !== optimistic.id))   // 回滾
-      setMsg(r.error === 'already_booked' ? '你已預約此場次' : r.error === 'full' ? '此場次已額滿' : '預約失敗,請稍後再試')
-      return
-    }
-    setMsg('已預約：' + s.title)
-    const { data: bks } = await supabase.from('bookings').select('id, session_id, status').eq('user_id', userId)
-    setMyBookings((bks ?? []).filter(b => b.status !== 'cancelled'))   // 換回真實 id（靜默）
-  }
 
   async function cancel(s) {
     const b = myBookings.find(x => x.session_id === s.id)
@@ -140,24 +117,9 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
         )
       })}
 
-      <div className="subgroup" style={{ marginTop: 22 }}>可預約場次（{openSessions.length}）<span className="ln" /></div>
-      {openSessions.length === 0 ? (
-        <p className="empty">目前沒有開放預約的場次</p>
-      ) : openSessions.map(s => {
-        const limited = s.capacity != null
-        const capTxt = limited ? `${s.booked ?? 0} / ${s.capacity}` : `${s.booked ?? 0} ／ 不限`
-        return (
-          <div key={s.id} className="row-card">
-            <div className="row-head">
-              <strong>{s.title}</strong>
-              <span className="muted">{s.session_date ?? '未定'}</span>
-              <span className="muted">已報名 {capTxt}</span>
-              <span className="spacer" />
-              <button className="btn-sm btn-pri" disabled={busy} onClick={() => book(s)}>預約</button>
-            </div>
-          </div>
-        )
-      })}
+      <div style={{ textAlign: 'center', marginTop: 18 }}>
+        <a className="btn-ghost" href="/" style={{ textDecoration: 'none' }}>要預約新場次?前往官網 ▸</a>
+      </div>
 
       {pickFor && (() => {
         const sessionId = pickFor
