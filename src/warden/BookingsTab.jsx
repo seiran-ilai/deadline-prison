@@ -41,17 +41,33 @@ export default function BookingsTab({ setMsg }) {
 
   async function setStatus(b, status) {
     if (status === 'cancelled' && !window.confirm('確定將這筆預約改為「已取消」?')) return
+    // 樂觀更新:就地把該筆 booking 的 status 改成目標值,bookedCount 由 bySession 衍生會自動跟著對。
+    const snapshot = bySession
+    setBySession(prev => ({
+      ...prev,
+      [b.session_id]: (prev[b.session_id] ?? []).map(x => x.id === b.id ? { ...x, status } : x),
+    }))
     const { error } = await supabase.from('bookings').update({ status }).eq('id', b.id)
-    if (error) { setMsg('更新狀態失敗:' + error.message); return }
-    setMsg('已更新預約狀態'); load()
+    if (error) { setBySession(snapshot); setMsg('更新狀態失敗,已還原:' + error.message); return }
+    setMsg('已更新預約狀態')
   }
 
   async function saveBookingInfo() {
     const e = editing
-    const { error } = await supabase.from('bookings')
-      .update({ game_name: e.game_name || null, avatar_url: e.avatar_url || null }).eq('id', e.id)
-    if (error) { setMsg('更新預約資料失敗:' + error.message); return }
-    setMsg('已更新預約暱稱/頭像'); setEditing(null); load()
+    const game_name = e.game_name || null
+    const avatar_url = e.avatar_url || null
+    // 樂觀更新:就地把該筆 booking 的暱稱/頭像寫進 bySession(editing 無 session_id,逐組 map 找 id)。
+    const snapshot = bySession
+    setBySession(prev => {
+      const next = {}
+      for (const [sid, arr] of Object.entries(prev))
+        next[sid] = arr.map(x => x.id === e.id ? { ...x, game_name, avatar_url } : x)
+      return next
+    })
+    setEditing(null)
+    const { error } = await supabase.from('bookings').update({ game_name, avatar_url }).eq('id', e.id)
+    if (error) { setBySession(snapshot); setMsg('更新預約資料失敗,已還原:' + error.message); return }
+    setMsg('已更新預約暱稱/頭像')
   }
 
   return (
