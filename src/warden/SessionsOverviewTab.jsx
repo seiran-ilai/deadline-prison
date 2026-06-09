@@ -69,10 +69,11 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     const payload = { title: newTitle, is_public: newPublic }
     if (newDate) payload.session_date = newDate
     payload.capacity = capValue(newCap)
-    const { error } = await supabase.from('sessions').insert(payload)
+    const { data, error } = await supabase.from('sessions').insert(payload).select().single()
     if (error) { setMsg('開場失敗:' + error.message); return }
+    setSessions(prev => [data, ...prev])   // 新場插入頂端,不整頁重抓
     setMsg('已開場:' + newTitle); setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true)
-    load(); reloadShared()
+    reloadShared()   // 背景同步共用清單
   }
 
   function startEdit(s) {
@@ -83,19 +84,32 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
 
   async function saveEdit(id) {
     if (!editTitle) { setMsg('場次名不能空白'); return }
-    const { error } = await supabase.from('sessions')
-      .update({ title: editTitle, session_date: editDate || null, capacity: capValue(editCap), is_public: editPublic }).eq('id', id)
-    if (error) { setMsg('編輯失敗:' + error.message); return }
-    setMsg('已更新場次'); cancelEdit(); load(); reloadShared()
+    const snapshot = sessions
+    const patch = { title: editTitle, session_date: editDate || null, capacity: capValue(editCap), is_public: editPublic }
+    setSessions(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))   // 樂觀更新
+    cancelEdit(); setMsg('已更新場次')
+    const { error } = await supabase.from('sessions').update(patch).eq('id', id)
+    if (error) { setSessions(snapshot); setMsg('編輯失敗,已還原:' + error.message); return }
+    reloadShared()
   }
 
-  // 場次五態狀態機:一律走 set_session_status RPC,成功後刷新本頁與共用資料。
+  // 場次五態狀態機:樂觀切換狀態,不重排;成功後背景同步共用資料。
   // confirmText 有值時先二次確認(結束服刑、退回入場用)。
   async function setStatus(s, newStatus, okMsg, confirmText) {
     if (confirmText && !window.confirm(confirmText)) return
+    const snapshot = sessions
+    // 樂觀更新:就地把該場 status 改成目標值(不重排,卡片留原位)。
+    // 本元件的標籤/按鈕都靠 normalizeStatus(s) 判斷,新值會直接反映;
+    // 番茄鐘等 timer 副作用由後端處理,reloadShared 會同步共用清單。
+    setSessions(prev => prev.map(x => x.id === s.id ? { ...x, status: newStatus } : x))
+    setMsg(okMsg)
     const { error } = await supabase.rpc('set_session_status', { p_session: s.id, p_new_status: newStatus })
-    if (error) { setMsg('狀態更新失敗:' + error.message); return }
-    setMsg(okMsg); load(); reloadShared()
+    if (error) {
+      setSessions(snapshot)   // 失敗回滾
+      setMsg('狀態更新失敗,已還原:' + error.message)
+      return
+    }
+    reloadShared()   // 背景同步共用 sessions(ended 會從 SessionTab 下拉消失),不重抓本頁
   }
 
   // 依 normalizeStatus(s) 顯示對應狀態機按鈕(退回類用次要/危險色與正向鈕區隔)
@@ -129,9 +143,13 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
 
   async function deleteSession(s) {
     if (!window.confirm(`確定刪除場次「${s.title}」?此動作無法復原,本場名單與目標也會一併移除`)) return
+    const snapshot = sessions
+    setSessions(prev => prev.filter(x => x.id !== s.id))   // 樂觀移除
+    if (expandedId === s.id) setExpandedId(null)           // 收掉可能展開中的該場
+    setMsg('已刪除場次')
     const { error } = await supabase.from('sessions').delete().eq('id', s.id)
-    if (error) { setMsg('刪除失敗:' + error.message); return }
-    setMsg('已刪除場次'); load(); reloadShared()
+    if (error) { setSessions(snapshot); setMsg('刪除失敗,已還原:' + error.message); return }
+    reloadShared()
   }
 
   return (
