@@ -5,10 +5,9 @@ import { pomodoroState } from '../pomodoro'
 // 單一場次的番茄鐘控台(僅典獄長)。容器層只在「場次 = serving」時才 render(見 SessionTab)。
 // 「開始服刑」已移到「場次總覽」狀態機(intake→serving),轉 serving 時後端自動設 timer_started_at,
 // 故本元件不再有 idle 的「開始服刑」UI。番茄鐘只是 serving 狀態內的計時資料。
-// 用 <SessionTimerControl key={session.id} ... /> 讓切換場次時 roundsInput 等內部狀態自動重置。
+// 用 <SessionTimerControl key={session.id} ... /> 讓切換場次時內部計時狀態自動重置。
 export default function SessionTimerControl({ session, setMsg, reloadShared }) {
   const sessionId = session.id
-  const [roundsInput, setRoundsInput] = useState(session.total_rounds ?? 8) // 專注輪數輸入
 
   // 每秒重算(讓 running 顯示的目前輪數與 −輪 下限即時推進)
   const [, setTick] = useState(0)
@@ -16,13 +15,6 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
     const t = setInterval(() => setTick(x => x + 1), 1000)
     return () => clearInterval(t)
   }, [])
-
-  async function saveRounds() {
-    const n = Math.max(1, parseInt(roundsInput) || 1)
-    const { error } = await supabase.from('sessions').update({ total_rounds: n }).eq('id', sessionId)
-    if (error) { setMsg('儲存輪數失敗:' + error.message); return }
-    setMsg('已設定專注輪數:' + n); reloadShared()
-  }
 
   // 提早結束:serving → ended(走場次狀態機,不直接動 timer_*)
   async function endTimer() {
