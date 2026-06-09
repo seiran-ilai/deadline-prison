@@ -128,6 +128,12 @@ export default function PrisonSite() {
 
   async function confirmBooking() {
     setSubmitting(true); setMsg(null)
+    // 先確保此登入者有 profile(沒有就建檔發號;已有則補上空的暱稱/頭像)。
+    // 帶入 modal 內填的暱稱/頭像;失敗不阻擋預約(profile 之後進 /app 也會自動建)。
+    await supabase.rpc('claim_profile', {
+      p_game_name: bkName.trim() || null,
+      p_avatar_url: bkAvatar || null,
+    })
     // 暱稱/頭像僅作該筆預約展示值(伺服器仍以 JWT 驗身分);沿用既有 profile 值或 modal 補填的值
     const r = await createBooking(sel.id, { game_name: bkName.trim() || null, avatar_url: bkAvatar || null })
     setSubmitting(false)

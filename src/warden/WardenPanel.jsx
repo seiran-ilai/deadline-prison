@@ -11,8 +11,6 @@ import { normalizeStatus } from './constants'
 
 export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
   const isWarden = myRole === 'warden'
-  const [pending, setPending] = useState([])
-  const [unmatched, setUnmatched] = useState([])
   const [inmates, setInmates] = useState([])
   const [sessions, setSessions] = useState([])
   const [currentSession, setCurrentSession] = useState('')
@@ -21,17 +19,14 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
   const [wtab, setWtab] = useState('overview')           // 主控台子頁籤
   const [editingMember, setEditingMember] = useState(null) // 編輯中的犯人資料(modal)
 
-  // 共用資料:預約 / 全部 profiles / 未結束場次(供「進行中場次」控台用)
+  // 共用資料:全部 profiles / 未結束場次(供「進行中場次」控台用)
   // 五態下不再以 status='open' 過濾,改抓全部再排除 normalizeStatus 為 ended 者(相容舊值 open/closed)
   async function load() {
     setLoading(true)
-    const { data: pend } = await supabase.from('pending_inmates').select('*').order('created_at')
     const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, discord_account, avatar_url, role')
     const { data: sess } = await supabase.from('sessions').select('*').order('created_at', { ascending: false })
     const live = (sess ?? []).filter(s => normalizeStatus(s) !== 'ended')
-    setPending(pend ?? [])
-    setUnmatched((all ?? []).filter(p => p.inmate_no == null))
-    setInmates((all ?? []).filter(p => p.inmate_no != null))
+    setInmates(all ?? [])
     setSessions(live)
     if (live.length && !currentSession) setCurrentSession(live[0].id)
     setLoading(false)
@@ -73,7 +68,7 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
         <SessionsOverviewTab setMsg={setMsg} reloadShared={load} />
       )}
       {wtab === 'overview' && (
-        <OverviewTab inmates={inmates} unmatched={unmatched} pending={pending}
+        <OverviewTab inmates={inmates}
           loading={loading} isWarden={isWarden} onEditMember={openEditMember}
           setMsg={setMsg} reloadShared={load} />
       )}

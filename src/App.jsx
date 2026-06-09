@@ -121,13 +121,12 @@ function App() {
     </div>
   )
   if (loading) return <div className="admin"><div className="center-box"><p className="sub">核對身分中…</p></div></div>
-  if (!profile || profile.inmate_no == null) {
+  if (!profile) {
     return (
       <div className="admin">
         <div className="center-box">
           <h1>死線<b>監獄</b></h1>
-          <p className="sub">查無預約資料,請與典獄長確認</p>
-          <a className="btn-ghost" href="https://discord.gg/tpRn7En9mk" target="_blank" rel="noreferrer">聯繫典獄長(Discord)</a>
+          <p className="sub">建立資料中…</p>
           <button onClick={signOut}>登出</button>
         </div>
       </div>
