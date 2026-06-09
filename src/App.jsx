@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import ManuscriptManager from './ManuscriptManager'
 import SessionGoals from './SessionGoals'
 import GuardWork from './GuardWork'
+import GuardMemosTab from './GuardMemosTab'
 import WardenPanel from './warden/WardenPanel'
 import ProfilePage from './ProfilePage'
 import RecordsPage from './RecordsPage'
@@ -147,8 +148,8 @@ function App() {
     await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo, scopes: 'identify' } })
   }
   async function signOut() {
-    supabase.auth.signOut()           // 不 await,背景清 session
-    window.location.replace('/')      // 立刻導回官網首頁,replace 不留 /app 在瀏覽歷史
+    await supabase.auth.signOut({ scope: 'local' })   // 先確實清掉本地 session 再導頁(避免跳太快、新頁面讀到殘留 session)
+    window.location.replace('/')                       // replace 不留 /app 在瀏覽歷史
   }
 
   // ⚠️ 測試專用：用 Email/密碼登入測試帳號（真實登入＝真實 RLS 權限）
@@ -199,6 +200,7 @@ function App() {
         { k: 'warden', label: '典獄長主控台' },
         { k: 'session', label: '犯人服刑', disabled: !inmateOK },
         { k: 'guardwork', label: '獄卒作業', disabled: !guardOK },
+        { k: 'memos', label: 'MEMO / 確認項' },
         { k: 'booking', label: '已預約場次' },
         { k: 'me', label: '我的稿件' },
         { k: 'records', label: '服刑紀錄' },
@@ -208,6 +210,7 @@ function App() {
       ? [
           { k: 'session', label: '犯人服刑', disabled: !inmateOK },
           { k: 'guardwork', label: '獄卒作業', disabled: !guardOK },
+          { k: 'memos', label: 'MEMO / 確認項' },
           { k: 'booking', label: '已預約場次' },
           { k: 'me', label: '我的稿件' },
           { k: 'records', label: '服刑紀錄' },
@@ -255,6 +258,7 @@ function App() {
             ? <SessionView userId={user.id} forceView="guard" onGoToManuscripts={() => setTab('me')} />
             : <LockedSessionNote text="目前不在任何進行中場次（獄卒），等待典獄長指派。" onGoToBooking={() => setTab('booking')} />
         )}
+        {activeTab === 'memos' && isStaff && <GuardMemosTab userId={user.id} />}
         {activeTab === 'booking' && <MyBookings userId={user.id} onGoToManuscripts={() => setTab('me')} />}
         {activeTab === 'me' && (
           <div className="ms-page">

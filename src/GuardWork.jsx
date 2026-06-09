@@ -3,7 +3,6 @@ import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
 import { computeProgress, goalStatusLabel } from './progress'
 import SessionStatus from './SessionStatus'
-import GuardMemosTab from './GuardMemosTab'
 import SessionMemoPanel from './SessionMemoPanel'
 import ProfileCard from './ProfileCard'
 import { normalizeStatus } from './warden/constants'
@@ -26,7 +25,6 @@ export default function GuardWork({ userId }) {
   const [stepsByMs, setStepsByMs] = useState({})    // manuscript_id -> [steps]
   const [expanded, setExpanded] = useState([])      // 展開中的目標(session_goals.id)
   const [msg, setMsg] = useState('')
-  const [gtab, setGtab] = useState('work')          // 獄卒端子分頁:work=服刑作業 / memos=MEMO確認項
 
   async function load() {
     setLoading(true)
@@ -135,19 +133,6 @@ export default function GuardWork({ userId }) {
 
   return (
     <div>
-      {/* 獄卒端子分頁:服刑作業 / MEMO·確認項 */}
-      <div className="subtabs">
-        <button className={gtab === 'work' ? 'on' : ''} onClick={() => setGtab('work')}>服刑作業</button>
-        <button className={gtab === 'memos' ? 'on' : ''} onClick={() => setGtab('memos')}>MEMO / 確認項</button>
-      </div>
-
-      {gtab === 'memos' ? (
-        <>
-          <ProfileCard userId={userId} />
-          <GuardMemosTab userId={userId} />
-        </>
-      ) : (
-      <>
       {loading ? (
         <p className="empty">讀取獄卒作業中…</p>
       ) : (
@@ -291,8 +276,6 @@ export default function GuardWork({ userId }) {
             </div>
           </div>
         </>
-      )}
-      </>
       )}
       </>
       )}
