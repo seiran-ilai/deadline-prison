@@ -8,6 +8,7 @@ import ProfilePage from './ProfilePage'
 import RecordsPage from './RecordsPage'
 import MyBookings from './MyBookings'
 import MessageBanner from './MessageBanner'
+import DeadlinePrisonLoader from './DeadlinePrisonLoader'
 import { normalizeStatus } from './warden/constants'
 import './styles/admin.css'
 
@@ -160,41 +161,34 @@ function App() {
   }
 
   if (!user) return (
-    <div className="admin">
-      <div className="center-box">
-        <h1>死線<b>監獄</b> · DEADLINE PRISON</h1>
-        <button className="btn-pri" onClick={signIn}>用 Discord 登入</button>
-        {import.meta.env.DEV && (
-          <div className="test-box">
-            <p className="t-title">⚠️ 測試專用(僅開發模式)</p>
-            <p className="t-sub">正式上線(production build)不會出現此區塊</p>
-            <div className="t-list">
-              {TEST_ACCOUNTS.map((acc) => (
-                <button key={acc.email} onClick={() => testSignIn(acc)} disabled={testBusy}>
-                  {acc.label}
-                </button>
-              ))}
-            </div>
-            {testError && <p className="banner err" style={{ marginTop: 12 }}>登入失敗:{testError}</p>}
+    <DeadlinePrisonLoader status="等候收容" statusEn="AWAITING INTAKE" procLabel="身分核對">
+      <button className="btn-pri" onClick={signIn}>用 Discord 入獄</button>
+      {import.meta.env.DEV && (
+        <div className="test-box">
+          <p className="t-title">⚠️ 測試專用（僅開發模式）</p>
+          <p className="t-sub">正式上線（production build）不會出現此區塊</p>
+          <div className="t-list">
+            {TEST_ACCOUNTS.map((acc) => (
+              <button key={acc.email} onClick={() => testSignIn(acc)} disabled={testBusy}>
+                {acc.label}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
-    </div>
+          {testError && <p className="banner err" style={{ marginTop: 12 }}>登入失敗：{testError}</p>}
+        </div>
+      )}
+    </DeadlinePrisonLoader>
   )
-  if (loading) return <div className="admin"><div className="center-box"><p className="sub">核對身分中…</p></div></div>
+  if (loading) return <DeadlinePrisonLoader status="收容中" statusEn="INTAKE OPEN" procLabel="核對身分" />
   if (!profile) {
     return (
-      <div className="admin">
-        <div className="center-box">
-          <h1>死線<b>監獄</b></h1>
-          <p className="sub">建立資料中…</p>
-          <button onClick={signOut}>登出</button>
-        </div>
-      </div>
+      <DeadlinePrisonLoader status="建檔中" statusEn="REGISTERING" procLabel="建立囚籍資料">
+        <button onClick={signOut}>登出</button>
+      </DeadlinePrisonLoader>
     )
   }
   // 落地分頁尚未決定前先遮 loading,避免用初始 tab 閃過 session/booking
-  if (!tabResolved) return <div className="admin"><div className="center-box"><p className="sub">核對身分中…</p></div></div>
+  if (!tabResolved) return <DeadlinePrisonLoader status="收容中" statusEn="INTAKE OPEN" procLabel="核對身分" />
 
   const isStaff = profile.role === 'guard' || profile.role === 'warden'
   // 互斥分頁:依「我目前未結束場次的本場身分」啟用「犯人服刑」/「獄卒作業」,跟著 myLive 輪詢即時重算。
@@ -227,7 +221,7 @@ function App() {
           { k: 'profile', label: '個人資料' },
         ]
   // disabled 分頁的點擊提示(hover title 同字)
-  const lockedHint = { session: '你目前不在任何進行中場次,或本場身分不是犯人', guardwork: '你目前不在任何進行中場次,或本場身分不是獄卒' }
+  const lockedHint = { session: '你目前不在任何進行中場次，或本場身分不是犯人', guardwork: '你目前不在任何進行中場次，或本場身分不是獄卒' }
   // 防呆:tab 不在當前身分的分頁清單時,落回第一個
   const activeTab = tabs.some(t => t.k === tab) ? tab : tabs[0].k
   return (
@@ -254,17 +248,17 @@ function App() {
         {activeTab === 'session' && (
           inmateOK
             ? <SessionView userId={user.id} forceView="inmate" onGoToManuscripts={() => setTab('me')} />
-            : <LockedSessionNote text="目前不在任何進行中場次(犯人),可至『已預約場次』報名或等待典獄長收監。" onGoToBooking={() => setTab('booking')} />
+            : <LockedSessionNote text="目前不在任何進行中場次（犯人），可至『已預約場次』報名或等待典獄長收監。" onGoToBooking={() => setTab('booking')} />
         )}
         {activeTab === 'guardwork' && (
           guardOK
             ? <SessionView userId={user.id} forceView="guard" onGoToManuscripts={() => setTab('me')} />
-            : <LockedSessionNote text="目前不在任何進行中場次(獄卒),等待典獄長指派。" onGoToBooking={() => setTab('booking')} />
+            : <LockedSessionNote text="目前不在任何進行中場次（獄卒），等待典獄長指派。" onGoToBooking={() => setTab('booking')} />
         )}
         {activeTab === 'booking' && <MyBookings userId={user.id} onGoToManuscripts={() => setTab('me')} />}
         {activeTab === 'me' && (
           <div className="ms-page">
-            <p className="muted" style={{ marginBottom: 4 }}>📍 我的稿件 · 遊戲暱稱:{profile.game_name ?? '(未設定)'}</p>
+            <p className="muted" style={{ marginBottom: 4 }}>📍 我的稿件 · 遊戲暱稱：{profile.game_name ?? '（未設定）'}</p>
             <h3>稿件管理</h3>
             <ManuscriptManager userId={user.id} />
           </div>
