@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { normalizeStatus } from './warden/constants'
 
 // 新增 / 編輯 獄卒 MEMO 的共用 modal(設計系統 modal 樣式)。
 // props:
@@ -12,17 +13,20 @@ export default function GuardMemoModal({ userId, initial, preset, onClose, onSav
   const [scope, setScope] = useState(initial?.scope ?? preset?.scope ?? 'every')
   const [sessionId, setSessionId] = useState(initial?.session_id ?? preset?.sessionId ?? '')
   const [targetId, setTargetId] = useState(initial?.target_prisoner_id ?? '')
-  const [sessions, setSessions] = useState([])     // 進行中 + 預約中(status='open')
+  const [sessions, setSessions] = useState([])     // 所有未結束場次(normalizeStatus !== 'ended')
   const [prisoners, setPrisoners] = useState([])   // 綁定對象候選
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
 
-  // 場次下拉:只列 status='open'(= 進行中 + 預約中,排除已結束 closed)
+  // 場次下拉:列出所有未結束場次(全撈 + normalizeStatus !== 'ended' 過濾,
+  // 涵蓋 booking/booking_paused/intake/serving;過渡期舊值 open/closed 也正規化,不用 .eq('status','open'))
   useEffect(() => {
     let alive = true
-    supabase.from('sessions').select('id, title, session_date, status')
-      .eq('status', 'open').order('session_date', { ascending: true, nullsFirst: false })
-      .then(({ data }) => { if (alive) setSessions(data ?? []) })
+    supabase.from('sessions').select('id, title, session_date, status, timer_started_at')
+      .order('session_date', { ascending: true, nullsFirst: false })
+      .then(({ data }) => {
+        if (alive) setSessions((data ?? []).filter(s => normalizeStatus(s) !== 'ended'))
+      })
     return () => { alive = false }
   }, [])
 
