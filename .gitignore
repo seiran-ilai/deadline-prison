@@ -28,3 +28,7 @@ dist-ssr
 .env
 .vercel
 .env*
+
+# Claude Code skill 工具檔(本機用,不進版控)
+.agents/
+skills-lock.json
