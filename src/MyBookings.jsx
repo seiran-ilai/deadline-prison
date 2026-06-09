@@ -117,10 +117,6 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
         )
       })}
 
-      <div style={{ textAlign: 'center', marginTop: 18 }}>
-        <a className="btn-ghost" href="/" style={{ textDecoration: 'none' }}>要預約新場次?前往官網 ▸</a>
-      </div>
-
       {pickFor && (() => {
         const sessionId = pickFor
         const taken = new Set((goalsBySession[sessionId] ?? []).map(g => g.manuscript_id))
