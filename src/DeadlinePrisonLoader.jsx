@@ -29,10 +29,20 @@ const CSS = `
 .dpl-fill.dpl-indet{width:38%;animation:dpl-haz 1s linear infinite,dpl-indet 1.5s ease-in-out infinite}
 .dpl-sheen{position:absolute;top:0;left:0;height:100%;width:60px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:dpl-sheen 1.4s linear infinite}
 .dpl-footer{margin-top:14px;opacity:0;animation:dpl-up .5s ease-out 1s both}
-.dpl-gate{display:flex;flex-direction:column;align-items:center;gap:15px}
-.dpl-privacy{margin-top:2px;text-align:center;font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",ui-sans-serif,sans-serif;color:#7c7d72;font-size:12.5px;line-height:1.85}
+.dpl-gate{display:flex;flex-direction:column;align-items:center;gap:15px;width:100%}
+/* Discord 登入主按鈕:登入頁不在 .admin 底下,樣式自帶(Discord 藍 + 光暈,行動端好點的大目標) */
+.dpl-dc{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:min(320px,88vw);min-height:50px;padding:13px 22px;border:none;border-radius:6px;background:#5865F2;color:#fff;font-size:16px;font-weight:700;letter-spacing:.06em;cursor:pointer;text-decoration:none;box-shadow:0 0 28px rgba(88,101,242,.4);transition:filter .2s ease,transform .12s ease}
+.dpl-dc:hover{filter:brightness(1.12)}
+.dpl-dc:active{transform:translateY(1px)}
+.dpl-dc svg{flex:0 0 auto}
+.dpl-privacy{margin-top:2px;text-align:center;font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",ui-sans-serif,sans-serif;color:#7c7d72;font-size:12.5px;line-height:1.85;max-width:100%}
 .dpl-privacy .dpl-pv-t{display:block;font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em;color:#5f6157;margin-bottom:7px}
 .dpl-privacy p{margin:0;white-space:nowrap}
+/* 窄螢幕:隱私說明允許換行(nowrap 會超出螢幕),左對齊較易讀 */
+@media (max-width:640px){
+.dpl-privacy{max-width:min(88vw,360px)}
+.dpl-privacy p{white-space:normal;text-align:left}
+}
 .dpl-back{display:inline-block;padding:8px 18px;border:1px solid rgba(207,202,187,.22);border-radius:3px;background:transparent;color:#9a9b90;font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-decoration:none;cursor:pointer;transition:border-color .2s ease,color .2s ease}
 .dpl-back:hover{border-color:rgba(232,182,0,.55);color:#cfcabb}
 @keyframes dpl-scan{0%{top:-30%}100%{top:120%}}

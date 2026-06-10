@@ -4,6 +4,7 @@ import { ProgressBar } from './ManuscriptManager'
 import { computeProgress, goalStatusLabel } from './progress'
 import SessionStatus from './SessionStatus'
 import SessionMemoPanel from './SessionMemoPanel'
+import SessionVisits from './SessionVisits'
 import ProfileCard from './ProfileCard'
 import { normalizeStatus } from './warden/constants'
 
@@ -252,6 +253,9 @@ export default function GuardWork({ userId }) {
               </div>
             </div>
           </div>
+
+          {/* === 本場廣播(指定由我執行的,唯讀) === */}
+          <SessionVisits sessionId={session.id} userId={userId} role="guard" />
 
           {/* === 底部:本場獄卒(頭貼格狀,同犯人端) === */}
           <div className="card-panel">

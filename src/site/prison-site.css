@@ -337,11 +337,16 @@
   background:transparent; border:1px solid var(--steel); color:var(--dim)}
 
 @media(max-width:720px){
-  /* 手機收掉桌機列,改用漢堡選單跳區段 */
-  .dp-site nav{gap:14px}
+  /* 手機收掉桌機列,改用漢堡選單跳區段;導覽列各件縮小避免 375px 寬溢出 */
+  .dp-site nav{gap:10px; padding:0 14px}
+  .dp-site nav .brand{font-size:17px}
   .dp-site nav .links{margin-left:auto; gap:0}
   .dp-site nav .links a{display:none}
-  .dp-site .nav-burger{display:inline-flex}
+  .dp-site nav .nav-entries{gap:8px}
+  .dp-site .nav-access{font-size:10px; padding:6px 8px; letter-spacing:1px}
+  .dp-site .nav-dc{width:30px; height:30px}
+  .dp-site .nav-dc svg{width:17px; height:17px}
+  .dp-site .nav-burger{display:inline-flex; width:34px; height:34px; margin-left:0}
   /* 全寬下拉面板:固定於 nav 下方,頂部 hazard 黃線 */
   .dp-site .nav-drawer{
     display:flex; flex-direction:column;

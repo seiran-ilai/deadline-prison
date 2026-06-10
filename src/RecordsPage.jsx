@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { normalizeStatus, SESSION_STATUS_LABEL } from './warden/constants'
 
 // 「服刑紀錄」分頁:依登入者角色顯示不同內容,一律「新→舊」排序(依場次日期,缺則 created_at)。
 //   犯人(member)— 我參加過的每一場:場次資訊 + 本場身分 + 那場我的專屬獄卒 + 我挑的目標稿名 + 探監(預留)。
@@ -11,7 +12,8 @@ const SESS_COLS = 'id, title, session_date, total_rounds, status, created_at'
 const dateKey = (s) => new Date(s?.session_date ?? s?.created_at ?? 0).getTime()
 const byDateDesc = (a, b) => dateKey(b.session) - dateKey(a.session)
 const sessionDate = (s) => (s?.session_date ? String(s.session_date).slice(0, 10) : '未定')
-const statusLabel = (s) => (s?.status === 'open' ? '進行中' : '已結束')
+// 場次五態標籤(相容過渡期舊值 open/closed,統一走 normalizeStatus)
+const statusLabel = (s) => SESSION_STATUS_LABEL[normalizeStatus(s)] ?? '已結束'
 const roleInSessionLabel = (r) => (r === 'guard' ? '獄卒' : '犯人')
 const guardName = (p) => p?.game_name ?? p?.display_name ?? '（未知）'
 
@@ -52,12 +54,20 @@ async function loadMember(userId) {
   for (const g of goals ?? [])
     (goalsBySi[g.session_inmate_id] ??= []).push(titleById[g.manuscript_id] ?? '（稿件已不存在）')
 
-  // 收到的探監(visits inmate_id=我,本場;新→舊)
+  // 收到的探監(visits inmate_id=我,本場;新→舊;含指定獄卒)
   const { data: visits } = await supabase.from('visits')
-    .select('id, session_id, visitor_name, message, created_at')
+    .select('id, session_id, guard_id, visitor_name, message, created_at')
     .eq('inmate_id', userId).in('session_id', sessionIds).order('created_at', { ascending: false })
+  // 探監指定獄卒的顯示名(與專屬獄卒共用 guardById 名字快取)
+  const vGuardIds = [...new Set((visits ?? []).map(v => v.guard_id).filter(Boolean).filter(id => !guardById[id]))]
+  if (vGuardIds.length) {
+    const { data: vgp } = await supabase.from('profiles')
+      .select('id, game_name, display_name').in('id', vGuardIds)
+    for (const p of vgp ?? []) guardById[p.id] = p
+  }
   const visitsBySession = {}
-  for (const v of visits ?? []) (visitsBySession[v.session_id] ??= []).push(v)
+  for (const v of visits ?? [])
+    (visitsBySession[v.session_id] ??= []).push({ ...v, guard_name: v.guard_id ? guardName(guardById[v.guard_id]) : null })
 
   return si.map(r => ({
     key: r.id,
@@ -138,7 +148,7 @@ function RecHead({ rec, showRole }) {
         </span>
       )}
       <span className="spacer" />
-      <span className={`tag tag-pill rec-status ${s.status === 'open' ? 'open' : 'ended'}`}>{statusLabel(s)}</span>
+      <span className={`tag tag-pill rec-status ${normalizeStatus(s) === 'ended' ? 'ended' : 'open'}`}>{statusLabel(s)}</span>
     </div>
   )
 }
@@ -154,19 +164,53 @@ export default function RecordsPage({ userId, role }) {
   const isStaff = role === 'guard' || role === 'warden'
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
+  const [myRows, setMyRows] = useState([])        // warden 專用:自己親自參與的場次(與全監總覽分開)
   const [summary, setSummary] = useState(null)    // my_record_summary 結果
   const [topGuards, setTopGuards] = useState([])  // my_top_guards 結果(並列最高)
+  const [visitLog, setVisitLog] = useState(null)  // 過去廣播紀錄 modal:null=關閉,{loading, rows}
 
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const result = role === 'warden' ? await loadWarden()
-        : role === 'guard' ? await loadGuard(userId)
-          : await loadMember(userId)
+      if (role === 'warden') {
+        // 典獄長:全監總覽 + 自己的參與紀錄分開載(總覽是全場次,不代表本人參加過)
+        const [all, mine] = await Promise.all([loadWarden(), loadMember(userId)])
+        if (alive) { setRows(all); setMyRows(mine); setLoading(false) }
+        return
+      }
+      const result = role === 'guard' ? await loadGuard(userId) : await loadMember(userId)
       if (alive) { setRows(result); setLoading(false) }
     })()
     return () => { alive = false }
   }, [userId, role])
+
+  // 過去廣播紀錄(收到的全部探監,跨場次新→舊;點「收到探監」統計卡開啟)
+  async function openVisitLog() {
+    setVisitLog({ loading: true, rows: [] })
+    const { data: vs } = await supabase.from('visits')
+      .select('id, session_id, guard_id, visitor_name, message, created_at')
+      .eq('inmate_id', userId).order('created_at', { ascending: false })
+    const sessIds = [...new Set((vs ?? []).map(v => v.session_id))]
+    const sessById = {}
+    if (sessIds.length) {
+      const { data: ss } = await supabase.from('sessions').select('id, title, session_date').in('id', sessIds)
+      for (const s of ss ?? []) sessById[s.id] = s
+    }
+    const gIds = [...new Set((vs ?? []).map(v => v.guard_id).filter(Boolean))]
+    const gById = {}
+    if (gIds.length) {
+      const { data: gp } = await supabase.from('profiles').select('id, game_name, display_name').in('id', gIds)
+      for (const p of gp ?? []) gById[p.id] = p
+    }
+    setVisitLog({
+      loading: false,
+      rows: (vs ?? []).map(v => ({
+        ...v,
+        session: sessById[v.session_id],
+        guard_name: v.guard_id ? guardName(gById[v.guard_id]) : null,
+      })),
+    })
+  }
 
   // 個人統整(security definer RPC;回傳可能是單列或單元素陣列,兩種都接)
   useEffect(() => {
@@ -198,10 +242,11 @@ export default function RecordsPage({ userId, role }) {
             <div className="rec-stat-num" title="依場次規劃輪數估算，非實際工時">{fmtRounds(summary.total_rounds)}</div>
             <div className="rec-stat-lbl">累計服刑時數（估算）</div>
           </div>
-          <div className="rec-stat">
+          {/* 點擊開「過去廣播紀錄」modal(跨場次全部探監) */}
+          <button type="button" className="rec-stat rec-stat-btn" onClick={openVisitLog} title="點擊查看過去廣播紀錄">
             <div className="rec-stat-num">{summary.visits_received ?? 0}</div>
-            <div className="rec-stat-lbl">收到探監</div>
-          </div>
+            <div className="rec-stat-lbl">收到探監 ▸</div>
+          </button>
           {isStaff && (
             <div className="rec-stat">
               <div className="rec-stat-num">{summary.guard_count ?? 0}</div>
@@ -219,55 +264,102 @@ export default function RecordsPage({ userId, role }) {
         </p>
       )}
 
-      {loading ? <p className="empty">讀取服刑紀錄中…</p>
-        : rows.length === 0 ? <p className="empty">{role === 'warden' ? '目前沒有任何場次' : '你還沒有任何服刑紀錄'}</p>
-          : role === 'warden' ? rows.map(rec => (
-            <div key={rec.key} className="rec-card">
-              <RecHead rec={rec} showRole={false} />
-              <div className="rec-body">
-                <div className="rec-row"><span className="rec-k">犯人</span><span className="rec-v">{rec.inmates} 人</span></div>
-                <div className="rec-row"><span className="rec-k">獄卒</span><span className="rec-v">{rec.guards} 人</span></div>
+      {(() => {
+        // 犯人視角的紀錄卡(典獄長「我的參與紀錄」區共用同一張卡)
+        const memberCard = (rec) => (
+          <div key={rec.key} className="rec-card">
+            <RecHead rec={rec} showRole={true} />
+            <div className="rec-body">
+              <div className="rec-row">
+                <span className="rec-k">專屬獄卒</span>
+                <span className="rec-v">{rec.guards.length ? rec.guards.map(guardName).join('、') : '無'}</span>
+              </div>
+              <div className="rec-row">
+                <span className="rec-k">本場目標</span>
+                <span className="rec-v">{rec.goalTitles.length ? rec.goalTitles.join('、') : '未挑稿'}</span>
+              </div>
+              <div className="rec-row">
+                <span className="rec-k">收到的探監</span>
+                <span className="rec-v">
+                  {rec.visits.length === 0
+                    ? <span className="faint">本場無人探監</span>
+                    : <span className="rec-visits">
+                        {rec.visits.map(v => (
+                          <span key={v.id} className="rec-visit">
+                            💌 {v.visitor_name}:{v.message}
+                            {v.guard_name && <span className="faint">（🛡 {v.guard_name}）</span>}
+                          </span>
+                        ))}
+                      </span>}
+                </span>
               </div>
             </div>
-          ))
-            : role === 'guard' ? rows.map(rec => (
+          </div>
+        )
+
+        if (loading) return <p className="empty">讀取服刑紀錄中…</p>
+        if (role === 'warden') return (
+          <>
+            {/* 我的參與紀錄:只列我真的在場(session_inmates)的場次 */}
+            <h4 className="rec-sec">我的參與紀錄</h4>
+            {myRows.length === 0
+              ? <p className="empty">你還沒有親自下場的服刑紀錄</p>
+              : myRows.map(memberCard)}
+            {/* 全監場次總覽:所有場次的營運視角,非個人參與紀錄 */}
+            <h4 className="rec-sec">全監場次總覽</h4>
+            {rows.length === 0 ? <p className="empty">目前沒有任何場次</p> : rows.map(rec => (
               <div key={rec.key} className="rec-card">
-                <RecHead rec={rec} showRole={true} />
+                <RecHead rec={rec} showRole={false} />
                 <div className="rec-body">
-                  <div className="rec-row">
-                    <span className="rec-k">看守的犯人</span>
-                    <span className="rec-v">{rec.guarded.length ? rec.guarded.map(guardName).join('、') : '本場無指派'}</span>
-                  </div>
+                  <div className="rec-row"><span className="rec-k">犯人</span><span className="rec-v">{rec.inmates} 人</span></div>
+                  <div className="rec-row"><span className="rec-k">獄卒</span><span className="rec-v">{rec.guards} 人</span></div>
                 </div>
               </div>
-            ))
-              : rows.map(rec => (
-                <div key={rec.key} className="rec-card">
-                  <RecHead rec={rec} showRole={true} />
-                  <div className="rec-body">
-                    <div className="rec-row">
-                      <span className="rec-k">專屬獄卒</span>
-                      <span className="rec-v">{rec.guards.length ? rec.guards.map(guardName).join('、') : '無'}</span>
-                    </div>
-                    <div className="rec-row">
-                      <span className="rec-k">本場目標</span>
-                      <span className="rec-v">{rec.goalTitles.length ? rec.goalTitles.join('、') : '未挑稿'}</span>
-                    </div>
-                    <div className="rec-row">
-                      <span className="rec-k">收到的探監</span>
-                      <span className="rec-v">
-                        {rec.visits.length === 0
-                          ? <span className="faint">本場無人探監</span>
-                          : <span className="rec-visits">
-                              {rec.visits.map(v => (
-                                <span key={v.id} className="rec-visit">💌 {v.visitor_name}:{v.message}</span>
-                              ))}
-                            </span>}
-                      </span>
-                    </div>
+            ))}
+          </>
+        )
+        if (rows.length === 0) return <p className="empty">你還沒有任何服刑紀錄</p>
+        if (role === 'guard') return rows.map(rec => (
+          <div key={rec.key} className="rec-card">
+            <RecHead rec={rec} showRole={true} />
+            <div className="rec-body">
+              <div className="rec-row">
+                <span className="rec-k">看守的犯人</span>
+                <span className="rec-v">{rec.guarded.length ? rec.guarded.map(guardName).join('、') : '本場無指派'}</span>
+              </div>
+            </div>
+          </div>
+        ))
+        return rows.map(memberCard)
+      })()}
+
+      {/* 過去廣播紀錄 modal:收到的全部探監(跨場次,新→舊) */}
+      {visitLog && (
+        <div className="admin-modal-bg" onClick={() => setVisitLog(null)}>
+          <div className="admin-modal visitlog-modal" onClick={e => e.stopPropagation()}>
+            <div className="goal-modal-head">
+              <h3>收到的探監廣播</h3>
+              <button className="goal-modal-x" onClick={() => setVisitLog(null)}>✕</button>
+            </div>
+            {visitLog.loading ? <p className="empty">讀取廣播紀錄中…</p>
+              : visitLog.rows.length === 0 ? <p className="empty">還沒有收到任何探監廣播</p>
+                : (
+                  <div className="visit-list">
+                    {visitLog.rows.map(v => (
+                      <div key={v.id} className="visit-row">
+                        <div className="visit-text">
+                          <span className="visit-meta">{String(v.created_at).slice(0, 10)} · {v.session?.title ?? '（場次已刪除）'}</span>
+                          <span className="visit-who">💌 {v.visitor_name}</span>
+                          <span className="visit-body">「{v.message}」</span>
+                          {v.guard_name && <span className="visit-guard">🛡 指定獄卒：{v.guard_name}</span>}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
+                )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

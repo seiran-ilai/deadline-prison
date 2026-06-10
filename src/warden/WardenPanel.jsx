@@ -19,16 +19,18 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
   const [wtab, setWtab] = useState('overview')           // 主控台子頁籤
   const [editingMember, setEditingMember] = useState(null) // 編輯中的犯人資料(modal)
 
-  // 共用資料:全部 profiles / 未結束場次(供「進行中場次」控台用)
-  // 五態下不再以 status='open' 過濾,改抓全部再排除 normalizeStatus 為 ended 者(相容舊值 open/closed)
+  // 共用資料:全部 profiles / 進行中場次(供「進行中場次」控台用)
+  // 「進行中場次」只放「開始入場」之後的場次(intake/serving);
+  // booking/booking_paused 階段的操作在「場次總覽」分頁,不在此控台出現。
   async function load() {
     setLoading(true)
     const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, discord_account, avatar_url, role')
     const { data: sess } = await supabase.from('sessions').select('*').order('created_at', { ascending: false })
-    const live = (sess ?? []).filter(s => normalizeStatus(s) !== 'ended')
+    const live = (sess ?? []).filter(s => ['intake', 'serving'].includes(normalizeStatus(s)))
     setInmates(all ?? [])
     setSessions(live)
-    if (live.length && !currentSession) setCurrentSession(live[0].id)
+    // 目前選的場次若已不在清單(尚未入場/已結束)→ 改選第一個可用場次
+    setCurrentSession(prev => (live.some(s => s.id === prev) ? prev : (live[0]?.id ?? '')))
     setLoading(false)
   }
   useEffect(() => { load() }, [])

@@ -409,14 +409,16 @@
   background:transparent; border:1px solid var(--line-2); color:var(--dim)}
 
 /* ================= 服刑中畫面重排(身分卡直式 / 計時器主角 / 囚犯置頂)================= */
-/* 上排:身分卡 + 計時器 */
+/* 上排:身分卡 + 計時器。
+   身分卡用固定窄欄(240px),不再跟著寬螢幕一起變寬變空;剩餘寬度全給計時器(主角)。 */
 .admin .ses-top{display:grid; gap:14px; margin-bottom:14px; align-items:stretch}
-.admin .ses-top.prisoner{grid-template-columns:minmax(190px,1fr) minmax(190px,1fr) 1.6fr}
-.admin .ses-top.guard{grid-template-columns:minmax(220px,1fr) 2fr}
+.admin .ses-top.prisoner{grid-template-columns:240px 240px 1fr}
+.admin .ses-top.guard{grid-template-columns:240px 1fr}
 
-/* 直式身分卡(頭像在上、文字置中在下;頭像正方 120×120 與本場獄卒卡一致)*/
+/* 直式身分卡(頭像在上、文字置中在下;頭像正方 120×120 與本場獄卒卡一致)
+   內容整體垂直置中:與計時器等高拉伸時,留白上下均分,不再擠在上半部留出大片空底。 */
 .admin .idcard{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px 16px;
-  display:flex; flex-direction:column; align-items:center; text-align:center; gap:9px}
+  display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:9px}
 .admin .idcard-stack{display:flex; flex-direction:column; gap:14px}
 .admin .idcard .id-av{width:120px; height:120px; border-radius:10px; flex:0 0 auto; overflow:hidden;
   display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:48px;
@@ -427,10 +429,9 @@
 .admin .idcard .id-no{font-family:var(--mono); font-size:12px; color:var(--dim); min-height:18px}
 .admin .idcard .id-nm{font-weight:700; font-size:17px; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap}
 .admin .idcard .id-watch{font-size:12px; color:var(--hazard); min-height:17px}
-/* 編輯鈕固定貼齊卡片底部(缺編輯鈕的卡片以等高 .id-spacer 留白撐住,不讓兩卡內容上下錯位) */
-.admin .idcard .id-edit{margin-top:auto}
-/* 無編輯鈕的卡(專屬獄卒):底部補等高留白,推到底以對齊並排卡片的底邊 */
-.admin .idcard .id-spacer{margin-top:auto; min-height:30px}
+/* 內容改為垂直置中後,編輯鈕/留白槽不再推底(margin-top:auto 會把其餘內容頂到上緣) */
+.admin .idcard .id-edit{margin-top:4px}
+.admin .idcard .id-spacer{display:none}
 .admin .idcard.me{border-color:var(--hazard-d)}
 .admin .idcard.me .id-av{background:rgba(245,197,24,.12); color:var(--hazard)}
 .admin .idcard.guardself{border-color:rgba(63,179,107,.4)}
@@ -456,8 +457,10 @@
 .admin .ses-timer .st-big{font-size:26px; font-weight:900; letter-spacing:2px; color:var(--text)}
 .admin .ses-timer .st-sub{color:var(--dim); font-family:var(--mono); font-size:13px; margin-top:6px}
 
-/* 中段兩欄 */
-.admin .ses-mid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:start}
+/* 中段兩欄:等高拉伸(兩欄內容量不同時,矮的一欄不再留出空底) */
+.admin .ses-mid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; align-items:stretch}
+.admin .ses-mid > .card-panel{display:flex; flex-direction:column}
+.admin .ses-mid > .card-panel > .body{flex:1}
 
 /* 囚犯列 */
 .admin .inmate{display:flex; align-items:center; gap:12px; padding:11px 12px; border-radius:6px; margin-bottom:8px;
@@ -568,6 +571,25 @@
 .admin .visit-row .visit-acts{display:flex; gap:6px; flex-wrap:wrap}
 .admin .visit-edit{flex:1; min-width:0; display:flex; flex-direction:column; gap:6px}
 .admin .visit-edit textarea{resize:vertical}
+/* 探監:指定獄卒(列表/本場廣播/紀錄 modal 共用)+ modal 列的日期場次小字 */
+.admin .visit-guard{font-size:12px; color:var(--ok); word-break:break-word}
+.admin .visit-meta{font-family:var(--mono); font-size:11px; color:var(--faint)}
+/* 已標記完成的廣播:淡化 + 完成標(不再輪播,僅留在主控台紀錄) */
+.admin .visit-row.done{opacity:.55}
+.admin .visit-done-tag{font-size:11px; font-weight:700; color:var(--ok); margin-left:8px;
+  background:rgba(63,179,107,.12); padding:1px 8px; border-radius:10px}
+
+/* 服刑紀錄:收到探監統計卡可點擊(開過去廣播紀錄)+ 典獄長視角分區標題 */
+.admin .rec-stat-btn{appearance:none; font:inherit; color:inherit; cursor:pointer; transition:border-color .15s}
+.admin .rec-stat-btn:hover{border-color:var(--hazard-d)}
+.admin .records-page .rec-sec{font-size:13px; letter-spacing:1.5px; color:var(--dim); margin:20px 0 10px;
+  display:flex; align-items:center; gap:10px}
+.admin .records-page .rec-sec::after{content:""; flex:1; height:1px; background:var(--line)}
+.admin-modal.visitlog-modal{width:560px; max-width:92vw; gap:12px}
+.admin-modal.visitlog-modal .visit-list{max-height:60vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px}
+.admin-modal.visitlog-modal .visit-row{display:flex; padding:10px 12px; border:1px solid rgba(255,255,255,.1);
+  border-radius:6px; background:#1d2127}
+.admin-modal.visitlog-modal .visit-text{display:flex; flex-direction:column; gap:3px; min-width:0}
 
 @media (max-width:600px){
   .admin .ov-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px}

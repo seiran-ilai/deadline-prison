@@ -26,8 +26,8 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   const [goalModalInmate, setGoalModalInmate] = useState(null) // 開啟「新增本場目標」modal 的犯人 roster row(null=關閉)
   const [goalExpanded, setGoalExpanded] = useState([])   // 展開中的目標(session_goals.id)
   const [visits, setVisits] = useState([])               // 本場探監(新→舊)
-  const [vForm, setVForm] = useState({ inmate_id: '', visitor_name: '', message: '' }) // 探監登錄表單
-  const [editingVisit, setEditingVisit] = useState(null) // inline 編輯中的探監 {id, visitor_name, message}
+  const [vForm, setVForm] = useState({ inmate_id: '', guard_id: '', visitor_name: '', message: '' }) // 探監登錄表單(guard_id 選填)
+  const [editingVisit, setEditingVisit] = useState(null) // inline 編輯中的探監 {id, guard_id, visitor_name, message}
 
   async function loadRoster(sid) {
     if (!sid) { setRoster([]); return }
@@ -81,7 +81,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   async function loadVisits(sid) {
     if (!sid) return
     const { data } = await supabase.from('visits')
-      .select('id, inmate_id, visitor_name, message, created_at')
+      .select('id, inmate_id, guard_id, visitor_name, message, is_done, created_at')
       .eq('session_id', sid).order('created_at', { ascending: false })
     setVisits(data ?? [])
   }
@@ -91,12 +91,20 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     ;(async () => {
       if (!currentSession) return
       const { data } = await supabase.from('visits')
-        .select('id, inmate_id, visitor_name, message, created_at')
+        .select('id, inmate_id, guard_id, visitor_name, message, is_done, created_at')
         .eq('session_id', currentSession).order('created_at', { ascending: false })
       if (alive) setVisits(data ?? [])
     })()
     return () => { alive = false }
   }, [currentSession])
+
+  // 標記完成/恢復:完成的廣播停止輪播(直播大螢幕、犯人/獄卒「本場廣播」都只取未完成)
+  async function toggleVisitDone(v) {
+    const { error } = await supabase.from('visits').update({ is_done: !v.is_done }).eq('id', v.id)
+    if (error) { setMsg('更新失敗：' + error.message); return }
+    setMsg(v.is_done ? '已恢復輪播' : '已標記完成，停止輪播')
+    loadVisits(currentSession)
+  }
 
   async function addVisit() {
     if (!vForm.inmate_id || !vForm.visitor_name.trim() || !vForm.message.trim()) {
@@ -104,16 +112,17 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     }
     const { error } = await supabase.from('visits').insert({
       session_id: currentSession, inmate_id: vForm.inmate_id,
+      guard_id: vForm.guard_id || null,   // 慰問品互動指定獄卒(選填)
       visitor_name: vForm.visitor_name.trim(), message: vForm.message.trim(),
     })
     if (error) { setMsg('登錄探監失敗：' + error.message); return }
-    setMsg('已登錄探監'); setVForm({ inmate_id: '', visitor_name: '', message: '' }); loadVisits(currentSession)
+    setMsg('已登錄探監'); setVForm({ inmate_id: '', guard_id: '', visitor_name: '', message: '' }); loadVisits(currentSession)
   }
 
   async function saveVisitEdit() {
     if (!editingVisit.visitor_name.trim() || !editingVisit.message.trim()) { setMsg('探監者與內容不可空白'); return }
     const { error } = await supabase.from('visits')
-      .update({ visitor_name: editingVisit.visitor_name.trim(), message: editingVisit.message.trim() })
+      .update({ visitor_name: editingVisit.visitor_name.trim(), message: editingVisit.message.trim(), guard_id: editingVisit.guard_id || null })
       .eq('id', editingVisit.id)   // updated_at 由觸發器自動更新
     if (error) { setMsg('更新探監失敗：' + error.message); return }
     setMsg('已更新探監'); setEditingVisit(null); loadVisits(currentSession)
@@ -230,8 +239,9 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     loadRoster(currentSession)
   }
   const currentSessionObj = sessions.find(s => s.id === currentSession)
-  // 探監用:本場犯人(下拉選項)+ member_id → profile(列表顯示犯人名)
+  // 探監用:本場犯人/獄卒(下拉選項)+ member_id → profile(列表顯示犯人名/獄卒名)
   const inmateRoster = roster.filter(r => r.role_in_session !== 'guard')
+  const guardRosterAll = roster.filter(r => r.role_in_session === 'guard')
   const profByMember = {}; for (const r of roster) profByMember[r.member_id] = r.profile
 
   return (
@@ -428,6 +438,14 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                   </option>
                 ))}
               </select>
+              <select className="sel" value={vForm.guard_id} onChange={e => setVForm({ ...vForm, guard_id: e.target.value })}>
+                <option value="">— 指定獄卒（選填）—</option>
+                {guardRosterAll.map(r => (
+                  <option key={r.id} value={r.member_id}>
+                    {r.profile?.game_name ?? r.profile?.display_name ?? '?'}{r.profile?.role === 'warden' ? '（典獄長）' : ''}
+                  </option>
+                ))}
+              </select>
               <input className="inp" placeholder="探監者名字" value={vForm.visitor_name}
                 onChange={e => setVForm({ ...vForm, visitor_name: e.target.value })} />
               <div className="visit-msg-field">
@@ -444,14 +462,25 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               <div className="visit-list">
                 {visits.map(v => {
                   const ip = profByMember[v.inmate_id]
+                  const gp = v.guard_id ? profByMember[v.guard_id] : null
                   const inmateName = ip?.game_name ?? ip?.display_name ?? '（已離場）'
+                  const guardName = v.guard_id ? (gp?.game_name ?? gp?.display_name ?? '（已離場）') : null
                   const isEditing = editingVisit?.id === v.id
                   return (
-                    <div key={v.id} className="visit-row">
+                    <div key={v.id} className={`visit-row${v.is_done ? ' done' : ''}`}>
                       {isEditing ? (
                         <div className="visit-edit">
                           <input className="inp" placeholder="探監者" value={editingVisit.visitor_name}
                             onChange={e => setEditingVisit({ ...editingVisit, visitor_name: e.target.value })} />
+                          <select className="sel" value={editingVisit.guard_id ?? ''}
+                            onChange={e => setEditingVisit({ ...editingVisit, guard_id: e.target.value })}>
+                            <option value="">— 指定獄卒（選填）—</option>
+                            {guardRosterAll.map(r => (
+                              <option key={r.id} value={r.member_id}>
+                                {r.profile?.game_name ?? r.profile?.display_name ?? '?'}{r.profile?.role === 'warden' ? '（典獄長）' : ''}
+                              </option>
+                            ))}
+                          </select>
                           <textarea className="inp" rows={2} maxLength={80} placeholder="內容" value={editingVisit.message}
                             onChange={e => setEditingVisit({ ...editingVisit, message: e.target.value })} />
                           <div className="visit-acts">
@@ -462,12 +491,17 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                       ) : (
                         <>
                           <div className="visit-text">
-                            <span className="visit-who">💌 {v.visitor_name} → No.{ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'} {inmateName}</span>
+                            <span className="visit-who">
+                              💌 {v.visitor_name} → No.{ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'} {inmateName}
+                              {v.is_done && <span className="visit-done-tag">✓ 已完成</span>}
+                            </span>
                             <span className="visit-body">「{v.message}」</span>
+                            {guardName && <span className="visit-guard">🛡 指定獄卒：{guardName}</span>}
                           </div>
                           <span className="spacer" />
                           <div className="visit-acts">
-                            <button className="btn-sm" onClick={() => setEditingVisit({ id: v.id, visitor_name: v.visitor_name, message: v.message })}>編輯</button>
+                            <button className="btn-sm" onClick={() => toggleVisitDone(v)}>{v.is_done ? '恢復輪播' : '標記完成'}</button>
+                            <button className="btn-sm" onClick={() => setEditingVisit({ id: v.id, guard_id: v.guard_id ?? '', visitor_name: v.visitor_name, message: v.message })}>編輯</button>
                             <button className="btn-sm btn-danger" onClick={() => deleteVisit(v.id)}>刪除</button>
                           </div>
                         </>

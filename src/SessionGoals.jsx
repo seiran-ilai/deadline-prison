@@ -5,6 +5,7 @@ import MessageBanner from './MessageBanner'
 import SessionStatus from './SessionStatus'
 import { computeProgress, goalStatusLabel } from './progress'
 import ProfileCard from './ProfileCard'
+import SessionVisits from './SessionVisits'
 import { normalizeStatus } from './warden/constants'
 
 // 同囚列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
@@ -436,6 +437,9 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       </div>
 
       </div>{/* === /中段兩欄 === */}
+
+      {/* === 本場廣播(探望我的,唯讀) === */}
+      <SessionVisits sessionId={session.id} userId={userId} role="inmate" />
 
       {/* === 底部:本場獄卒(頭貼格狀) === */}
       <div className="card-panel sg-section">
