@@ -305,7 +305,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               )}
 
               {staffCandidates.length === 0 ? (
-                <p className="empty">沒有可加入的獄卒（沒有符合的 staff，或搜尋無結果）</p>
+                <p className="empty">沒有可加入的獄卒（名單中沒有符合的人選，或搜尋無結果）</p>
               ) : staffCandidates.map(p => {
                 const inSession = guardMemberIds.includes(p.id)
                 return (
@@ -321,7 +321,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                   </div>
                 )
               })}
-              <div className="note">候選為全域獄卒 / 典獄長；犯人由「開始入場」自動帶入，或用右側「重新帶入預約名單」補帶。</div>
+              <div className="note">名單僅列出獄卒／典獄長身分的人員；犯人會在「開始入場」時自動帶入，也可用右側「重新帶入預約名單」補上。</div>
             </>)}
           </div>
         </div>
@@ -531,7 +531,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               </div>
               {available.length === 0 ? (
                 <div className="goal-modal-empty">
-                  <p className="warn">沒有可挑的 active 稿件（都挑進來了，或先到「我的稿件」新增）</p>
+                  <p className="warn">沒有可以加入的稿件，請到「我的稿件」新增</p>
                   {onGoToManuscripts && (
                     <button className="btn-pri" onClick={() => { setGoalModalInmate(null); onGoToManuscripts() }}>前往我的稿件</button>
                   )}

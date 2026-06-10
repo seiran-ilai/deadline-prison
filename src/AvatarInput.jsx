@@ -74,7 +74,7 @@ export default function AvatarInput({ value, onChange, userId }) {
         .upload(path, blob, { cacheControl: '3600', upsert: false, contentType: 'image/jpeg' })
       if (error) {
         setUploading(false)
-        setErr('上傳失敗：' + error.message + '（若是 Bucket not found，請先執行 avatars bucket 的 SQL)')
+        setErr('上傳失敗，請稍後再試（' + error.message + '）')
         return
       }
       const { data } = supabase.storage.from('avatars').getPublicUrl(path)

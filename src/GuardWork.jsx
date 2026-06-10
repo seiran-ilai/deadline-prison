@@ -154,7 +154,7 @@ export default function GuardWork({ userId }) {
 
       {!myInmate ? (
         <div className="card-panel"><div className="body">
-          <p className="empty" style={{ textAlign: 'center' }}>你目前不在任何服刑場次中，請等典獄長報到為本場獄卒</p>
+          <p className="empty" style={{ textAlign: 'center' }}>你目前不在任何進行中的場次，請等待典獄長將你加入為本場獄卒</p>
         </div></div>
       ) : (
         <>

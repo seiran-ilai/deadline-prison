@@ -167,7 +167,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
       <div className="toolbar">
         <input className="inp" placeholder="場次名（如 6/14 晚場）" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
         <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
-        <input type="number" min="1" placeholder="人數上限（空=不限）" value={newCap} onChange={e => setNewCap(e.target.value)} style={{ width: 160 }} />
+        <input type="number" min="1" placeholder="人數上限（留空＝不限）" value={newCap} onChange={e => setNewCap(e.target.value)} style={{ width: 160 }} />
         <label><input type="checkbox" checked={newPublic} onChange={e => setNewPublic(e.target.checked)} />對外公開</label>
         <button className="btn-pri" onClick={openNew}>開新場次</button>
       </div>
@@ -185,7 +185,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                 <div className="row-head">
                   <input className="inp" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                   <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
-                  <input type="number" min="1" placeholder="上限（空=不限）" value={editCap} onChange={e => setEditCap(e.target.value)} style={{ width: 130 }} />
+                  <input type="number" min="1" placeholder="上限（留空＝不限）" value={editCap} onChange={e => setEditCap(e.target.value)} style={{ width: 130 }} />
                   <label><input type="checkbox" checked={editPublic} onChange={e => setEditPublic(e.target.checked)} />對外公開</label>
                   <button onClick={() => saveEdit(s.id)}>儲存</button>
                   <button onClick={cancelEdit}>取消</button>

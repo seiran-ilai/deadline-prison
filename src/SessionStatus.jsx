@@ -86,7 +86,7 @@ export default function SessionStatus({ userId }) {
   const { session, role, hasGuard, hasInmates } = data
 
   // 階段1:還沒報到進任何未結束場次 → 統一文字
-  if (!session) return <TimerWaiting text="等待身分核對" sub="尚未被報到進任何場次，請等典獄長報到" />
+  if (!session) return <TimerWaiting text="等待身分核對" sub="尚未加入任何場次，請等待典獄長為你報到" />
 
   // 狀態一律看 normalizeStatus,不再用 timer_started_at 有無當狀態判斷
   const ds = normalizeStatus(session)

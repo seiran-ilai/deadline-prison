@@ -132,7 +132,7 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
               </div>
               {available.length === 0 ? (
                 <div className="goal-modal-empty">
-                  <p className="warn">沒有可挑的 active 稿件（都排進來了，或先到「我的稿件」新增）</p>
+                  <p className="warn">沒有可以加入的稿件，請到「我的稿件」新增</p>
                   {onGoToManuscripts && <button className="btn-pri" onClick={() => { setPickFor(null); onGoToManuscripts() }}>前往我的稿件</button>}
                 </div>
               ) : (
