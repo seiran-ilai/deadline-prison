@@ -29,6 +29,12 @@ const CSS = `
 .dpl-fill.dpl-indet{width:38%;animation:dpl-haz 1s linear infinite,dpl-indet 1.5s ease-in-out infinite}
 .dpl-sheen{position:absolute;top:0;left:0;height:100%;width:60px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:dpl-sheen 1.4s linear infinite}
 .dpl-footer{margin-top:14px;opacity:0;animation:dpl-up .5s ease-out 1s both}
+.dpl-gate{display:flex;flex-direction:column;align-items:center;gap:15px}
+.dpl-privacy{margin-top:2px;text-align:center;font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",ui-sans-serif,sans-serif;color:#7c7d72;font-size:12.5px;line-height:1.85}
+.dpl-privacy .dpl-pv-t{display:block;font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em;color:#5f6157;margin-bottom:7px}
+.dpl-privacy p{margin:0;white-space:nowrap}
+.dpl-back{display:inline-block;padding:8px 18px;border:1px solid rgba(207,202,187,.22);border-radius:3px;background:transparent;color:#9a9b90;font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-decoration:none;cursor:pointer;transition:border-color .2s ease,color .2s ease}
+.dpl-back:hover{border-color:rgba(232,182,0,.55);color:#cfcabb}
 @keyframes dpl-scan{0%{top:-30%}100%{top:120%}}
 @keyframes dpl-haz{0%{background-position:0 0}100%{background-position:34px 0}}
 @keyframes dpl-blink{0%,55%{opacity:1}56%,100%{opacity:.18}}

@@ -163,7 +163,15 @@ function App() {
 
   if (!user) return (
     <DeadlinePrisonLoader status="等候收容" statusEn="AWAITING INTAKE" procLabel="身分核對">
-      <button className="btn-pri" onClick={signIn}>用 Discord 入獄</button>
+      <div className="dpl-gate">
+        <button className="btn-pri" onClick={signIn}>用 Discord 入獄</button>
+        <div className="dpl-privacy">
+          <span className="dpl-pv-t">隱私說明</span>
+          <p>・我們只取用你的 Discord 使用者名稱與 ID,用來建立個人資料、避免重複註冊。</p>
+          <p>・Discord 授權會要求頭像、橫幅與 email,但本監獄不會儲存或使用其中任何一項。</p>
+        </div>
+        <a className="dpl-back" href="/">← 回到監獄入口</a>
+      </div>
       {import.meta.env.DEV && (
         <div className="test-box">
           <p className="t-title">⚠️ 測試專用（僅開發模式）</p>
@@ -230,7 +238,7 @@ function App() {
   return (
     <div className="admin">
       <div className="topbar">
-        <div className="logo">死線<b>監獄</b></div>
+        <a className="logo" href="/" title="回到監獄入口">死線<b>監獄</b></a>
         <div className="who">
           <span className="num">No.{String(profile.inmate_no).padStart(4, '0')}</span>
           {profile.game_name ?? profile.display_name}
