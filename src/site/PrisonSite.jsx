@@ -12,6 +12,64 @@ const RULES = [
   ['04', '刑滿釋放', '梯次結束即收尾放人。帶著趕完的稿離開——或自首下一場。'],
 ]
 
+// 營業項目價目(RP 店收費;費用單位 W)
+const PRICING = [
+  {
+    code: 'A', name: '基本入獄', sub: '自首', price: '50W', unit: '/ 人', featured: true,
+    desc: '自行前來報到入獄，含 2 小時監獄作業體驗。費用內含基本費 20W ＋ 保釋金 30W。',
+    bail: [
+      ['完成 100%', '退還 30W', '實付 20W'],
+      ['完成 50% 以上', '退還 15W', '實付 35W'],
+      ['低於 50%', '全額沒收', '實付 50W'],
+    ],
+    items: [
+      '入獄時自行登記今日目標（例：寫 2000 字、完成線稿）',
+      '出獄時自行回報進度＋截圖佐證，獄卒確認即可',
+      '所有紀錄計入「小本本」，影響排行榜成績',
+    ],
+  },
+  {
+    code: 'B', name: '監獄外抓捕', sub: '移監劇場', price: '30W', unit: '起',
+    desc: '想把朋友抓進監獄？由委託人下單付費，獄卒出動至指定地點，上演約 15 分鐘逮捕劇場（白頻演出）。',
+    items: [
+      '2 名獄卒出動 30W ／ 3 名 45W ／ 4 名 60W，每追加 1 人 +15W',
+      '需當事人配合前往店舖',
+      '不論最終是否到店，移監費皆不退還',
+    ],
+  },
+  {
+    code: 'B+A', name: '抓捕＋入獄套餐', sub: '一網打盡', price: '70W', was: '80W',
+    desc: '委託人一次包下「抓捕 2 人出動 ＋ 被捕者入獄費」，套餐省 10W。',
+    items: [
+      '被捕者保釋金制度照常運作',
+      '費用分攤由委託人與被捕者自行協商',
+      '抓捕需 3 人以上出動：套餐底價 70W ＋ 超出獄卒費（每 +1 人 +15W）',
+    ],
+  },
+  {
+    code: 'C', name: '探監', sub: '慰問服刑友人', price: '10W', unit: '/ 人',
+    desc: '探望正在服刑中的囚犯朋友。不佔囚犯名額，限當梯次營業時間內。',
+    items: [
+      '探監合照 ×1：在鐵欄內外與囚犯、獄卒合照',
+      '探監留言：替囚犯留下一段話，記入後台資料',
+      '慰問品互動：指定一名獄卒對囚犯即興演出（鼓勵系／責罵系）',
+      '進階客製化演出（如整人劇場、假裝放人結果沒有）可加購 5W',
+    ],
+  },
+  {
+    code: 'D', name: '刑期延長', sub: '自願續刑', price: '10W', unit: '/ hr',
+    desc: '2 小時刑期結束後，可申請自願續刑或由獄卒判定加刑（RP 演出）。',
+    items: [
+      '視獄卒排班狀況開放，不保證每次可用',
+      '延長時段的進度同樣計入保釋金判定，可逆轉結果',
+    ],
+  },
+]
+const PRICE_EXTRAS = [
+  ['拍立得合照', '5W / 張', '與指定獄卒合照，含手寫簽名小卡；限完成目標的囚犯購買'],
+  ['入獄肖像照', '80W', '入獄紀念肖像照'],
+]
+
 // 場次狀態徽章(依 public_sessions 的 display_status;後端已過濾已結束場)
 const SESS_STATUS = {
   booking:        { label: '預約中',   cls: 'booking' },  // 預約中(正向綠)
@@ -55,6 +113,7 @@ export default function PrisonSite() {
   const [myProfile, setMyProfile] = useState(null)   // 預約者既有 profile(暱稱/頭像來源判定)
   const [bkName, setBkName] = useState('')           // 入監暱稱(預設帶既有 game_name)
   const [bkAvatar, setBkAvatar] = useState('')       // 入監頭像 URL(預設帶既有 avatar_url)
+  const [menuOpen, setMenuOpen] = useState(false)    // 手機版漢堡選單開合
   const rootRef = useRef(null)
 
   const loadData = useCallback(async () => {
@@ -94,6 +153,9 @@ export default function PrisonSite() {
     const io = new IntersectionObserver(es => es.forEach(e => {
       if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
     }), { threshold: 0.15 })
+    // 同一 section 內的 .reveal 依出現順序遞增進場延遲(上限 280ms)
+    root.querySelectorAll('section').forEach(sec =>
+      sec.querySelectorAll('.reveal').forEach((el, i) => { el.style.transitionDelay = `${Math.min(i * 70, 280)}ms` }))
     root.querySelectorAll('.reveal').forEach(el => io.observe(el))
     const navIO = new IntersectionObserver(es => es.forEach(e => {
       if (e.isIntersecting) {
@@ -101,7 +163,7 @@ export default function PrisonSite() {
           a.classList.toggle('active', a.getAttribute('data-sec') === e.target.id))
       }
     }), { rootMargin: '-50% 0px -50% 0px' });
-    ['about', 'staff', 'wall', 'hall', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
+    ['about', 'staff', 'wall', 'hall', 'pricing', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
     return () => { io.disconnect(); navIO.disconnect() }
   }, [loading])
 
@@ -196,6 +258,7 @@ export default function PrisonSite() {
             <a data-sec="staff" onClick={() => scrollTo('staff')}>監獄人員</a>
             <a data-sec="wall" onClick={() => scrollTo('wall')}>犯人牆</a>
             <a data-sec="hall" onClick={() => scrollTo('hall')}>名人堂</a>
+            <a data-sec="pricing" onClick={() => scrollTo('pricing')}>收費價目</a>
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
           </div>
           <div className="nav-entries">
@@ -206,7 +269,31 @@ export default function PrisonSite() {
               </svg>
             </a>
           </div>
+          {/* 手機版漢堡按鈕(僅 720px 以下顯示) */}
+          <button
+            className="nav-burger"
+            aria-label="選單"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(o => !o)}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              {menuOpen
+                ? <><path d="M6 6l12 12" /><path d="M18 6 6 18" /></>
+                : <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>}
+            </svg>
+          </button>
         </nav>
+        {/* 手機版下拉面板:展開時全寬列出區段連結 */}
+        {menuOpen && (
+          <div className="nav-drawer">
+            {[
+              ['about', '服刑須知'], ['staff', '監獄人員'], ['wall', '犯人牆'],
+              ['hall', '名人堂'], ['pricing', '收費價目'], ['sessions', '趕稿場次'],
+            ].map(([id, label]) => (
+              <a key={id} onClick={() => { scrollTo(id); setMenuOpen(false) }}>{label}</a>
+            ))}
+          </div>
+        )}
         <div className="hazard thin" />
 
         {/* 首頁 */}
@@ -253,7 +340,7 @@ export default function PrisonSite() {
           </div>
         </section>
 
-        <div className="hazard" />
+        <div className="perforation" />
 
         {/* 監獄人員 */}
         <section id="staff">
@@ -301,7 +388,7 @@ export default function PrisonSite() {
           </div>
         </section>
 
-        <div className="hazard" />
+        <div className="perforation" />
 
         {/* 監獄名人堂(排行榜:慣犯榜 / 人氣榜) */}
         <section id="hall">
@@ -323,10 +410,11 @@ export default function PrisonSite() {
                     : (
                       <ol className="hall-list">
                         {board.rows.map(r => (
-                          <li className={`hall-row${r.rank <= 3 ? ' top' : ''}`} key={r.rank}>
+                          <li className={`hall-row${r.rank <= 3 ? ' top' : ''}${r.rank === 1 ? ' r1' : ''}`} key={r.rank}>
                             <span className="hall-rank">{r.rank}</span>
                             <span className={`hall-name${r.display_name ? '' : ' masked'}`}>
                               {r.display_name ?? '〔機密犯人〕'}
+                              {r.rank === 1 && <span className="hall-badge">重刑犯</span>}
                             </span>
                             <span className="hall-count">{r.count} 次</span>
                           </li>
@@ -340,9 +428,55 @@ export default function PrisonSite() {
 
         <div className="hazard" />
 
+        {/* 營業項目價目 */}
+        <section id="pricing">
+          <div className="eyebrow reveal">營業項目 <span className="blk">// BLOCK 05</span></div>
+          <h2 className="title reveal">收費價目</h2>
+          <p className="subline reveal">把自己關起來也要明碼標價。保釋金制度為增加體驗之設計，非強制消費；所有互動皆為角色扮演，請保持良好的 RP 禮儀。</p>
+          <div className="price-grid reveal">
+            {PRICING.map(c => (
+              <div className={`price-card${c.featured ? ' featured' : ''}`} key={c.code}>
+                <div className="price-head">
+                  <span className="price-code">{c.code}</span>
+                  <div className="price-name">
+                    <h4>{c.name}</h4>
+                    <span>{c.sub}</span>
+                  </div>
+                  <div className="price-tag">
+                    {c.was && <s>{c.was}</s>}
+                    <b>{c.price}</b>{c.unit && <em>{c.unit}</em>}
+                  </div>
+                </div>
+                <p className="price-desc">{c.desc}</p>
+                {c.bail && (
+                  <div className="price-bail">
+                    <div className="pb-lbl">保釋金退還規則</div>
+                    {c.bail.map(([cond, refund, paid]) => (
+                      <div className="pb-row" key={cond}><span>{cond}</span><b>{refund}</b><em>{paid}</em></div>
+                    ))}
+                  </div>
+                )}
+                <ul className="price-items">
+                  {c.items.map(t => <li key={t}>{t}</li>)}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="price-extras reveal">
+            <span className="px-lbl">加購</span>
+            {PRICE_EXTRAS.map(([name, price, desc]) => (
+              <div className="px-item" key={name}>
+                <b>{name}</b><span className="px-price">{price}</span><span className="px-desc">{desc}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="perforation" />
+
         {/* 趕稿場次 */}
         <section id="sessions">
-          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 05</span></div>
+          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 06</span></div>
           <h2 className="title reveal">近期趕稿場次</h2>
           <p className="subline reveal">選一個梯次自首入監。額滿停止收監，過期梯次已結案。</p>
           <div className="sessions reveal">
@@ -383,6 +517,7 @@ export default function PrisonSite() {
           <div className="f-brand">死線<b>監獄</b></div>
           <div className="f-sub">DEADLINE PRISON · 趕稿收容所 · since 2026</div>
           <div className="f-addr">服刑地點：巴哈姆特 - 薰衣草苗園 - 1區 - 18號</div>
+          <div className="f-stamp" aria-hidden="true">結案 · CLASSIFIED</div>
         </footer>
       </div>
 

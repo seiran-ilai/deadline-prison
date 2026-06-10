@@ -1,4 +1,6 @@
 /* 死線監獄形象官網視覺(工業拘留所)。全部 scoped 在 .dp-site 底下,不汙染主控台/犯人頁。 */
+/* 註冊 hero 探照燈掃描用的 custom property,讓 @keyframes 能平滑補間百分比 */
+@property --sx{ syntax:'<percentage>'; inherits:false; initial-value:30%; }
 :root{
   --concrete-0:#0c0d0f; --concrete-1:#131519; --concrete-2:#1b1e23;
   --concrete-3:#23272e; --panel:#191c21;
@@ -44,6 +46,11 @@
 /* 警示黃黑斜紋 */
 .dp-site .hazard{height:14px; background:repeating-linear-gradient(45deg,var(--hazard) 0 22px,#0a0a0a 22px 44px)}
 .dp-site .hazard.thin{height:8px}
+/* 穿孔虛線分隔(區段間較輕的節奏);左右各一圓孔 */
+.dp-site .perforation{height:0; max-width:1120px; margin:0 auto; border-top:1px dashed var(--steel); position:relative}
+.dp-site .perforation::before,.dp-site .perforation::after{content:""; position:absolute; top:-5px; width:8px; height:8px; border:1px solid var(--steel); background:var(--concrete-0); border-radius:50%}
+.dp-site .perforation::before{left:0}
+.dp-site .perforation::after{right:0}
 
 /* 導覽列 */
 .dp-site nav{
@@ -83,6 +90,11 @@
 }
 .dp-site .nav-dc:hover{color:var(--hazard); border-color:var(--hazard)}
 .dp-site .nav-dc svg{display:block}
+/* 手機版漢堡按鈕 + 下拉面板(桌機隱藏,僅 720px 以下顯示) */
+.dp-site .nav-burger{display:none; margin-left:14px; width:38px; height:38px; align-items:center; justify-content:center; background:transparent; border:1px solid var(--steel); color:var(--text); cursor:pointer; transition:color .2s, border-color .2s}
+.dp-site .nav-burger:hover{color:var(--hazard); border-color:var(--hazard)}
+.dp-site .nav-burger svg{display:block}
+.dp-site .nav-drawer{display:none}
 
 /* 通用區塊 */
 .dp-site section{padding:96px 28px; max-width:1120px; margin:0 auto; position:relative}
@@ -148,11 +160,21 @@
 .dp-site .roster{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px}
 .dp-site .card{background:var(--panel); border:1px solid var(--line); position:relative; overflow:hidden; transition:transform .18s, border-color .25s}
 .dp-site .card:hover{transform:translateY(-4px); border-color:var(--steel-2)}
-.dp-site .card .mug{height:200px; position:relative; display:flex; align-items:center; justify-content:center; background:var(--concrete-2); border-bottom:1px solid var(--line)}
-.dp-site .card .mug .initial{font-family:var(--stamp); font-size:74px; color:var(--steel)}
-.dp-site .card .mug img{width:100%; height:100%; object-fit:cover}
+.dp-site .card .mug{height:200px; position:relative; display:flex; align-items:center; justify-content:center; border-bottom:1px solid var(--line);
+  /* 拘留所身高背板:水平刻度細線(每 24px 一條)疊在水泥底上 */
+  background:repeating-linear-gradient(rgba(255,255,255,.05) 0 1px,transparent 1px 24px),var(--concrete-2)}
+/* 左側身高數字刻度(mono 小字);有照片時被蓋住,fallback 時可見 */
+.dp-site .card .mug::before{content:"180\A 160\A 140"; white-space:pre; position:absolute; left:6px; top:24px; z-index:0;
+  font-family:var(--mono); font-size:9px; line-height:40px; color:var(--faint); letter-spacing:1px; pointer-events:none}
+.dp-site .card .mug .initial{position:relative; z-index:1; font-family:var(--stamp); font-size:74px; color:var(--steel)}
+.dp-site .card .mug img{position:relative; z-index:1; width:100%; height:100%; object-fit:cover; filter:grayscale(.85) contrast(1.05); transition:filter .3s}
+.dp-site .card:hover .mug img{filter:grayscale(0) contrast(1.05)}
 .dp-site .card .body{padding:18px 18px 22px}
-.dp-site .card .role{font-family:var(--cond); font-size:17px; letter-spacing:2px; color:var(--hazard); margin-bottom:4px}
+/* 鐵牌樣式的職稱/編號標籤,左右各一鉚釘 */
+.dp-site .card .role{font-family:var(--cond); font-size:17px; letter-spacing:2px; color:var(--hazard); margin-bottom:8px;
+  display:inline-block; padding:3px 16px; background:var(--concrete-3); border:1px solid var(--steel);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  background-image:radial-gradient(circle at 6px 50%,rgba(255,255,255,.28) 0 1.6px,transparent 2px),radial-gradient(circle at calc(100% - 6px) 50%,rgba(255,255,255,.28) 0 1.6px,transparent 2px)}
 .dp-site .card h4{font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:10px}
 .dp-site .card .bio{font-size:13px; color:var(--dim); line-height:1.7}
 
@@ -167,8 +189,15 @@
 .dp-site .hall-row{display:flex; align-items:center; gap:14px; padding:11px 8px; border-bottom:1px solid var(--line)}
 .dp-site .hall-row:last-child{border-bottom:none}
 .dp-site .hall-rank{font-family:var(--stamp); font-size:20px; color:var(--steel-2); min-width:36px; text-align:center; line-height:1}
-.dp-site .hall-row.top .hall-rank{font-size:30px; color:var(--hazard)}
+/* 第 2、3 名:銀鋼色、略大 */
+.dp-site .hall-row.top .hall-rank{font-size:24px; color:var(--steel-2)}
+/* 第 1 名:鐵欄黃強調(黃條 + 左側 hazard 邊) */
+.dp-site .hall-row.r1{border-left:4px solid var(--hazard); background:linear-gradient(90deg,rgba(245,197,24,.07),transparent)}
+.dp-site .hall-row.r1 .hall-rank{font-size:30px; color:var(--hazard)}
 .dp-site .hall-name{flex:1; min-width:0; font-family:var(--cjk); font-size:15px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dp-site .hall-row.r1 .hall-name{display:flex; align-items:center; gap:8px}
+/* 第 1 名徽章 */
+.dp-site .hall-badge{flex:0 0 auto; font-family:var(--mono); font-size:10px; letter-spacing:2px; color:#0a0a0a; background:var(--hazard); padding:2px 6px}
 .dp-site .hall-name.masked{color:var(--dim); font-style:italic}
 .dp-site .hall-count{font-family:var(--mono); font-size:13px; color:var(--hazard); white-space:nowrap}
 .dp-site .hall-empty{color:var(--dim); font-size:14px}
@@ -180,15 +209,17 @@
 .dp-site .sess.open{border-left-color:var(--hazard)}
 .dp-site .sess.full{border-left-color:var(--alarm)}
 .dp-site .sess.ended{opacity:.42; border-left-color:var(--faint)}
-.dp-site .sess .when{font-family:var(--mono)}
+/* 日期欄包成檔案分頁感:鋼框 + 頂部 hazard 斜紋細條 */
+.dp-site .sess .when{font-family:var(--mono); position:relative; text-align:center; border:1px solid var(--line); background:var(--concrete-2); padding:12px 10px}
+.dp-site .sess .when::before{content:""; position:absolute; top:0; left:0; right:0; height:4px; background:repeating-linear-gradient(45deg,var(--hazard) 0 6px,#0a0a0a 6px 12px)}
 .dp-site .sess .when .d{font-size:26px; font-weight:700; color:var(--text); line-height:1}
 .dp-site .sess .when .m{font-size:12px; color:var(--dim); letter-spacing:2px; margin-top:4px}
 .dp-site .sess .meta .batch{font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--faint); margin-bottom:6px}
 .dp-site .sess .meta h4{font-family:var(--cjk); font-weight:700; font-size:21px; letter-spacing:1px; margin-bottom:8px}
 .dp-site .sess .meta .cap{font-family:var(--mono); font-size:12.5px; color:var(--dim); display:flex; align-items:center; gap:12px}
 .dp-site .sess .meta .cap .gauge{width:120px; height:6px; background:var(--concrete-0); border:1px solid var(--line); position:relative}
-.dp-site .sess .meta .cap .gauge i{position:absolute; inset:0 auto 0 0; background:var(--hazard)}
-.dp-site .sess.full .gauge i{background:var(--alarm)}
+.dp-site .sess .meta .cap .gauge i{position:absolute; inset:0 auto 0 0; background:repeating-linear-gradient(45deg,var(--hazard) 0 6px,var(--hazard-deep) 6px 12px)}
+.dp-site .sess.full .gauge i{background:repeating-linear-gradient(45deg,var(--alarm) 0 6px,#9e2a1e 6px 12px)}
 .dp-site .sess .act{text-align:right}
 .dp-site .tag-status{font-family:var(--cond); font-size:15px; letter-spacing:2px; padding:4px 10px; display:inline-block; margin-bottom:10px}
 .dp-site .tag-status.open{color:var(--hazard); border:1px solid var(--hazard-deep)}
@@ -206,12 +237,52 @@
 .dp-site .btn-book:not(:disabled):active{transform:translateY(1px)}
 .dp-site .btn-book:disabled{background:var(--concrete-3); color:var(--faint); cursor:not-allowed; transform:none}
 
+/* 營業項目價目 */
+.dp-site .price-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px}
+.dp-site .price-card{background:var(--panel); border:1px solid var(--line); border-top:3px solid var(--steel); padding:22px 22px 24px; display:flex; flex-direction:column; transition:transform .18s, border-color .25s}
+.dp-site .price-card:hover{transform:translateY(-4px); border-color:var(--steel-2); border-top-color:var(--steel-2)}
+.dp-site .price-card.featured{border-top-color:var(--hazard)}
+.dp-site .price-card.featured:hover{border-top-color:var(--hazard)}
+.dp-site .price-head{display:flex; align-items:flex-start; gap:14px; padding-bottom:14px; border-bottom:1px dashed var(--line); margin-bottom:14px}
+.dp-site .price-code{font-family:var(--stamp); font-size:26px; color:var(--steel); line-height:1.1; min-width:34px}
+.dp-site .price-card.featured .price-code{color:var(--hazard)}
+.dp-site .price-name{flex:1; min-width:0}
+.dp-site .price-name h4{font-family:var(--cjk); font-weight:700; font-size:19px; letter-spacing:1px; line-height:1.25}
+.dp-site .price-name span{font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--faint)}
+.dp-site .price-tag{text-align:right; font-family:var(--cond); white-space:nowrap}
+.dp-site .price-tag b{font-size:30px; color:var(--hazard); letter-spacing:1px; line-height:1}
+.dp-site .price-tag s{display:block; font-size:15px; color:var(--faint)}
+.dp-site .price-tag em{font-style:normal; font-size:13px; color:var(--dim); margin-left:4px; letter-spacing:1px}
+.dp-site .price-desc{font-size:13px; color:var(--dim); line-height:1.75; margin-bottom:14px}
+/* 保釋金退還規則小表(僅 A 卡) */
+.dp-site .price-bail{border:1px solid var(--line); background:var(--concrete-2); padding:12px 14px; margin-bottom:14px}
+.dp-site .price-bail .pb-lbl{font-family:var(--cond); font-size:15px; letter-spacing:2px; color:var(--hazard); margin-bottom:8px}
+.dp-site .price-bail .pb-row{display:flex; gap:10px; align-items:baseline; font-family:var(--mono); font-size:12px; padding:5px 0; border-bottom:1px dashed var(--line)}
+.dp-site .price-bail .pb-row:last-child{border-bottom:none}
+.dp-site .price-bail .pb-row span{flex:1; color:var(--dim)}
+.dp-site .price-bail .pb-row b{color:var(--text)}
+.dp-site .price-bail .pb-row em{font-style:normal; color:var(--faint)}
+.dp-site .price-items{list-style:none; margin-top:auto; display:flex; flex-direction:column; gap:7px}
+.dp-site .price-items li{font-size:12.5px; color:var(--dim); line-height:1.7; padding-left:14px; position:relative}
+.dp-site .price-items li::before{content:"▸"; position:absolute; left:0; color:var(--hazard-deep)}
+/* 加購列 */
+.dp-site .price-extras{margin-top:18px; border:1px solid var(--line); border-left:3px solid var(--hazard); background:rgba(255,255,255,.02); padding:16px 20px; display:flex; flex-wrap:wrap; gap:10px 28px; align-items:baseline}
+.dp-site .price-extras .px-lbl{font-family:var(--cond); font-size:16px; letter-spacing:3px; color:var(--hazard)}
+.dp-site .price-extras .px-item{display:flex; gap:10px; align-items:baseline; flex-wrap:wrap}
+.dp-site .price-extras .px-item b{font-family:var(--cjk); font-size:14px; color:var(--text)}
+.dp-site .price-extras .px-price{font-family:var(--mono); font-size:13px; color:var(--hazard); white-space:nowrap}
+.dp-site .price-extras .px-desc{font-size:12px; color:var(--faint)}
+
 /* 頁尾 */
-.dp-site footer{padding:60px 28px 40px; max-width:1120px; margin:0 auto; border-top:1px solid var(--line)}
+.dp-site footer{padding:60px 28px 40px; max-width:1120px; margin:0 auto; border-top:1px solid var(--line); position:relative}
 .dp-site footer .f-brand{font-family:var(--stamp); font-size:30px; letter-spacing:2px}
 .dp-site footer .f-brand b{color:var(--hazard); font-weight:400}
 .dp-site footer .f-sub{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:2px; margin-top:8px}
 .dp-site footer .f-addr{font-family:var(--mono); font-size:12px; color:var(--dim); letter-spacing:1px; margin-top:10px}
+/* 結案戳章:右側傾斜雙線框 */
+.dp-site footer .f-stamp{position:absolute; top:50%; right:36px; transform:translateY(-50%) rotate(-12deg);
+  font-family:var(--stamp); letter-spacing:4px; color:var(--alarm); opacity:.35;
+  border:3px double var(--alarm); padding:8px 18px; white-space:nowrap; pointer-events:none}
 
 /* 入監服刑 Modal */
 .dp-modal-bg{position:fixed; inset:0; z-index:100; background:rgba(6,7,8,.84); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:24px}
@@ -266,10 +337,26 @@
   background:transparent; border:1px solid var(--steel); color:var(--dim)}
 
 @media(max-width:720px){
-  /* 手機收掉次要區段連結,但保留主 CTA「入監服刑」可達 */
+  /* 手機收掉桌機列,改用漢堡選單跳區段 */
   .dp-site nav{gap:14px}
   .dp-site nav .links{margin-left:auto; gap:0}
   .dp-site nav .links a{display:none}
+  .dp-site .nav-burger{display:inline-flex}
+  /* 全寬下拉面板:固定於 nav 下方,頂部 hazard 黃線 */
+  .dp-site .nav-drawer{
+    display:flex; flex-direction:column;
+    position:fixed; top:62px; left:0; right:0; z-index:49;
+    background:rgba(12,13,15,.96); backdrop-filter:blur(10px);
+    border-top:2px solid var(--hazard); border-bottom:1px solid var(--line);
+    padding:8px 0; animation:dp-drawer .2s ease;
+  }
+  .dp-site .nav-drawer a{
+    font-family:var(--cond); font-size:22px; letter-spacing:2px; color:var(--dim);
+    padding:13px 28px; cursor:pointer; border-bottom:1px solid var(--line); transition:color .2s, background .2s;
+  }
+  .dp-site .nav-drawer a:last-child{border-bottom:none}
+  .dp-site .nav-drawer a:hover,.dp-site .nav-drawer a:active{color:var(--text); background:rgba(255,255,255,.03)}
+  @keyframes dp-drawer{from{opacity:0; transform:translateY(-8px)}}
   .dp-site .btn-serve{font-size:16px; padding:7px 14px}
   .dp-site .place{margin:-12px 0 36px}
   /* 拘留卡在窄螢幕改直向堆疊,避免三欄擠壓溢出 */
@@ -281,6 +368,10 @@
   .dp-site .btn-book{width:100%}
   .dp-site section{padding:72px 22px}
   .dp-site .hero{padding:90px 22px 70px}
+  /* 結案戳章改為內容下方、縮小,避免水平溢出 */
+  .dp-site footer{padding-bottom:48px}
+  .dp-site footer .f-stamp{position:static; transform:rotate(-8deg); display:inline-block; transform-origin:left center;
+    font-size:14px; padding:6px 14px; margin-top:24px}
 }
 
 /* 尊重系統減動偏好:停掉掃光/閃爍/下沉等持續動畫,並確保進場內容直接顯示 */
