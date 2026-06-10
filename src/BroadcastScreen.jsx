@@ -1,41 +1,56 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import { pomodoroState, PHASE_LABEL, fmt } from './pomodoro'
+import { pomodoroState, PHASE_LABEL, fmt, FOCUS, BREAK, LONGBREAK } from './pomodoro'
 
-// 直播大螢幕:獨立視窗(不在 .admin 底下),配色沿用監獄色票,全部 inline style。
+// 直播大螢幕:獨立視窗(不在 .admin 底下),為 1920×1080 投放設計。
+// 版面(上→下):警示斜紋 / 標題列 / 大鐘 + 階段進度條 + 輪次刻度(主角,置中) / 本場獄卒列 / 警示斜紋。
+// 犯人不顯示;探監廣播改右上角跳出式訊息卡輪播;獄卒超過 5 人自動跑馬燈(右→左循環)。
 const C = {
   bg: '#0c0d0f', panel: '#15171b', line: 'rgba(255,255,255,.08)',
   text: '#e4e5e7', dim: '#9298a2', faint: '#5a606a',
-  hazard: '#f5c518', alarm: '#d8412f', ok: '#3fb36b',
+  hazard: '#f5c518', hazardDeep: '#caa00f', alarm: '#d8412f', ok: '#3fb36b',
 }
 const MONO = "'Space Mono', monospace"
 const CJK = "'Noto Sans TC', sans-serif"
 
-// 階段配色(底淡字濃,與主控台計時器一致)
+// 階段配色(底淡字濃,與主控台計時器一致)+ 各階段總秒數(算進度條)
 const PHASE_STYLE = {
-  focus: { bg: 'rgba(245,197,24,.16)', color: C.hazard },
-  break: { bg: 'rgba(63,179,107,.16)', color: C.ok },
-  longbreak: { bg: 'rgba(58,123,208,.18)', color: '#7fb0ea' },
+  focus: { bg: 'rgba(245,197,24,.16)', color: C.hazard, bar: C.hazard },
+  break: { bg: 'rgba(63,179,107,.16)', color: C.ok, bar: C.ok },
+  longbreak: { bg: 'rgba(58,123,208,.18)', color: '#7fb0ea', bar: '#3a7bd0' },
 }
+const PHASE_SECONDS = { focus: FOCUS, break: BREAK, longbreak: LONGBREAK }
+
+// 動畫/跑馬燈 keyframes(此頁不吃 admin.css,樣式自帶;reduced-motion 一併降級)
+const STYLE = `
+@keyframes bc-toast-in{from{opacity:0;transform:translateX(48px)}to{opacity:1;transform:none}}
+@keyframes bc-blink{0%,55%{opacity:1}56%,100%{opacity:.2}}
+@keyframes bc-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.bc-marquee{display:flex;width:max-content;animation:bc-marquee var(--bc-dur,30s) linear infinite}
+@media (prefers-reduced-motion:reduce){
+  .bc-marquee{animation:none!important}
+  .bc-toast{animation:none!important}
+  .bc-live-dot{animation:none!important}
+}
+`
 
 // 黃黑警示斜紋條
-const hazardStripe = (h = 10) => ({
+const hazardStripe = (h = 12) => ({
   height: h, flex: '0 0 auto',
-  background: 'repeating-linear-gradient(45deg,#f5c518 0 18px,#0a0a0a 18px 36px)',
+  background: 'repeating-linear-gradient(45deg,#f5c518 0 20px,#0a0a0a 20px 40px)',
 })
 
 // 方形拘留照頭貼(有照片用照片,無照片用首字)
 function PersonAvatar({ profile, size }) {
   const name = profile?.game_name ?? profile?.display_name ?? ''
   const initial = name ? name[0] : (profile?.inmate_no != null ? String(profile.inmate_no).slice(-2) : '?')
-  const frame = {
-    width: size, height: size, borderRadius: 10, overflow: 'hidden', flex: '0 0 auto',
-    border: `1px solid ${C.line}`, background: '#1d2127',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: C.dim, fontFamily: MONO, fontWeight: 700, fontSize: size * 0.34,
-  }
   return (
-    <div style={frame}>
+    <div style={{
+      width: size, height: size, borderRadius: 12, overflow: 'hidden', flex: '0 0 auto',
+      border: `1px solid ${C.line}`, background: '#1d2127',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: C.dim, fontFamily: MONO, fontWeight: 700, fontSize: size * 0.34,
+    }}>
       {profile?.avatar_url
         ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         : initial}
@@ -43,12 +58,24 @@ function PersonAvatar({ profile, size }) {
   )
 }
 
-// 區段標籤(小字 + 延伸線)
-function SectionLabel({ children, color }) {
+// 獄卒卡(靜態列與跑馬燈共用)
+function GuardCard({ profile }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
-      <span style={{ fontSize: 20, letterSpacing: 4, color, fontFamily: CJK, fontWeight: 700, whiteSpace: 'nowrap' }}>{children}</span>
-      <span style={{ flex: 1, height: 1, background: C.line }} />
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+      background: C.panel, border: `1px solid ${C.line}`, borderTop: `3px solid ${C.hazardDeep}`,
+      borderRadius: 12, padding: '16px 24px', flex: '0 0 auto',
+    }}>
+      <PersonAvatar profile={profile} size={130} />
+      <span style={{ fontSize: 21, fontWeight: 700, whiteSpace: 'nowrap' }}>
+        {profile?.game_name ?? profile?.display_name ?? '?'}
+      </span>
+      <span style={{
+        fontSize: 13, letterSpacing: 2, color: C.ok,
+        border: '1px solid rgba(63,179,107,.4)', borderRadius: 4, padding: '1px 10px',
+      }}>
+        {profile?.role === 'warden' ? '典獄長' : '獄卒'}
+      </span>
     </div>
   )
 }
@@ -56,9 +83,9 @@ function SectionLabel({ children, color }) {
 export default function BroadcastScreen({ sessionId }) {
   const [session, setSession] = useState(null)  // { title, timer_started_at, total_rounds }
   const [guards, setGuards] = useState([])
-  const [inmates, setInmates] = useState([])
   const [visits, setVisits] = useState([])      // 本場未完成廣播(新→舊;標記完成即退出輪播)
-  const [visitIdx, setVisitIdx] = useState(0)   // 探監輪播目前索引
+  const [visitIdx, setVisitIdx] = useState(0)   // 廣播輪播目前索引
+  const [profById, setProfById] = useState({})  // 廣播對象名字解析(犯人不上畫面,仍需顯示名)
   const [notFound, setNotFound] = useState(false)
   const [, setTick] = useState(0)
 
@@ -68,20 +95,23 @@ export default function BroadcastScreen({ sessionId }) {
       .select('title, timer_started_at, timer_ended_at, total_rounds').eq('id', sessionId).single()
     if (!sess) { setNotFound(true); return }
     setSession(sess)
-    // 本場廣播輪播:只取未完成(is_done=false);完成的留在紀錄,不再輪播
+    // 本場廣播:只取未完成(is_done=false);完成的留在紀錄,不再輪播
     const { data: vs } = await supabase.from('visits')
       .select('id, inmate_id, guard_id, visitor_name, message, created_at')
       .eq('session_id', sessionId).eq('is_done', false).order('created_at', { ascending: false })
     setVisits(vs ?? [])
     const { data: si } = await supabase.from('session_inmates')
       .select('member_id, role_in_session').eq('session_id', sessionId)
-    if (!si || si.length === 0) { setGuards([]); setInmates([]); return }
+    const memberIds = (si ?? []).map(r => r.member_id)
+    // 廣播卡要顯示犯人/指定獄卒名,一併把廣播相關 id 撈進名字快取
+    const visitIds = (vs ?? []).flatMap(v => [v.inmate_id, v.guard_id]).filter(Boolean)
+    const allIds = [...new Set([...memberIds, ...visitIds])]
+    if (!allIds.length) { setGuards([]); setProfById({}); return }
     const { data: profs } = await supabase.from('profiles')
-      .select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', si.map(r => r.member_id))
-    const profById = {}; for (const p of profs ?? []) profById[p.id] = p
-    const merged = si.map(r => ({ role_in_session: r.role_in_session, profile: profById[r.member_id] }))
-    setGuards(merged.filter(m => m.role_in_session === 'guard'))
-    setInmates(merged.filter(m => m.role_in_session !== 'guard'))
+      .select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', allIds)
+    const byId = {}; for (const p of profs ?? []) byId[p.id] = p
+    setProfById(byId)
+    setGuards((si ?? []).filter(r => r.role_in_session === 'guard').map(r => ({ profile: byId[r.member_id] })))
   }
   useEffect(() => {
     if (!sessionId) return
@@ -96,7 +126,7 @@ export default function BroadcastScreen({ sessionId }) {
     return () => clearInterval(t)
   }, [])
 
-  // 探監輪播:多筆時每 7 秒切下一筆;一筆固定、零筆不顯示(modulo 容忍筆數變動)
+  // 廣播輪播:多筆時每 7 秒切下一筆;一筆固定、零筆不顯示(modulo 容忍筆數變動)
   useEffect(() => {
     if (visits.length <= 1) return
     const t = setInterval(() => setVisitIdx(i => (i + 1) % visits.length), 7000)
@@ -111,54 +141,71 @@ export default function BroadcastScreen({ sessionId }) {
   }
 
   const screen = {
-    minHeight: '100vh', background: C.bg, color: C.text, fontFamily: CJK,
-    boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
+    height: '100vh', overflow: 'hidden', background: C.bg, color: C.text, fontFamily: CJK,
+    boxSizing: 'border-box', display: 'flex', flexDirection: 'column', position: 'relative',
   }
-  const inner = { padding: '28px 44px 44px', display: 'flex', flexDirection: 'column', gap: 34, flex: 1 }
 
   if (notFound) return <div style={{ ...screen, justifyContent: 'center', alignItems: 'center' }}>查無此場次</div>
   if (!session) return <div style={{ ...screen, justifyContent: 'center', alignItems: 'center' }}>讀取中…</div>
 
-  // 番茄鐘狀態(2.2:階段徽章 + 大鐘 + 第幾輪 + 輪次圓點)
+  // ===== 計時主區(大鐘 + 階段進度條 + 輪次刻度)=====
   const N = session.total_rounds ?? 8
   let timerBlock
   if (!session.timer_started_at) {
-    timerBlock = <div style={{ fontSize: 46, color: C.dim, letterSpacing: 4 }}>尚未開始服刑</div>
+    timerBlock = <div style={{ fontSize: 54, color: C.dim, letterSpacing: 6 }}>尚未開始服刑</div>
   } else {
     const elapsed = Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000)
     const st = pomodoroState(elapsed, N, session.timer_ended_at)
     if (st.ended) {
-      timerBlock = <div style={{ fontSize: 62, fontWeight: 900, letterSpacing: 4 }}>🔓 本場服刑結束</div>
+      timerBlock = <div style={{ fontSize: 80, fontWeight: 900, letterSpacing: 6 }}>🔓 本場服刑結束</div>
     } else {
       const ps = PHASE_STYLE[st.phase] ?? PHASE_STYLE.focus
+      const dur = PHASE_SECONDS[st.phase] ?? FOCUS
+      const pct = Math.max(0, Math.min(100, (1 - st.remainingSeconds / dur) * 100))
+      const barW = 'min(880px, 62vw)'
       timerBlock = (
         <>
-          <div style={{
-            display: 'inline-block', padding: '8px 28px', borderRadius: 6, fontSize: 30,
-            fontWeight: 700, letterSpacing: 6, background: ps.bg, color: ps.color,
-          }}>
-            {PHASE_LABEL[st.phase]}
+          {/* 階段徽章 + 輪次 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
+            <span style={{
+              padding: '10px 34px', borderRadius: 8, fontSize: 34, fontWeight: 700,
+              letterSpacing: 8, background: ps.bg, color: ps.color,
+            }}>
+              {PHASE_LABEL[st.phase]}
+            </span>
+            <span style={{ fontSize: 30, color: C.dim, fontFamily: MONO, letterSpacing: 2 }}>
+              第 <b style={{ color: C.text }}>{st.round}</b> / {N} 輪
+            </span>
           </div>
+          {/* 大鐘 */}
           <div style={{
-            fontSize: 170, fontWeight: 700, lineHeight: 1, letterSpacing: 6,
+            fontSize: 'clamp(150px, 24vh, 280px)', fontWeight: 700, lineHeight: 1, letterSpacing: 10,
             fontFamily: MONO, fontVariantNumeric: 'tabular-nums',
-            textShadow: st.phase === 'focus' ? '0 0 80px rgba(245,197,24,.25)' : 'none',
+            textShadow: st.phase === 'focus' ? '0 0 90px rgba(245,197,24,.25)' : 'none',
           }}>
             {fmt(st.remainingSeconds)}
           </div>
-          <div style={{ fontSize: 28, color: C.dim, fontFamily: MONO, letterSpacing: 2 }}>
-            第 <b style={{ color: C.text }}>{st.round}</b> / {N} 輪
+          {/* 目前階段進度條(黃黑斜紋填充) */}
+          <div style={{
+            width: barW, height: 24, borderRadius: 6, overflow: 'hidden',
+            background: 'rgba(255,255,255,.07)', border: `1px solid ${C.line}`,
+          }}>
+            <div style={{
+              width: `${pct}%`, height: '100%', transition: 'width 1s linear',
+              background: st.phase === 'focus'
+                ? 'repeating-linear-gradient(45deg,#f5c518 0 14px,#caa00f 14px 28px)'
+                : ps.bar,
+            }} />
           </div>
-          {/* 輪次進度圓點:已完成=實黃、目前=發光、未到=暗格 */}
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {/* 輪次刻度(已完成=深黃/目前=亮黃/未到=暗格) */}
+          <div style={{ width: barW, display: 'flex', gap: 8 }}>
             {Array.from({ length: N }, (_, i) => {
               const n = i + 1
-              const style = n < st.round
-                ? { background: '#caa00f' }
-                : n === st.round
-                  ? { background: C.hazard, boxShadow: '0 0 14px rgba(245,197,24,.6)' }
-                  : { background: 'rgba(255,255,255,.1)' }
-              return <i key={n} style={{ width: 34, height: 10, borderRadius: 5, ...style }} />
+              const bg = n < st.round ? C.hazardDeep
+                : n === st.round ? C.hazard
+                  : 'rgba(255,255,255,.1)'
+              const glow = n === st.round ? { boxShadow: '0 0 14px rgba(245,197,24,.55)' } : {}
+              return <i key={n} style={{ flex: 1, height: 10, borderRadius: 5, background: bg, ...glow }} />
             })}
           </div>
         </>
@@ -166,111 +213,105 @@ export default function BroadcastScreen({ sessionId }) {
     }
   }
 
+  // ===== 廣播跳出訊息卡(右上;輪播未完成廣播)=====
+  const v = visits.length ? visits[visitIdx % visits.length] : null
+  const toast = v && (() => {
+    const ip = profById[v.inmate_id]
+    const inmateName = ip?.game_name ?? ip?.display_name ?? '某囚'
+    const no = ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'
+    const gp = v.guard_id ? profById[v.guard_id] : null
+    const guardName = v.guard_id ? (gp?.game_name ?? gp?.display_name ?? null) : null
+    return (
+      <div key={v.id} className="bc-toast" style={{
+        position: 'fixed', top: 86, right: 44, zIndex: 10, width: 'min(560px, 38vw)',
+        background: 'linear-gradient(135deg,#241a35,#15131c)', border: '1px solid #b56fd9',
+        borderLeft: '5px solid #b56fd9', borderRadius: 14, padding: '20px 24px',
+        boxShadow: '0 14px 50px rgba(0,0,0,.55)', animation: 'bc-toast-in .45s ease-out both',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+          <span style={{ fontSize: 16, color: '#c89be0', letterSpacing: 4, fontFamily: MONO }}>
+            💌 探監廣播{visits.length > 1 ? ` · ${(visitIdx % visits.length) + 1} / ${visits.length}` : ''}
+          </span>
+          <span style={{ flex: 1 }} />
+          <button
+            onClick={() => markVisitDone(v)}
+            style={{
+              cursor: 'pointer', background: 'transparent', border: '1px solid #b56fd9',
+              color: '#c89be0', borderRadius: 6, padding: '6px 14px', fontSize: 14,
+              fontFamily: CJK, letterSpacing: 1, whiteSpace: 'nowrap',
+            }}>
+            ✓ 標記完成
+          </button>
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.4 }}>
+          〈{v.visitor_name}〉 探望 <span style={{ color: C.hazard }}>No.{no} {inmateName}</span>
+        </div>
+        <div style={{ fontSize: 21, marginTop: 6, lineHeight: 1.5 }}>「{v.message}」</div>
+        {guardName && <div style={{ fontSize: 17, color: '#9bd0a8', marginTop: 8 }}>🛡 指定獄卒：{guardName}</div>}
+      </div>
+    )
+  })()
+
+  // ===== 獄卒列(>5 人自動跑馬燈,右→左循環;reduced-motion 降級為靜態)=====
+  const marquee = guards.length > 5
+  const guardRow = guards.length === 0
+    ? <div style={{ color: C.faint, fontSize: 22, textAlign: 'center' }}>本場目前沒有獄卒在場</div>
+    : marquee
+      ? (
+        <div style={{ overflow: 'hidden', width: '100%' }}>
+          {/* 列表渲染兩份,位移 -50% 後無縫接回起點;時長隨人數放大保持等速 */}
+          <div className="bc-marquee" style={{ gap: 26, paddingRight: 26, '--bc-dur': `${Math.max(24, guards.length * 5)}s` }}>
+            {[...guards, ...guards].map((g, i) => <GuardCard key={i} profile={g.profile} />)}
+          </div>
+        </div>
+      )
+      : (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 26, flexWrap: 'nowrap' }}>
+          {guards.map((g, i) => <GuardCard key={i} profile={g.profile} />)}
+        </div>
+      )
+
   return (
     <div style={screen}>
-      {/* 頂部:警示斜紋 + 場次標題列 */}
-      <div style={hazardStripe(10)} />
+      <style>{STYLE}</style>
+
+      {/* 頂部:警示斜紋 + 標題列 */}
+      <div style={hazardStripe(12)} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '16px 44px 0' }}>
+        <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: 3 }}>死線<b style={{ color: C.hazard }}>監獄</b></span>
+        <span style={{ fontSize: 14, color: C.faint, fontFamily: MONO, letterSpacing: 3 }}>DEADLINE PRISON</span>
+        <span style={{ fontSize: 24, color: C.dim }}>｜ {session.title}</span>
+        <span style={{ flex: 1 }} />
+        <span className="bc-live-dot" style={{
+          width: 12, height: 12, borderRadius: '50%', background: C.alarm,
+          boxShadow: `0 0 10px ${C.alarm}`, animation: 'bc-blink 1.2s steps(1,end) infinite',
+        }} />
+        <span style={{ fontSize: 18, color: C.alarm, fontFamily: MONO, letterSpacing: 5 }}>LIVE</span>
+      </div>
+
+      {/* 中央:計時主區 */}
       <div style={{
-        display: 'flex', alignItems: 'baseline', gap: 16, padding: '18px 44px 0',
-        justifyContent: 'center',
+        flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 30,
       }}>
-        <span style={{ fontSize: 26, fontWeight: 900, letterSpacing: 3 }}>死線<b style={{ color: C.hazard }}>監獄</b></span>
-        <span style={{ fontSize: 14, color: C.faint, fontFamily: MONO, letterSpacing: 3 }}>DEADLINE PRISON · LIVE</span>
-        <span style={{ fontSize: 22, color: C.dim }}>｜ {session.title}</span>
+        {timerBlock}
       </div>
 
-      <div style={inner}>
-        {/* 番茄鐘(主角) */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-          {timerBlock}
+      {/* 底部:本場獄卒 */}
+      <div style={{ flex: '0 0 auto', padding: '0 44px 26px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
+          <span style={{ fontSize: 22, letterSpacing: 5, color: C.hazard, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            本場獄卒（{guards.length}）
+          </span>
+          <span style={{ flex: 1, height: 1, background: C.line }} />
+          <span style={{ fontSize: 13, color: C.faint, fontFamily: MONO, letterSpacing: 3 }}>GUARDS ON DUTY</span>
         </div>
-
-        {/* 探監廣播輪播(2.3/2.4:只輪播未完成;標記完成即移出輪播) */}
-        {visits.length > 0 && (() => {
-          const profById = {}
-          for (const m of [...inmates, ...guards]) if (m.profile) profById[m.profile.id] = m.profile
-          const v = visits[visitIdx % visits.length]
-          if (!v) return null
-          const ip = profById[v.inmate_id]
-          const inmateName = ip?.game_name ?? ip?.display_name ?? '某囚'
-          const no = ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'
-          const gp = v.guard_id ? profById[v.guard_id] : null
-          const guardName = v.guard_id ? (gp?.game_name ?? gp?.display_name ?? null) : null
-          return (
-            <div style={{
-              background: 'linear-gradient(90deg,#241a35,#15131c)', border: '1px solid #b56fd9',
-              borderLeft: '5px solid #b56fd9', borderRadius: 12, padding: '20px 32px',
-              display: 'flex', alignItems: 'center', gap: 28,
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 18, color: '#c89be0', letterSpacing: 4, fontFamily: MONO, marginBottom: 8 }}>
-                  💌 探監廣播{visits.length > 1 ? ` · ${(visitIdx % visits.length) + 1} / ${visits.length}` : ''}
-                </div>
-                <div style={{ fontSize: 32, fontWeight: 800 }}>
-                  〈{v.visitor_name}〉 探望 <span style={{ color: C.hazard }}>No.{no} {inmateName}</span>
-                </div>
-                <div style={{ fontSize: 28, marginTop: 8 }}>「{v.message}」</div>
-                {guardName && <div style={{ fontSize: 20, color: '#9bd0a8', marginTop: 8 }}>🛡 指定獄卒：{guardName}</div>}
-              </div>
-              <button
-                onClick={() => markVisitDone(v)}
-                style={{
-                  flex: '0 0 auto', cursor: 'pointer', background: 'transparent',
-                  border: '1px solid #b56fd9', color: '#c89be0', borderRadius: 8,
-                  padding: '12px 20px', fontSize: 17, fontFamily: CJK, letterSpacing: 2,
-                }}>
-                ✓ 標記完成
-              </button>
-            </div>
-          )
-        })()}
-
-        {/* 本場獄卒(2.1:頭貼 + 名稱) */}
-        <div>
-          <SectionLabel color={C.hazard}>本場獄卒（{guards.length}）</SectionLabel>
-          {guards.length === 0 ? <div style={{ color: C.faint, fontSize: 20 }}>無</div> : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }}>
-              {guards.map((g, i) => (
-                <div key={i} style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                  background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: '16px 22px',
-                }}>
-                  <PersonAvatar profile={g.profile} size={120} />
-                  <span style={{ fontSize: 21, fontWeight: 700 }}>{g.profile?.game_name ?? g.profile?.display_name ?? '?'}</span>
-                  <span style={{
-                    fontSize: 13, letterSpacing: 2, color: C.ok, border: '1px solid rgba(63,179,107,.4)',
-                    borderRadius: 4, padding: '2px 10px',
-                  }}>
-                    {g.profile?.role === 'warden' ? '典獄長' : '獄卒'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 本場囚犯 */}
-        <div>
-          <SectionLabel color={C.alarm}>本場囚犯（{inmates.length}）</SectionLabel>
-          {inmates.length === 0 ? <div style={{ color: C.faint, fontSize: 20 }}>本場還沒有囚犯</div> : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }}>
-              {inmates.map((m, i) => (
-                <div key={i} style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: 200,
-                  background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: '16px 12px',
-                }}>
-                  <PersonAvatar profile={m.profile} size={160} />
-                  <span style={{ fontSize: 19, fontWeight: 700, textAlign: 'center' }}>{m.profile?.game_name ?? m.profile?.display_name ?? '?'}</span>
-                  <span style={{ fontSize: 14, color: C.faint, fontFamily: MONO }}>No.{m.profile?.inmate_no != null ? String(m.profile.inmate_no).padStart(4, '0') : '----'}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {guardRow}
       </div>
+      <div style={hazardStripe(12)} />
 
-      {/* 底部:警示斜紋收尾 */}
-      <div style={hazardStripe(10)} />
+      {/* 廣播跳出訊息(右上,固定浮層) */}
+      {toast}
     </div>
   )
 }

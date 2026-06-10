@@ -30,10 +30,22 @@ if (window.location.pathname === '/') {
     if (!container) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const anim = lottie.loadAnimation({
-      container, renderer: 'svg', loop: true, autoplay: !reduce, path: '/loader.json',
+      container, renderer: 'svg', loop: false, autoplay: false, path: '/loader.json',
     })
+    // loader.json 原生 90 幀(30fps):格子逐格亮起,第 84 幀全滿、第 85 幀整排清空(循環復位用)。
+    // 因此只播 0→84 段,停在「全滿」幀不再動;並校速讓全滿剛好落在第 3 秒(與最少顯示 3 秒對齊)。
+    const FULL_FRAME = 84
     const startMinTimer = () => setTimeout(() => { minElapsed = true; tryHide() }, 3000)
-    anim.addEventListener('DOMLoaded', startMinTimer)   // 動畫資料載入且首幀就緒
+    anim.addEventListener('DOMLoaded', () => {           // 動畫資料載入且首幀就緒
+      if (reduce) {
+        anim.goToAndStop(FULL_FRAME, true)               // 減動效:直接停在 100% 全滿幀
+      } else {
+        const fr = anim.frameRate || 30
+        anim.setSpeed((FULL_FRAME / fr) / 3)             // 84 幀 ÷ 30fps = 2.8s → 放慢到 3s 整
+        anim.playSegments([0, FULL_FRAME], true)
+      }
+      startMinTimer()
+    })
     anim.addEventListener('data_failed', startMinTimer) // 抓不到檔也別把畫面卡死
   })
 } else {

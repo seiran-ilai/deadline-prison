@@ -463,12 +463,15 @@ export default function PrisonSite() {
             ))}
           </div>
           <div className="price-extras reveal">
-            <span className="px-lbl">加購</span>
-            {PRICE_EXTRAS.map(([name, price, desc]) => (
-              <div className="px-item" key={name}>
-                <b>{name}</b><span className="px-price">{price}</span><span className="px-desc">{desc}</span>
-              </div>
-            ))}
+            <div className="px-head">加購項目 <span className="px-en">// ADD-ON</span></div>
+            <div className="px-grid">
+              {PRICE_EXTRAS.map(([name, price, desc]) => (
+                <div className="px-item" key={name}>
+                  <div className="px-top"><b>{name}</b><span className="px-price">{price}</span></div>
+                  <p className="px-desc">{desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
