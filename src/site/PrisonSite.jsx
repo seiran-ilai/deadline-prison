@@ -61,6 +61,9 @@ const SESS_STATUS = {
   serving:        { label: '服刑中',   cls: 'serving' },  // 服刑中(強調色)
 }
 
+// 犯人牆每頁張數(人多時分頁,左右切換;桌機約 4 欄 × 2 列、手機 2 欄 × 4 列)
+const WALL_PAGE_SIZE = 8
+
 // 名人堂榜單圖示(取代 emoji ⛓/💌,維持工業線稿調性)
 const ChainIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -101,6 +104,8 @@ export default function PrisonSite() {
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
+  const [wallPage, setWallPage] = useState(0)        // 犯人牆目前頁(0 起算)
+  const wallTouch = useRef(null)                     // 犯人牆觸控起點(手機左右滑換頁)
   const rootRef = useRef(null)
 
   const loadData = useCallback(async () => {
@@ -177,6 +182,21 @@ export default function PrisonSite() {
     const id = new URLSearchParams(window.location.search).get('intake')
     if (id) { const s = sessions.find(x => x.id === id); if (s) setSel(s) }
   }, [loading, sessions])
+
+  // 犯人牆分頁:人數多時左右翻頁,不讓牆無限變長
+  const wallPages = Math.max(1, Math.ceil(wall.length / WALL_PAGE_SIZE))
+  useEffect(() => { setWallPage(p => Math.min(p, wallPages - 1)) }, [wallPages])
+  const flipWall = dir => setWallPage(p => Math.min(Math.max(p + dir, 0), wallPages - 1))
+  const onWallTouchStart = e => { wallTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }
+  const onWallTouchEnd = e => {
+    if (!wallTouch.current) return
+    const dx = e.changedTouches[0].clientX - wallTouch.current.x
+    const dy = e.changedTouches[0].clientY - wallTouch.current.y
+    wallTouch.current = null
+    // 位移過小、或偏垂直(使用者在捲頁面)→ 不觸發翻頁
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.2) return
+    flipWall(dx < 0 ? 1 : -1)
+  }
 
   const scrollTo = id => rootRef.current?.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' })
   const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null) }
@@ -368,27 +388,49 @@ export default function PrisonSite() {
 
         <div className="hazard" />
 
-        {/* 犯人牆(自願公開服刑紀錄的犯人) */}
+        {/* 犯人牆(自願公開服刑紀錄的犯人;人多時分頁,按鈕/左右滑動切換) */}
         <section id="wall">
           <div className="eyebrow reveal">服刑紀錄 <span className="blk">// BLOCK 03</span></div>
           <h2 className="title reveal">犯人牆</h2>
           <p className="subline reveal">自願把服刑紀錄公開示眾的犯人。沒被趕完的稿，大家一起看著。</p>
-          <div className="roster reveal">
-            {loading ? <p style={{ color: 'var(--dim)' }}>調閱服刑紀錄中…</p>
-              : wall.length === 0 ? <p style={{ color: 'var(--dim)' }}>目前無人願意公開服刑紀錄</p>
-                : wall.map((p, i) => (
-                  <div className="card" key={i}>
-                    <div className="mug">
-                      {p.img ? <img src={p.img} alt={p.name} /> : <div className="initial">{p.name[0] || '?'}</div>}
+          {loading ? <p style={{ color: 'var(--dim)' }}>調閱服刑紀錄中…</p>
+            : wall.length === 0 ? <p style={{ color: 'var(--dim)' }}>目前無人願意公開服刑紀錄</p>
+              : <>
+                <div className="wall-bar reveal">
+                  <span className="wall-count">收容人數 <b>{wall.length}</b> 人</span>
+                  {wallPages > 1 && (
+                    <div className="wall-nav">
+                      <button onClick={() => flipWall(-1)} disabled={wallPage === 0} aria-label="上一頁">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                      </button>
+                      <span className="wall-pageno">{wallPage + 1} / {wallPages}</span>
+                      <button onClick={() => flipWall(1)} disabled={wallPage === wallPages - 1} aria-label="下一頁">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                      </button>
                     </div>
-                    <div className="body">
-                      <div className="role">No.{String(p.no ?? 0).padStart(4, '0')}</div>
-                      <h4>{p.name}</h4>
-                      <p className="bio">{p.bio || '〔機密資料未公開〕'}</p>
-                    </div>
+                  )}
+                </div>
+                <div className="wall-pager reveal" onTouchStart={onWallTouchStart} onTouchEnd={onWallTouchEnd}>
+                  <div className="wall-track" style={{ transform: `translateX(-${wallPage * 100}%)` }}>
+                    {Array.from({ length: wallPages }, (_, pg) => (
+                      <div className="roster wall-page" key={pg} aria-hidden={pg !== wallPage}>
+                        {wall.slice(pg * WALL_PAGE_SIZE, (pg + 1) * WALL_PAGE_SIZE).map((p, i) => (
+                          <div className="card" key={pg * WALL_PAGE_SIZE + i}>
+                            <div className="mug">
+                              {p.img ? <img src={p.img} alt={p.name} /> : <div className="initial">{p.name[0] || '?'}</div>}
+                            </div>
+                            <div className="body">
+                              <div className="role">No.{String(p.no ?? 0).padStart(4, '0')}</div>
+                              <h4>{p.name}</h4>
+                              <p className="bio">{p.bio || '〔機密資料未公開〕'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
                   </div>
-                ))}
-          </div>
+                </div>
+              </>}
         </section>
 
         <div className="perforation" />
