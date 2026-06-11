@@ -24,6 +24,7 @@ export function toSessionView(r) {
     capacity: r.capacity ?? null,
     displayStatus: r.display_status,
     canBook: r.can_book === true,
+    hasPassword: r.has_password === true,   // 密鑰場:報名前須通過密鑰核對
   }
 }
 

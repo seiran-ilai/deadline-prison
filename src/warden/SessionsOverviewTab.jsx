@@ -15,11 +15,14 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [newDate, setNewDate] = useState('')
   const [newCap, setNewCap] = useState('')          // 人數上限(空 = 不限)
   const [newPublic, setNewPublic] = useState(true)  // 對外公開(預設公開)
+  const [newPw, setNewPw] = useState('')            // 通行密鑰(僅公開場可設;空 = 不設)
   const [editId, setEditId] = useState(null)       // 編輯中的場次 id
   const [editTitle, setEditTitle] = useState('')
   const [editDate, setEditDate] = useState('')
   const [editCap, setEditCap] = useState('')
   const [editPublic, setEditPublic] = useState(true)
+  const [editPw, setEditPw] = useState('')
+  const [pwById, setPwById] = useState({})          // session_id -> 通行密鑰(RLS 僅典獄長可讀,後台直接顯示)
   const [expandedId, setExpandedId] = useState(null) // 展開檢視中的場次 id(僅 open)
   const [rosterById, setRosterById] = useState({})   // session_id -> { inmates:[], guards:[] }
 
@@ -29,6 +32,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     const { data: sess } = await supabase.from('sessions')
       .select('id, title, session_date, status, timer_started_at, opened_by, capacity, created_at, is_public')
     const { data: si } = await supabase.from('session_inmates').select('session_id')
+    const { data: pws } = await supabase.from('session_passwords').select('session_id, password')
+    const pwMap = {}
+    for (const r of pws ?? []) pwMap[r.session_id] = r.password
+    setPwById(pwMap)
     const cnt = {}
     for (const r of si ?? []) cnt[r.session_id] = (cnt[r.session_id] ?? 0) + 1
     // 排序:未結束在上、已結束(ended)在下;同組內依日期由近到遠
@@ -72,24 +79,40 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     const { data, error } = await supabase.from('sessions').insert(payload).select().single()
     if (error) { setMsg('開場失敗：' + error.message); return }
     setSessions(prev => [data, ...prev])   // 新場插入頂端,不整頁重抓
-    setMsg('已開場：' + newTitle); setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true)
+    setMsg('已開場：' + newTitle)
+    // 通行密鑰:僅公開場可設(內部場本來就不在官網露出)
+    const pwVal = newPublic ? newPw.trim() : ''
+    if (pwVal) {
+      const { error: pwErr } = await supabase.from('session_passwords').insert({ session_id: data.id, password: pwVal })
+      if (pwErr) setMsg('已開場，但密鑰設定失敗：' + pwErr.message)
+      else setPwById(prev => ({ ...prev, [data.id]: pwVal }))
+    }
+    setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true); setNewPw('')
     reloadShared()   // 背景同步共用清單
   }
 
   function startEdit(s) {
     setEditId(s.id); setEditTitle(s.title ?? ''); setEditDate(s.session_date ?? ''); setEditCap(s.capacity ?? '')
     setEditPublic(s.is_public !== false)   // 帶入現值(null/undefined 視為公開)
+    setEditPw(pwById[s.id] ?? '')
   }
-  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate(''); setEditCap(''); setEditPublic(true) }
+  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate(''); setEditCap(''); setEditPublic(true); setEditPw('') }
 
   async function saveEdit(id) {
     if (!editTitle) { setMsg('場次名不能空白'); return }
     const snapshot = sessions
     const patch = { title: editTitle, session_date: editDate || null, capacity: capValue(editCap), is_public: editPublic }
+    const pwVal = editPublic ? editPw.trim() : ''   // 取消公開 = 一併移除密鑰
     setSessions(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))   // 樂觀更新
     cancelEdit(); setMsg('已更新場次')
     const { error } = await supabase.from('sessions').update(patch).eq('id', id)
     if (error) { setSessions(snapshot); setMsg('編輯失敗，已還原：' + error.message); return }
+    // 密鑰同步:有值 upsert、空值刪除(沒設過也可安全刪)
+    const { error: pwErr } = pwVal
+      ? await supabase.from('session_passwords').upsert({ session_id: id, password: pwVal })
+      : await supabase.from('session_passwords').delete().eq('session_id', id)
+    if (pwErr) setMsg('場次已更新，但密鑰設定失敗：' + pwErr.message)
+    else setPwById(prev => { const n = { ...prev }; if (pwVal) n[id] = pwVal; else delete n[id]; return n })
     reloadShared()
   }
 
@@ -168,7 +191,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
         <input className="inp" placeholder="場次名（如 6/14 晚場）" value={newTitle} onChange={e => setNewTitle(e.target.value)} />
         <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
         <input type="number" min="1" placeholder="人數上限（留空＝不限）" value={newCap} onChange={e => setNewCap(e.target.value)} style={{ width: 160 }} />
-        <label><input type="checkbox" checked={newPublic} onChange={e => setNewPublic(e.target.checked)} />對外公開</label>
+        <label><input type="checkbox" checked={newPublic} onChange={e => { setNewPublic(e.target.checked); if (!e.target.checked) setNewPw('') }} />對外公開</label>
+        {/* 通行密鑰:僅對外公開可設;設了官網會顯示「密鑰入獄」,需輸入密鑰才能報名 */}
+        <input className="inp" placeholder={newPublic ? '通行密鑰（留空＝不設）' : '內部場不可設密鑰'} value={newPw}
+          disabled={!newPublic} onChange={e => setNewPw(e.target.value)} style={{ width: 170 }} />
         <button className="btn-pri" onClick={openNew}>開新場次</button>
       </div>
 
@@ -186,7 +212,9 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                   <input className="inp" value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                   <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
                   <input type="number" min="1" placeholder="上限（留空＝不限）" value={editCap} onChange={e => setEditCap(e.target.value)} style={{ width: 130 }} />
-                  <label><input type="checkbox" checked={editPublic} onChange={e => setEditPublic(e.target.checked)} />對外公開</label>
+                  <label><input type="checkbox" checked={editPublic} onChange={e => { setEditPublic(e.target.checked); if (!e.target.checked) setEditPw('') }} />對外公開</label>
+                  <input className="inp" placeholder={editPublic ? '通行密鑰（留空＝不設）' : '內部場不可設密鑰'} value={editPw}
+                    disabled={!editPublic} onChange={e => setEditPw(e.target.value)} style={{ width: 160 }} />
                   <button onClick={() => saveEdit(s.id)}>儲存</button>
                   <button onClick={cancelEdit}>取消</button>
                 </div>
@@ -206,6 +234,11 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                     ? { background: 'rgba(245,197,24,.12)', color: 'var(--hazard)' }
                     : { background: 'rgba(255,255,255,.06)', color: 'var(--faint)' }}>
                     {s.is_public !== false ? '官網公開' : '內部場'}</span>
+                  {/* 密鑰場標記:後台直接顯示密鑰內容,方便典獄長轉知 */}
+                  {s.is_public !== false && pwById[s.id] && (
+                    <span className="tag tag-pill" style={{ background: 'rgba(63,140,255,.14)', color: '#7fb0ff' }}>
+                      密鑰：{pwById[s.id]}</span>
+                  )}
                   <span className="muted">報到 {counts[s.id] ?? 0} 人</span>
                   <span className="muted">上限 {s.capacity ?? '不限'}</span>
                   <span className="spacer" />

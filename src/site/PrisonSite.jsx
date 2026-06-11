@@ -97,6 +97,10 @@ export default function PrisonSite() {
   const [bkName, setBkName] = useState('')           // 入監暱稱(預設帶既有 game_name)
   const [bkAvatar, setBkAvatar] = useState('')       // 入監頭像 URL(預設帶既有 avatar_url)
   const [menuOpen, setMenuOpen] = useState(false)    // 手機版漢堡選單開合
+  const [pw, setPw] = useState('')                   // 密鑰場:輸入中的通行密鑰
+  const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
+  const [pwChecking, setPwChecking] = useState(false)
+  const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
   const rootRef = useRef(null)
 
   const loadData = useCallback(async () => {
@@ -175,14 +179,26 @@ export default function PrisonSite() {
   }, [loading, sessions])
 
   const scrollTo = id => rootRef.current?.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' })
-  const openModal = s => { setSel(s); setMsg(null) }
-  const closeModal = () => { setSel(null); setMsg(null) }
+  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null) }
+  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null) }
 
   async function loginWithDiscord() {
     await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: { redirectTo: `${window.location.origin}/?intake=${sel.id}`, scopes: 'identify' },
     })
+  }
+
+  // 密鑰場:報名前先核對通行密鑰(RPC 只回對/錯,不外洩密鑰;送出報名時 /api/booking 會再驗一次)
+  async function verifyPassword() {
+    const input = pw.trim()
+    if (!input) return
+    setPwChecking(true); setPwErr(null)
+    const { data, error } = await supabase.rpc('check_session_password', { p_session: sel.id, p_password: input })
+    setPwChecking(false)
+    if (error) { setPwErr('密鑰核對失敗，請稍後再試。'); return }
+    if (!data) { setPwErr('密鑰不正確，請確認後重試。'); return }
+    setPwOk(true)
   }
 
   async function confirmBooking() {
@@ -194,11 +210,15 @@ export default function PrisonSite() {
       p_avatar_url: bkAvatar || null,
     })
     // 暱稱/頭像僅作該筆預約展示值(伺服器仍以 JWT 驗身分);沿用既有 profile 值或 modal 補填的值
-    const r = await createBooking(sel.id, { game_name: bkName.trim() || null, avatar_url: bkAvatar || null })
+    const r = await createBooking(sel.id, {
+      game_name: bkName.trim() || null, avatar_url: bkAvatar || null,
+      password: sel.hasPassword ? pw.trim() : null,
+    })
     setSubmitting(false)
     if (r.ok) setMsg('收監成功。鈴響時見。')
     else if (r.error === 'already_booked') setMsg('你已在此梯次服刑名冊上。')
     else if (r.error === 'full') setMsg('此梯次已停止收監。')
+    else if (r.error === 'wrong_password') setMsg('通行密鑰不正確，請重新開啟報名並輸入密鑰。')
     else if (r.error === 'not_authenticated') setMsg('請先以 Discord 登入。')
     else setMsg('收監失敗，請稍後再試。')
     loadData()
@@ -488,7 +508,8 @@ export default function PrisonSite() {
                       <div className="act">
                         <span className={`tag-status ${meta.cls}`}>{meta.label}</span>
                         {bookable
-                          ? <button className="btn-book" onClick={() => openModal(s)}>入監服刑</button>
+                          // 密鑰場顯示「密鑰入獄」,點開後需先通過密鑰核對才能報名
+                          ? <button className="btn-book" onClick={() => openModal(s)}>{s.hasPassword ? '密鑰入獄' : '入監服刑'}</button>
                           // can_book 但額滿 → 已額滿;can_book=false → 顯示對應狀態文字(報名暫停/入場中/服刑中)
                           : <button className="btn-book" disabled>{s.canBook ? '已額滿' : meta.label}</button>}
                       </div>
@@ -514,7 +535,7 @@ export default function PrisonSite() {
             <div className="m-haz" />
             <button className="m-close" onClick={closeModal}>✕</button>
             <div className="m-body">
-              <div className="m-eyebrow">入監服刑 · INTAKE</div>
+              <div className="m-eyebrow">{sel.hasPassword ? '密鑰入獄 · INTAKE' : '入監服刑 · INTAKE'}</div>
               <h3>{sel.title}</h3>
               <div className="m-row"><span>梯次編號</span><b>{sel.batch}</b></div>
               <div className="m-row"><span>服刑日期</span><b>{sel.dateISO || '未定'}</b></div>
@@ -531,6 +552,21 @@ export default function PrisonSite() {
                 <>
                   <p className="m-note">你已在此梯次服刑名冊上。</p>
                   <button className="m-dc m-ghost" onClick={cancel} disabled={submitting}>取消預約</button>
+                </>
+              ) : (sel.hasPassword && !pwOk) ? (
+                // 密鑰場關卡:通過核對才進入報名流程(已在名冊上的取消不需密鑰)
+                <>
+                  <p className="m-note">本梯次為<b style={{ color: 'var(--text)' }}>密鑰場</b>，請輸入通行密鑰後繼續報名。</p>
+                  <div className="m-field">
+                    <span className="m-field-lbl">通行密鑰</span>
+                    <input className="m-input" type="password" placeholder="輸入通行密鑰" value={pw}
+                      onChange={e => setPw(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') verifyPassword() }} />
+                  </div>
+                  {pwErr && <p className="m-note" style={{ color: 'var(--alarm)' }}>{pwErr}</p>}
+                  <button className="m-dc m-confirm" onClick={verifyPassword} disabled={pwChecking || !pw.trim()}>
+                    {pwChecking ? '核對中…' : '核對密鑰'}
+                  </button>
                 </>
               ) : selBooking ? (
                 <>

@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   try {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!token) return res.status(401).json({ error: 'not_authenticated' })
-    const { session_id, note, game_name, avatar_url } = req.body || {}
+    const { session_id, note, game_name, avatar_url, password } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
 
     // 以使用者 JWT 建立 client → insert 走 RLS(user_id = auth.uid())
@@ -35,6 +35,13 @@ export default async function handler(req, res) {
     const sess = (pub || []).find(s => s.id === session_id)
     if (!sess) return res.status(404).json({ error: 'session_not_found' })
     if (sess.capacity != null && sess.booked >= sess.capacity) return res.status(409).json({ error: 'full' })
+
+    // 密鑰場:伺服器端核對通行密鑰(不只靠前端擋;密鑰內容只在 DB 與典獄長後台)
+    if (sess.has_password) {
+      const pw = typeof password === 'string' ? password.trim() : ''
+      const { data: pwOk } = await supabase.rpc('check_session_password', { p_session: session_id, p_password: pw })
+      if (!pwOk) return res.status(403).json({ error: 'wrong_password' })
+    }
 
     // insert(DB 唯一鍵兜底重複)
     // game_name / avatar_url:前端帶來的展示值(暱稱/頭像),僅供該筆預約顯示,不作身分依據;
