@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { adminCreateAccount, adminResetPassword, adminRenameAccount, adminIssueCredentials, zhAdminError } from '../adminAccountApi'
+import { adminCreateAccount, adminRenameAccount, adminIssueCredentials, zhAdminError } from '../adminAccountApi'
 
 // 典獄長代開帳號 UI(僅 warden 會被容器渲染):
 //   CreateAccountSection   — 名單總覽頂部的「收監登記」區塊(開立帳號)
-//   ResetPasswordModal     — 名單卡片「重設密碼」(確認 → 一次性密碼卡)
 //   RenameAccountModal     — 名單卡片「修改帳號名」
-//   IssueCredentialsModal  — 名單卡片「核發帳密」:為既有 Discord 用戶補帳號+密碼(uuid 不變)
+//   IssueCredentialsModal  — 名單卡片「核發帳密」:為既有用戶設定帳號+密碼(uuid 不變);
+//                            可重複核發,新帳密直接蓋過舊的(忘記密碼走這裡)
 // 密碼只存在 API 回應與這裡的 state,關掉 modal 即消失,不落任何 log。
 
 const ACCOUNT_RE = /^[a-z0-9_]{3,20}$/
@@ -95,40 +95,6 @@ export function CreateAccountSection({ reloadShared }) {
   )
 }
 
-// 重設密碼:確認對話框 → 呼叫 API → 一次性密碼卡
-export function ResetPasswordModal({ member, onClose }) {
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState(null)
-  const [result, setResult] = useState(null)   // { account, password }
-  const name = member.game_name ?? member.display_name ?? '（未命名）'
-
-  async function run() {
-    setErr(null); setBusy(true)
-    const r = await adminResetPassword(member.id)
-    setBusy(false)
-    if (!r.ok) { setErr(zhAdminError(r.error)); return }
-    setResult({ account: r.account, password: r.password })
-  }
-
-  if (result) {
-    return <PasswordModal title="密碼已重設" account={result.account} password={result.password} onClose={onClose} />
-  }
-  return (
-    <div className="admin-modal-bg" onClick={onClose}>
-      <div className="admin-modal" onClick={e => e.stopPropagation()}>
-        <h3>重設密碼</h3>
-        <p>確定要重設「{name}」的密碼嗎？</p>
-        <p className="warn">舊密碼將立即失效，並產生新的一次性預設密碼；本人下次登入須重新設定密碼。</p>
-        {err && <p className="warn">{err}</p>}
-        <div className="modal-acts">
-          <button onClick={onClose}>取消</button>
-          <button className="btn-pri" onClick={run} disabled={busy}>{busy ? '重設中…' : '確認重設'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // 核發帳密:為既有用戶(Discord 或信箱註冊)設定登入帳號+密碼(原帳號 uuid 不變,編號/紀錄不動)。
 // 帳號名預填自 Discord 帳號(過濾為合法字元),密碼由典獄長自訂(可一鍵隨機產生);
 // 本人拿到帳密登入後,可在個人資料頁自行修改帳號與密碼,不強制首登改密。
@@ -162,8 +128,11 @@ export function IssueCredentialsModal({ member, onClose, reloadShared }) {
   return (
     <div className="admin-modal-bg" onClick={onClose}>
       <div className="admin-modal" onClick={e => e.stopPropagation()}>
-        <h3>核發帳號密碼</h3>
+        <h3>{member.account_type === 'warden_created' ? '重新核發帳號密碼' : '核發帳號密碼'}</h3>
         <p>為「{name}」設定登入帳號與密碼。核發後本人以「帳號＋密碼」登入，編號、名號與所有紀錄不變；登入後可在個人資料頁自行修改帳號密碼。</p>
+        {member.account_type === 'warden_created' && (
+          <p className="warn">此成員已核發過帳密：本次將以新帳號＋新密碼直接蓋過，舊密碼立即失效。</p>
+        )}
         <form onSubmit={submit}>
           <label>帳號名
             <input value={account} maxLength={20} autoComplete="off" autoFocus

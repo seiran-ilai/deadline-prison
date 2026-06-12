@@ -19,9 +19,6 @@ async function call(path, payload) {
 export const adminCreateAccount = (account, displayName) =>
   call('/api/admin-create-account', { account, display_name: displayName })
 
-export const adminResetPassword = (userId) =>
-  call('/api/admin-reset-password', { user_id: userId })
-
 export const adminRenameAccount = (userId, account) =>
   call('/api/admin-rename-account', { user_id: userId, account })
 
@@ -40,7 +37,6 @@ export function zhAdminError(code) {
     account_exists: '此帳號名已被使用，請換一個',
     not_warden_created: '此類帳號不可使用此操作（僅限典獄長代開的帳號）',
     user_not_found: '找不到該使用者',
-    already_issued: '此成員已核發過帳號，請改用「重設密碼」',
     invalid_password: '密碼需為 8–72 碼',
     forbidden: '僅典獄長可執行此操作',
     not_authenticated: '登入狀態已失效，請重新登入',

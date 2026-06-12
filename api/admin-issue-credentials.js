@@ -4,8 +4,9 @@ import { requireWarden, ACCOUNT_DOMAIN, ACCOUNT_RE } from './_lib/wardenAuth.js'
 // 信箱與 Discord 登入已全面移除,這支讓舊用戶(Discord 或信箱註冊皆可)改用
 // 「帳號名+密碼」登入:在原本的 auth 使用者上設定假 email 與典獄長自訂的密碼
 // (uuid 不變,profiles/紀錄完全不動),並標 account_type='warden_created'。
-// 不設 must_change_password:帳密由典獄長親自轉交,本人登入後可在個人資料頁
-// 自行修改帳號名與密碼。
+// 可重複核發:已核發過的帳號再核發一次,新帳號名+新密碼直接蓋過舊的
+// (本人忘記密碼即走此路)。不設 must_change_password:帳密由典獄長親自轉交,
+// 本人登入後可在個人資料頁自行修改帳號名與密碼。
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
   try {
@@ -22,9 +23,6 @@ export default async function handler(req, res) {
 
     const { data: got, error: gErr } = await supabase.auth.admin.getUserById(userId)
     if (gErr || !got?.user) return res.status(404).json({ error: 'user_not_found' })
-    if (got.user.user_metadata?.account_type === 'warden_created') {
-      return res.status(400).json({ error: 'already_issued' })
-    }
 
     const email = `${account}@${ACCOUNT_DOMAIN}`
     const { error: uErr } = await supabase.auth.admin.updateUserById(userId, {

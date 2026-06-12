@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ROLE_LABEL } from './constants'
-import { CreateAccountSection, ResetPasswordModal, RenameAccountModal, IssueCredentialsModal } from './AccountAdmin'
+import { CreateAccountSection, RenameAccountModal, IssueCredentialsModal } from './AccountAdmin'
 
 // 名單總覽(卡片網格版):已配號清單,分獄卒區 / 犯人區。
 // 登入即建檔發號,不再有「未配對 / 預約中」待處理區;搜尋 / 排序作用於整份清單。
@@ -10,9 +10,8 @@ import { CreateAccountSection, ResetPasswordModal, RenameAccountModal, IssueCred
 export default function OverviewTab({ inmates, loading, isWarden, onEditMember, setMsg, reloadShared }) {
   const [q, setQ] = useState('')                          // 清單搜尋(暱稱 / 編號)
   const [sortDir, setSortDir] = useState('asc')           // 排序:asc=編號舊→新(預設) / desc=新→舊
-  const [resetTarget, setResetTarget] = useState(null)    // 代開/核發帳號:重設密碼對象
   const [renameTarget, setRenameTarget] = useState(null)  // 代開/核發帳號:改帳號名對象
-  const [issueTarget, setIssueTarget] = useState(null)    // Discord 用戶:核發帳密對象
+  const [issueTarget, setIssueTarget] = useState(null)    // 核發帳密對象(首發或重發蓋過)
 
   // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序
   const ql = q.trim().toLowerCase()
@@ -47,14 +46,10 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
         {isWarden && (
           <div className="ov-acts">
             <button className="btn-sm" onClick={() => onEditMember(p)}>編輯</button>
-            {p.account_type === 'warden_created' ? (
-              <>
-                <button className="btn-sm" onClick={() => setResetTarget(p)}>重設密碼</button>
-                <button className="btn-sm" onClick={() => setRenameTarget(p)}>改帳號名</button>
-              </>
-            ) : (
-              // 尚未核發帳密的舊用戶(Discord 或信箱註冊;兩種登入入口皆已移除)
-              <button className="btn-sm" onClick={() => setIssueTarget(p)}>核發帳密</button>
+            {/* 核發帳密:未核發者首發;已核發者重發(新帳號名+新密碼直接蓋過舊的) */}
+            <button className="btn-sm" onClick={() => setIssueTarget(p)}>核發帳密</button>
+            {p.account_type === 'warden_created' && (
+              <button className="btn-sm" onClick={() => setRenameTarget(p)}>改帳號名</button>
             )}
           </div>
         )}
@@ -96,9 +91,6 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
             </section>
           </>)}
 
-      {isWarden && resetTarget && (
-        <ResetPasswordModal member={resetTarget} onClose={() => setResetTarget(null)} />
-      )}
       {isWarden && renameTarget && (
         <RenameAccountModal member={renameTarget} setMsg={setMsg} onClose={() => setRenameTarget(null)} />
       )}
