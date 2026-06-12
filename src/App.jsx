@@ -8,6 +8,7 @@ import GuardMemosTab from './GuardMemosTab'
 import WardenPanel from './warden/WardenPanel'
 import ProfilePage from './ProfilePage'
 import RecordsPage from './RecordsPage'
+import GuardRecordsPage from './GuardRecordsPage'
 import MyBookings from './MyBookings'
 import MessageBanner from './MessageBanner'
 import DeadlinePrisonLoader from './DeadlinePrisonLoader'
@@ -435,6 +436,7 @@ function App() {
         { k: 'booking', label: '已預約場次' },
         { k: 'me', label: '我的稿件' },
         { k: 'records', label: '服刑紀錄' },
+        { k: 'guardrecords', label: '看守紀錄' },
         { k: 'profile', label: '個人資料' },
       ]
     : profile.role === 'guard'
@@ -445,6 +447,7 @@ function App() {
           { k: 'booking', label: '已預約場次' },
           { k: 'me', label: '我的稿件' },
           { k: 'records', label: '服刑紀錄' },
+          { k: 'guardrecords', label: '看守紀錄' },
           { k: 'profile', label: '個人資料' },
         ]
       : [
@@ -500,6 +503,7 @@ function App() {
         )}
         {activeTab === 'warden' && isStaff && <WardenPanel myRole={profile.role} userId={user.id} onGoToManuscripts={() => setTab('me')} />}
         {activeTab === 'records' && <RecordsPage userId={user.id} role={profile.role} />}
+        {activeTab === 'guardrecords' && isStaff && <GuardRecordsPage userId={user.id} />}
         {activeTab === 'profile' && (
           <ProfilePage userId={user.id} role={profile.role}
             onSaved={(patch) => setProfile(p => ({ ...p, ...patch }))} />

@@ -81,7 +81,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   async function loadVisits(sid) {
     if (!sid) return
     const { data } = await supabase.from('visits')
-      .select('id, inmate_id, guard_id, visitor_name, message, is_done, created_at')
+      .select('id, inmate_id, guard_id, visitor_name, message, is_done, photo_done, interact_done, created_at')
       .eq('session_id', sid).order('created_at', { ascending: false })
     setVisits(data ?? [])
   }
@@ -91,7 +91,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     ;(async () => {
       if (!currentSession) return
       const { data } = await supabase.from('visits')
-        .select('id, inmate_id, guard_id, visitor_name, message, is_done, created_at')
+        .select('id, inmate_id, guard_id, visitor_name, message, is_done, photo_done, interact_done, created_at')
         .eq('session_id', currentSession).order('created_at', { ascending: false })
       if (alive) setVisits(data ?? [])
     })()
@@ -103,6 +103,15 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     const { error } = await supabase.from('visits').update({ is_done: !v.is_done }).eq('id', v.id)
     if (error) { setMsg('更新失敗：' + error.message); return }
     setMsg(v.is_done ? '已恢復輪播' : '已標記完成，停止輪播')
+    loadVisits(currentSession)
+  }
+
+  // 執行確認:已經合照(photo_done)/ 已經執行指定互動(interact_done),可再點取消。
+  // 獄卒「看守紀錄」依這兩個欄位 + guard_id 統計合照/互動次數。
+  async function toggleVisitFlag(v, field, label) {
+    const { error } = await supabase.from('visits').update({ [field]: !v[field] }).eq('id', v.id)
+    if (error) { setMsg('更新失敗：' + error.message); return }
+    setMsg(v[field] ? `已取消「${label}」` : `已確認「${label}」`)
     loadVisits(currentSession)
   }
 
@@ -494,12 +503,22 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
                             <span className="visit-who">
                               💌 {v.visitor_name} → No.{ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'} {inmateName}
                               {v.is_done && <span className="visit-done-tag">✓ 已完成</span>}
+                              {v.photo_done && <span className="visit-done-tag">📷 已合照</span>}
+                              {v.interact_done && <span className="visit-done-tag">🎭 已互動</span>}
                             </span>
                             <span className="visit-body">「{v.message}」</span>
                             {guardName && <span className="visit-guard">🛡 指定獄卒：{guardName}</span>}
                           </div>
                           <span className="spacer" />
                           <div className="visit-acts">
+                            <button className={`btn-sm${v.photo_done ? ' btn-pri' : ''}`}
+                              onClick={() => toggleVisitFlag(v, 'photo_done', '已經合照')}>
+                              {v.photo_done ? '✓ 已經合照' : '已經合照'}
+                            </button>
+                            <button className={`btn-sm${v.interact_done ? ' btn-pri' : ''}`}
+                              onClick={() => toggleVisitFlag(v, 'interact_done', '已經執行指定互動')}>
+                              {v.interact_done ? '✓ 已執行指定互動' : '已經執行指定互動'}
+                            </button>
                             <button className="btn-sm" onClick={() => toggleVisitDone(v)}>{v.is_done ? '恢復輪播' : '標記完成'}</button>
                             <button className="btn-sm" onClick={() => setEditingVisit({ id: v.id, guard_id: v.guard_id ?? '', visitor_name: v.visitor_name, message: v.message })}>編輯</button>
                             <button className="btn-sm btn-danger" onClick={() => deleteVisit(v.id)}>刪除</button>
