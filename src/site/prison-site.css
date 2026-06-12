@@ -339,6 +339,7 @@
 .dp-modal .m-swap{margin:10px 0 0; font-size:12.5px; color:var(--dim); text-align:center}
 .dp-modal .m-lnk{color:var(--text); text-decoration:underline; text-underline-offset:3px; cursor:pointer}
 .dp-modal .m-lnk:hover{color:var(--hazard)}
+.dp-modal .m-remark{margin:14px 0 0; padding:10px 12px; border-left:2px solid var(--hazard); background:rgba(245,197,24,.06); font-size:12px; color:var(--dim); line-height:1.7}
 .dp-modal .m-choose{margin:12px 0 0; font-size:11px; color:var(--dim); line-height:1.7; text-align:center; white-space:nowrap}
 @media (max-width:480px){ .dp-modal .m-choose{white-space:normal} }
 

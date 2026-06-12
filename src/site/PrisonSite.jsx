@@ -631,6 +631,7 @@ export default function PrisonSite() {
               <div className="m-row"><span>梯次編號</span><b>{sel.batch}</b></div>
               <div className="m-row"><span>服刑日期</span><b>{sel.dateISO || '未定'}</b></div>
               <div className="m-row"><span>收容情況</span><b>{sel.capacity > 0 ? `${sel.booked} / ${sel.capacity}` : `${sel.booked} ／ 不限`}</b></div>
+              <p className="m-remark">備註：獄卒將會在休息時間處理公務，此時你可以與全場有空閒的獄卒互動。</p>
 
               {msg ? (
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
