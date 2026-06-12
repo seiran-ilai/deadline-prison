@@ -24,7 +24,7 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
   // booking/booking_paused 階段的操作在「場次總覽」分頁,不在此控台出現。
   async function load() {
     setLoading(true)
-    const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, discord_account, avatar_url, role')
+    const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, discord_account, avatar_url, role, account_type')
     const { data: sess } = await supabase.from('sessions').select('*').order('created_at', { ascending: false })
     const live = (sess ?? []).filter(s => ['intake', 'serving'].includes(normalizeStatus(s)))
     setInmates(all ?? [])

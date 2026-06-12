@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { ROLE_LABEL } from './constants'
+import { CreateAccountSection, ResetPasswordModal, RenameAccountModal } from './AccountAdmin'
 
 // 名單總覽(卡片網格版):已配號清單,分獄卒區 / 犯人區。
 // 登入即建檔發號,不再有「未配對 / 預約中」待處理區;搜尋 / 排序作用於整份清單。
 // 不再顯示光臨次數、目前狀態,也不再展開看稿件進度(簡化)。
-// 註:setMsg / reloadShared 仍由 WardenPanel 傳入(向後相容),但移除待處理區後本元件已不需要,
-// 故不解構以免 no-unused-vars;之後若需要再就地取用即可。
-export default function OverviewTab({ inmates, loading, isWarden, onEditMember }) {
+// warden 另有「收監登記」區塊(代開帳號),與代開帳號(account_type='warden_created')
+// 卡片上的「重設密碼 / 改帳號名」操作。
+export default function OverviewTab({ inmates, loading, isWarden, onEditMember, setMsg, reloadShared }) {
   const [q, setQ] = useState('')                          // 清單搜尋(暱稱 / 編號)
   const [sortDir, setSortDir] = useState('asc')           // 排序:asc=編號舊→新(預設) / desc=新→舊
+  const [resetTarget, setResetTarget] = useState(null)    // 代開帳號:重設密碼對象
+  const [renameTarget, setRenameTarget] = useState(null)  // 代開帳號:改帳號名對象
 
   // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序
   const ql = q.trim().toLowerCase()
@@ -43,6 +46,12 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember }
         {isWarden && (
           <div className="ov-acts">
             <button className="btn-sm" onClick={() => onEditMember(p)}>編輯</button>
+            {p.account_type === 'warden_created' && (
+              <>
+                <button className="btn-sm" onClick={() => setResetTarget(p)}>重設密碼</button>
+                <button className="btn-sm" onClick={() => setRenameTarget(p)}>改帳號名</button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -60,6 +69,9 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember }
           <option value="desc">編號 新→舊</option>
         </select>
       </div>
+
+      {/* 收監登記(代開帳號):僅 warden */}
+      {isWarden && <CreateAccountSection reloadShared={reloadShared} />}
 
       {loading ? <p className="empty">載入中…</p>
         : inmates.length === 0 ? <p className="empty">名單還沒有任何人</p>
@@ -79,6 +91,13 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember }
                 : <div className="ov-grid">{members.map(MemberCard)}</div>}
             </section>
           </>)}
+
+      {isWarden && resetTarget && (
+        <ResetPasswordModal member={resetTarget} onClose={() => setResetTarget(null)} />
+      )}
+      {isWarden && renameTarget && (
+        <RenameAccountModal member={renameTarget} setMsg={setMsg} onClose={() => setRenameTarget(null)} />
+      )}
     </div>
   )
 }

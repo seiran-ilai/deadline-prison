@@ -8,6 +8,7 @@ export function zhAuthError(message) {
   if (m.includes('valid email') || m.includes('invalid format')) return '信箱格式不正確'
   if (m.includes('Email rate limit') || m.includes('rate limit')) return '寄信次數已達上限，請稍後再試'
   if (m.includes('same') && m.includes('password')) return '新密碼不可與舊密碼相同'
+  if (m.includes('different from the old')) return '新密碼不可與舊密碼相同'
   if (m.includes('session missing') || m.includes('expired')) return '重設連結已失效，請重新申請密碼重設'
   return '操作失敗，請稍後再試'
 }

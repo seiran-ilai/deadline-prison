@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { zhAuthError } from './authText'
-import { EMAIL_SIGNUP_OPEN, DISCORD_LOGIN_OPEN } from './authConfig'
+import { EMAIL_SIGNUP_OPEN, DISCORD_LOGIN_OPEN, INTERNAL_ACCOUNT_DOMAIN } from './authConfig'
 import ManuscriptManager from './ManuscriptManager'
 import SessionGoals from './SessionGoals'
 import GuardWork from './GuardWork'
@@ -103,6 +103,11 @@ function App() {
   const [newPw2, setNewPw2] = useState('')
   const [recoveryBusy, setRecoveryBusy] = useState(false)
   const [recoveryErr, setRecoveryErr] = useState(null)
+  // ---- 首次登入強制改密碼(典獄長代開帳號:user_metadata.must_change_password) ----
+  const [mcPw, setMcPw] = useState('')
+  const [mcPw2, setMcPw2] = useState('')
+  const [mcBusy, setMcBusy] = useState(false)
+  const [mcErr, setMcErr] = useState(null)
   // ---- 建檔失敗重試(不讓使用者卡在空白畫面) ----
   const [profileErr, setProfileErr] = useState(null)
   const [profileRetry, setProfileRetry] = useState(0)
@@ -254,9 +259,12 @@ function App() {
   async function emailSignIn(e) {
     e.preventDefault()
     setAuthErr(null); setAuthNotice(null)
-    if (!emailVal.trim() || !pwVal) { setAuthErr('請輸入信箱與密碼'); return }
+    const raw = emailVal.trim()
+    if (!raw || !pwVal) { setAuthErr('請輸入信箱／帳號與密碼'); return }
+    // 不含 @ → 視為典獄長代開的帳號名,補上內部後綴;含 @ → 一般 email,維持原行為
+    const email = raw.includes('@') ? raw : `${raw.toLowerCase()}@${INTERNAL_ACCOUNT_DOMAIN}`
     setAuthBusy(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: emailVal.trim(), password: pwVal })
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pwVal })
     setAuthBusy(false)
     if (error) setAuthErr(zhAuthError(error.message))
     // 成功時 onAuthStateChange 會帶 user 進站,這裡不用做事
@@ -291,6 +299,8 @@ function App() {
     e.preventDefault()
     setAuthErr(null); setAuthNotice(null)
     if (!emailVal.trim()) { setAuthErr('請輸入信箱'); return }
+    // 代開帳號(無 @)的假 email 收不到信,密碼由典獄長後台重設
+    if (!emailVal.trim().includes('@')) { setAuthErr('此類帳號請聯繫典獄長重設密碼'); return }
     setAuthBusy(true)
     // redirectTo 指向 /app:連結點開後 hash 帶 type=recovery,由上方雙保險偵測進「設定新密碼」
     const { error } = await supabase.auth.resetPasswordForEmail(emailVal.trim(), {
@@ -310,6 +320,24 @@ function App() {
     if (error) { setRecoveryBusy(false); setRecoveryErr(zhAuthError(error.message)); return }
     // 沿用既有 replace 手法清掉殘留 hash(避免 # 汙染後續 OAuth redirect),並以乾淨 URL 重新進站
     window.location.replace(window.location.pathname)
+  }
+
+  // 首登強制改密碼:成功後同步清旗標,主畫面 gate 解除、走既有 tabResolved 流程進站
+  async function submitFirstPassword(e) {
+    e.preventDefault()
+    setMcErr(null)
+    if (mcPw.length < 8) { setMcErr('密碼至少需 8 碼'); return }
+    if (mcPw !== mcPw2) { setMcErr('兩次輸入的密碼不一致'); return }
+    setMcBusy(true)
+    const { data, error } = await supabase.auth.updateUser({
+      password: mcPw,
+      data: { must_change_password: false },
+    })
+    setMcBusy(false)
+    if (error) { setMcErr(zhAuthError(error.message)); return }
+    // onAuthStateChange 的 USER_UPDATED 也會更新 user,這裡直接同步免等事件
+    if (data?.user) setUser(data.user)
+    setMcPw(''); setMcPw2('')
   }
 
   // 密碼重設深連結:不走一般登入/進站,先讓使用者把新密碼設完(成功後 replace 清 hash 重新進站)
@@ -338,8 +366,9 @@ function App() {
         {/* Email 主通道:登入 / 註冊 / 忘記密碼 切換式表單 */}
         {authMode === 'login' && (
           <form className="dpl-mail" onSubmit={emailSignIn}>
-            <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
-              autoComplete="email" onChange={e => setEmailVal(e.target.value)} />
+            {/* type=text:代開帳號只輸入帳號名(不含 @),不能用瀏覽器的 email 格式驗證 */}
+            <input className="dpl-inp" type="text" placeholder="信箱或帳號" value={emailVal}
+              autoComplete="username" onChange={e => setEmailVal(e.target.value)} />
             <input className="dpl-inp" type="password" placeholder="密碼" value={pwVal}
               autoComplete="current-password" onChange={e => setPwVal(e.target.value)} />
             <div className="dpl-mail-row">
@@ -417,6 +446,27 @@ function App() {
           {testError && <p className="banner err" style={{ marginTop: 12 }}>登入失敗：{testError}</p>}
         </div>
       )}
+    </DeadlinePrisonLoader>
+  )
+  // 首次登入強制改密碼(典獄長代開帳號):在 auth 確立之後、主畫面之前全畫面攔截,
+  // 不可跳過、不可進任何分頁;改完旗標清除,gate 自動解除走既有 tabResolved 流程。
+  // recovery 深連結分支在更前面 return,兩者不會同時出現。
+  if (user.user_metadata?.must_change_password === true) return (
+    <DeadlinePrisonLoader status="設定新密碼" statusEn="SET NEW PASSWORD" procLabel="首次登入">
+      <div className="dpl-gate">
+        <form className="dpl-mail" onSubmit={submitFirstPassword}>
+          <p className="dpl-mail-t">首次登入，請設定您的新密碼</p>
+          <input className="dpl-inp" type="password" placeholder="新密碼（至少 8 碼）" value={mcPw}
+            autoComplete="new-password" onChange={e => setMcPw(e.target.value)} />
+          <input className="dpl-inp" type="password" placeholder="再次輸入新密碼" value={mcPw2}
+            autoComplete="new-password" onChange={e => setMcPw2(e.target.value)} />
+          {mcErr && <p className="dpl-err">{mcErr}</p>}
+          <button className="dpl-btn" type="submit" disabled={mcBusy}>
+            {mcBusy ? '設定中…' : '確認設定並進站'}
+          </button>
+        </form>
+        <a className="dpl-back" onClick={signOut} style={{ cursor: 'pointer' }}>← 登出</a>
+      </div>
     </DeadlinePrisonLoader>
   )
   if (loading) return <DeadlinePrisonLoader status="收容中" statusEn="INTAKE OPEN" procLabel="核對身分" />
