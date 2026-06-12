@@ -211,16 +211,18 @@ function App() {
     setTestBusy(false)
   }
 
-  // ---- 信箱／帳號登入 ----
+  // ---- 帳號登入(信箱登入已移除,僅收帳號名,後綴由程式補) ----
   async function emailSignIn(e) {
     e.preventDefault()
     setAuthErr(null)
     const raw = emailVal.trim()
-    if (!raw || !pwVal) { setAuthErr('請輸入信箱／帳號與密碼'); return }
-    // 不含 @ → 視為典獄長代開的帳號名,補上內部後綴;含 @ → 一般 email,維持原行為
-    const email = raw.includes('@') ? raw : `${raw.toLowerCase()}@${INTERNAL_ACCOUNT_DOMAIN}`
+    if (!raw || !pwVal) { setAuthErr('請輸入帳號與密碼'); return }
+    if (raw.includes('@')) { setAuthErr('請輸入帳號名（不含 @）；原以信箱註冊者請聯繫典獄長換發帳號'); return }
     setAuthBusy(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pwVal })
+    const { error } = await supabase.auth.signInWithPassword({
+      email: `${raw.toLowerCase()}@${INTERNAL_ACCOUNT_DOMAIN}`,
+      password: pwVal,
+    })
     setAuthBusy(false)
     if (error) setAuthErr(zhAuthError(error.message))
     // 成功時 onAuthStateChange 會帶 user 進站,這裡不用做事
@@ -247,8 +249,7 @@ function App() {
     <DeadlinePrisonLoader status="等候收容" statusEn="AWAITING INTAKE" procLabel="身分核對">
       <div className="dpl-gate">
         <form className="dpl-mail" onSubmit={emailSignIn}>
-          {/* type=text:代開帳號只輸入帳號名(不含 @),不能用瀏覽器的 email 格式驗證 */}
-          <input className="dpl-inp" type="text" placeholder="信箱或帳號" value={emailVal}
+          <input className="dpl-inp" type="text" placeholder="帳號" value={emailVal}
             autoComplete="username" onChange={e => setEmailVal(e.target.value)} />
           <input className="dpl-inp" type="password" placeholder="密碼" value={pwVal}
             autoComplete="current-password" onChange={e => setPwVal(e.target.value)} />
@@ -265,7 +266,7 @@ function App() {
 
         <div className="dpl-privacy">
           <span className="dpl-pv-t">隱私說明</span>
-          <p>・本站僅保存你的信箱／帳號與加密後的密碼,不會用於任何其他用途。</p>
+          <p>・本站僅保存你的帳號與加密後的密碼,不會用於任何其他用途。</p>
           <p>・早期以 Discord 登入建立的帳號,僅保存其 Discord 使用者名稱與 ID,用於識別身分。</p>
         </div>
         <a className="dpl-back" href="/">← 回到監獄入口</a>

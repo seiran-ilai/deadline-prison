@@ -13,15 +13,21 @@ const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 export const ACCOUNT_DOMAIN = 'inmate.deadline-prison.local'
 export const ACCOUNT_RE = /^[a-z0-9_]{3,20}$/
 
+// service client(繞過 RLS;只能在伺服器端使用);env 未設齊回 null
+export function getServiceClient() {
+  if (!SUPABASE_URL || !SERVICE_KEY) return null
+  return createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
 // 驗證呼叫者身分:Authorization JWT → getUser → profiles.role === 'warden'。
 // 通過回 { supabase: service client, caller };失敗回 { status, error }(呼叫端原樣回給前端)。
 export async function requireWarden(req) {
-  if (!SUPABASE_URL || !SERVICE_KEY) return { status: 500, error: 'server_not_configured' }
+  const supabase = getServiceClient()
+  if (!supabase) return { status: 500, error: 'server_not_configured' }
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
   if (!token) return { status: 401, error: 'not_authenticated' }
-  const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
   const { data: { user }, error } = await supabase.auth.getUser(token)
   if (error || !user) return { status: 401, error: 'not_authenticated' }
   const { data: prof, error: pErr } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()

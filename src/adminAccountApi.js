@@ -25,8 +25,12 @@ export const adminResetPassword = (userId) =>
 export const adminRenameAccount = (userId, account) =>
   call('/api/admin-rename-account', { user_id: userId, account })
 
-export const adminIssueCredentials = (userId, account) =>
-  call('/api/admin-issue-credentials', { user_id: userId, account })
+export const adminIssueCredentials = (userId, account, password) =>
+  call('/api/admin-issue-credentials', { user_id: userId, account, password })
+
+// 本人自改帳號名(非 warden 操作;對象固定為 JWT 驗出的本人)
+export const renameSelfAccount = (account) =>
+  call('/api/account-rename-self', { account })
 
 // API 錯誤碼中文化(收監登記/重設密碼/改帳號名共用)
 export function zhAdminError(code) {
@@ -37,7 +41,7 @@ export function zhAdminError(code) {
     not_warden_created: '此類帳號不可使用此操作（僅限典獄長代開的帳號）',
     user_not_found: '找不到該使用者',
     already_issued: '此成員已核發過帳號，請改用「重設密碼」',
-    has_real_email: '此成員以真實信箱註冊，已可用信箱登入，不需核發帳號',
+    invalid_password: '密碼需為 8–72 碼',
     forbidden: '僅典獄長可執行此操作',
     not_authenticated: '登入狀態已失效，請重新登入',
     server_not_configured: '伺服器尚未設定完成（缺 service key），請聯繫管理員',

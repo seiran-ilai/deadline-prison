@@ -10,8 +10,16 @@ import { adminCreateAccount, adminResetPassword, adminRenameAccount, adminIssueC
 
 const ACCOUNT_RE = /^[a-z0-9_]{3,20}$/
 
+// 前端輔助用隨機密碼(與 api/_lib/wardenAuth.js 同字元集:排除易混淆 0O1lI);
+// 僅供「核發帳密」表單一鍵填入,實際送出仍由典獄長確認/可改
+function suggestPassword() {
+  const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const buf = crypto.getRandomValues(new Uint32Array(12))
+  return Array.from(buf, n => chars[n % chars.length]).join('')
+}
+
 // 一次性密碼卡:背景點擊不關閉(避免誤關漏抄),須按「我已轉交」
-function PasswordModal({ title, account, password, onClose }) {
+function PasswordModal({ title, account, password, onClose, note = '本人首次登入會被要求設定新密碼。' }) {
   const [copied, setCopied] = useState(false)
   async function copy() {
     try {
@@ -31,7 +39,7 @@ function PasswordModal({ title, account, password, onClose }) {
         <label>預設密碼
           <input readOnly value={password} onFocus={e => e.target.select()} style={{ fontFamily: 'monospace' }} />
         </label>
-        <p className="warn">⚠️ 密碼僅顯示這一次，請立即透過私訊轉交給本人。本人首次登入會被要求設定新密碼。</p>
+        <p className="warn">⚠️ 密碼僅顯示這一次，請立即透過私訊轉交給本人。{note}</p>
         <div className="modal-acts">
           <button onClick={copy}>{copied ? '已複製 ✓' : '複製帳密'}</button>
           <button className="btn-pri" onClick={onClose}>我已轉交，關閉</button>
@@ -121,11 +129,13 @@ export function ResetPasswordModal({ member, onClose }) {
   )
 }
 
-// 核發帳密:既有 Discord 註冊用戶 → 補帳號名+一次性密碼(原帳號 uuid 不變,編號/紀錄不動)。
-// 帳號名預填自 Discord 帳號(過濾為合法字元),典獄長可改;成功後顯示一次性密碼卡。
+// 核發帳密:為既有用戶(Discord 或信箱註冊)設定登入帳號+密碼(原帳號 uuid 不變,編號/紀錄不動)。
+// 帳號名預填自 Discord 帳號(過濾為合法字元),密碼由典獄長自訂(可一鍵隨機產生);
+// 本人拿到帳密登入後,可在個人資料頁自行修改帳號與密碼,不強制首登改密。
 export function IssueCredentialsModal({ member, onClose, reloadShared }) {
   const suggested = (member.discord_account ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20)
   const [account, setAccount] = useState(suggested)
+  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const [result, setResult] = useState(null)   // { account, password }
@@ -136,8 +146,9 @@ export function IssueCredentialsModal({ member, onClose, reloadShared }) {
     setErr(null)
     const acc = account.trim().toLowerCase()
     if (!ACCOUNT_RE.test(acc)) { setErr(zhAdminError('invalid_account')); return }
+    if (password.length < 8) { setErr('密碼至少需 8 碼'); return }
     setBusy(true)
-    const r = await adminIssueCredentials(member.id, acc)
+    const r = await adminIssueCredentials(member.id, acc, password)
     setBusy(false)
     if (!r.ok) { setErr(zhAdminError(r.error)); return }
     setResult({ account: r.account, password: r.password })
@@ -145,17 +156,25 @@ export function IssueCredentialsModal({ member, onClose, reloadShared }) {
   }
 
   if (result) {
-    return <PasswordModal title="帳號密碼已核發" account={result.account} password={result.password} onClose={onClose} />
+    return <PasswordModal title="帳號密碼已核發" account={result.account} password={result.password}
+      note="本人登入後可在個人資料頁自行修改帳號密碼。" onClose={onClose} />
   }
   return (
     <div className="admin-modal-bg" onClick={onClose}>
       <div className="admin-modal" onClick={e => e.stopPropagation()}>
         <h3>核發帳號密碼</h3>
-        <p>為 Discord 用戶「{name}」核發站內帳號。核發後本人改以「帳號名＋密碼」登入，編號、名號與所有紀錄不變。</p>
+        <p>為「{name}」設定登入帳號與密碼。核發後本人以「帳號＋密碼」登入，編號、名號與所有紀錄不變；登入後可在個人資料頁自行修改帳號密碼。</p>
         <form onSubmit={submit}>
           <label>帳號名
             <input value={account} maxLength={20} autoComplete="off" autoFocus
               placeholder="a-z 0-9 _，3–20 字" onChange={e => setAccount(e.target.value)} />
+          </label>
+          <label>登入密碼（至少 8 碼）
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={password} maxLength={72} autoComplete="off" style={{ flex: 1, fontFamily: 'monospace' }}
+                placeholder="自訂或按右側隨機產生" onChange={e => setPassword(e.target.value)} />
+              <button type="button" className="btn-sm" onClick={() => setPassword(suggestPassword())}>隨機產生</button>
+            </div>
           </label>
           {err && <p className="warn">{err}</p>}
           <div className="modal-acts">

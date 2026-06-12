@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import AvatarInput from './AvatarInput'
+import { renameSelfAccount, zhAdminError } from './adminAccountApi'
 
 // 「個人資料」分頁:本人編輯自己那列 profiles(頭貼 / 暱稱 / 自我介紹 /(犯人才有)公開到犯人牆)。
 // RLS profiles_update_self 限制只能改自己(id = auth.uid());role 不在此頁變更。
@@ -27,17 +28,39 @@ export default function ProfilePage({ userId, role, onSaved }) {
   const [pwSaving, setPwSaving] = useState(false)
   const [pwErr, setPwErr] = useState('')
   const [pwSaved, setPwSaved] = useState(false)
+  // 帳號設定:典獄長代開/核發的帳號可自改帳號名(走 /api/account-rename-self)
+  const [accountName, setAccountName] = useState(null)   // 目前帳號名(假 email 的 local part);null = 非此類帳號
+  const [newAccount, setNewAccount] = useState('')
+  const [accSaving, setAccSaving] = useState(false)
+  const [accErr, setAccErr] = useState('')
+  const [accSaved, setAccSaved] = useState(false)
 
   useEffect(() => {
     let alive = true
     supabase.auth.getSession().then(({ data }) => {
       const u = data.session?.user
-      if (alive) setIsEmailUser(
+      if (!alive) return
+      setIsEmailUser(
         u?.app_metadata?.provider === 'email' || u?.user_metadata?.account_type === 'warden_created'
       )
+      if (u?.user_metadata?.account_type === 'warden_created') {
+        setAccountName((u.email || '').split('@')[0] || null)
+      }
     })
     return () => { alive = false }
   }, [])
+
+  async function changeAccount() {
+    setAccErr(''); setAccSaved(false)
+    const acc = newAccount.trim().toLowerCase()
+    if (!/^[a-z0-9_]{3,20}$/.test(acc)) { setAccErr('帳號名格式不符：僅允許小寫英文、數字與底線，3–20 字'); return }
+    if (acc === accountName) { setAccErr('新帳號名與目前相同'); return }
+    setAccSaving(true)
+    const r = await renameSelfAccount(acc)
+    setAccSaving(false)
+    if (!r.ok) { setAccErr(zhAdminError(r.error)); return }
+    setAccountName(r.account); setNewAccount(''); setAccSaved(true)
+  }
 
   async function changePassword() {
     setPwErr(''); setPwSaved(false)
@@ -129,6 +152,29 @@ export default function ProfilePage({ userId, role, onSaved }) {
           </div>
         </div>
       </div>
+
+      {/* 帳號設定:典獄長代開/核發的帳號可自改帳號名(改名不影響編號/紀錄,下次登入用新帳號) */}
+      {accountName && (
+        <div className="card-panel" style={{ marginTop: 16 }}>
+          <div className="pf-form">
+            <h4 style={{ margin: 0 }}>帳號設定</h4>
+            <label className="pf-label">目前帳號
+              <input value={accountName} readOnly onFocus={e => e.target.select()} />
+            </label>
+            <label className="pf-label">新帳號名
+              <input value={newAccount} maxLength={20} autoComplete="off"
+                placeholder="a-z 0-9 _，3–20 字" onChange={e => { setNewAccount(e.target.value); setAccSaved(false) }} />
+            </label>
+            {accErr && <p className="warn">{accErr}</p>}
+            <div className="pf-acts">
+              <button className="btn-pri" onClick={changeAccount} disabled={accSaving || !newAccount.trim()}>
+                {accSaving ? '更新中…' : '更新帳號名'}
+              </button>
+              {accSaved && <span className="pf-saved">已更新，下次登入請使用新帳號</span>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 修改密碼:僅信箱註冊用戶(已登入狀態直接 updateUser,不需舊密碼) */}
       {isEmailUser && (

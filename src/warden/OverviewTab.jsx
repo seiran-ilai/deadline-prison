@@ -52,10 +52,10 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
                 <button className="btn-sm" onClick={() => setResetTarget(p)}>重設密碼</button>
                 <button className="btn-sm" onClick={() => setRenameTarget(p)}>改帳號名</button>
               </>
-            ) : p.discord_account ? (
-              // Discord 註冊的舊用戶(獄卒/犯人):核發站內帳密(DC 登入入口已移除)
+            ) : (
+              // 尚未核發帳密的舊用戶(Discord 或信箱註冊;兩種登入入口皆已移除)
               <button className="btn-sm" onClick={() => setIssueTarget(p)}>核發帳密</button>
-            ) : null}
+            )}
           </div>
         )}
       </div>

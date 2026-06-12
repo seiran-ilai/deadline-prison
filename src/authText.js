@@ -1,7 +1,7 @@
 // Supabase auth 錯誤訊息中文化(/app 登入頁與官網入監 modal 共用)
 export function zhAuthError(message) {
   const m = message ?? ''
-  if (m.includes('Invalid login credentials')) return '信箱或密碼錯誤'
+  if (m.includes('Invalid login credentials')) return '帳號或密碼錯誤'
   if (m.includes('Email not confirmed')) return '請先完成信箱驗證'
   if (m.includes('User already registered')) return '此信箱已註冊過，請直接登入'
   if (m.includes('Password should be at least')) return '密碼至少需 8 碼'

@@ -203,16 +203,19 @@ export default function PrisonSite() {
   const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
   const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
 
-  // modal 內登入:成功後不換頁,直接刷新 user / 資料,留在同一個 modal 繼續報名流程。
-  // 輸入不含 @ → 視為典獄長代開的帳號名,補內部後綴;含 @ → 一般 email。
+  // modal 內帳號登入:成功後不換頁,直接刷新 user / 資料,留在同一個 modal 繼續報名流程。
+  // 僅收帳號名(信箱登入已移除),後綴由程式補。
   async function modalEmailSignIn(e) {
     e.preventDefault()
     setMAuthErr(null)
     const raw = mEmail.trim()
-    if (!raw || !mPw) { setMAuthErr('請輸入信箱／帳號與密碼'); return }
-    const email = raw.includes('@') ? raw : `${raw.toLowerCase()}@${INTERNAL_ACCOUNT_DOMAIN}`
+    if (!raw || !mPw) { setMAuthErr('請輸入帳號與密碼'); return }
+    if (raw.includes('@')) { setMAuthErr('請輸入帳號名（不含 @）；原以信箱註冊者請聯繫典獄長換發帳號'); return }
     setMAuthBusy(true)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: mPw })
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: `${raw.toLowerCase()}@${INTERNAL_ACCOUNT_DOMAIN}`,
+      password: mPw,
+    })
     setMAuthBusy(false)
     if (error) { setMAuthErr(zhAuthError(error.message)); return }
     setUser(data.user)
@@ -598,11 +601,11 @@ export default function PrisonSite() {
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
                 <>
-                  <p className="m-note">報名前請先登入。請以<b style={{ color: 'var(--text)' }}>信箱或帳號</b>登入；尚無帳號請聯繫典獄長開立。</p>
+                  <p className="m-note">報名前請先登入。請以<b style={{ color: 'var(--text)' }}>典獄長核發的帳號</b>登入；尚無帳號請聯繫典獄長開立。</p>
                   <form onSubmit={modalEmailSignIn}>
                     <div className="m-field">
-                      <span className="m-field-lbl">信箱或帳號</span>
-                      <input className="m-input" type="text" autoComplete="username" placeholder="信箱或帳號"
+                      <span className="m-field-lbl">帳號</span>
+                      <input className="m-input" type="text" autoComplete="username" placeholder="帳號"
                         value={mEmail} onChange={e => setMEmail(e.target.value)} />
                     </div>
                     <div className="m-field">
