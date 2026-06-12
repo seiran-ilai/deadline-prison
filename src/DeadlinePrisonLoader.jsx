@@ -52,9 +52,11 @@ const CSS = `
 .dpl-inp{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid rgba(207,202,187,.25);border-radius:4px;background:rgba(255,255,255,.045);color:#ededed;font-size:14.5px;outline:none;transition:border-color .2s ease}
 .dpl-inp:focus{border-color:rgba(232,182,0,.6)}
 .dpl-inp::placeholder{color:#6a6b61}
-.dpl-btn{width:100%;min-height:44px;padding:11px 18px;border:1px solid rgba(232,182,0,.55);border-radius:4px;background:rgba(232,182,0,.1);color:#E8B600;font-size:14.5px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:background .2s ease}
-.dpl-btn:hover{background:rgba(232,182,0,.18)}
+.dpl-btn{width:100%;min-height:48px;padding:12px 18px;border:none;border-radius:5px;background:#E8B600;color:#16150f;font-size:15.5px;font-weight:800;letter-spacing:.08em;cursor:pointer;box-shadow:0 0 26px rgba(232,182,0,.32);transition:filter .2s ease,transform .12s ease}
+.dpl-btn:hover{filter:brightness(1.08)}
+.dpl-btn:active{transform:translateY(1px)}
 .dpl-btn:disabled{opacity:.55;cursor:default}
+.dpl-choose{margin:0;max-width:min(88vw,360px);color:#7c7d72;font-size:12.5px;line-height:1.7;text-align:center}
 .dpl-mail-row{display:flex;justify-content:flex-end;margin-top:-4px}
 .dpl-swap{margin:2px 0 0;color:#7c7d72;font-size:12.5px;text-align:center}
 .dpl-lnk{color:#cfcabb;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:12.5px}

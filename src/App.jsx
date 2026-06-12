@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { zhAuthError } from './authText'
 import ManuscriptManager from './ManuscriptManager'
 import SessionGoals from './SessionGoals'
 import GuardWork from './GuardWork'
@@ -74,20 +75,6 @@ const TEST_ACCOUNTS = [
 // onAuthStateChange 前事件可能已發完(時序競態),所以以這個同步嗅探為主、
 // PASSWORD_RECOVERY 事件為輔(雙保險),擇穩定者 —— 兩者任一命中都進「設定新密碼」。
 const HAD_RECOVERY_HASH = window.location.hash.includes('type=recovery')
-
-// Supabase auth 錯誤訊息中文化(登入/註冊/重設共用)
-function zhAuthError(message) {
-  const m = message ?? ''
-  if (m.includes('Invalid login credentials')) return '信箱或密碼錯誤'
-  if (m.includes('Email not confirmed')) return '請先完成信箱驗證'
-  if (m.includes('User already registered')) return '此信箱已註冊過，請直接登入'
-  if (m.includes('Password should be at least')) return '密碼至少需 8 碼'
-  if (m.includes('valid email') || m.includes('invalid format')) return '信箱格式不正確'
-  if (m.includes('Email rate limit') || m.includes('rate limit')) return '寄信次數已達上限，請稍後再試'
-  if (m.includes('same') && m.includes('password')) return '新密碼不可與舊密碼相同'
-  if (m.includes('session missing') || m.includes('expired')) return '重設連結已失效，請重新申請密碼重設'
-  return '操作失敗，請稍後再試'
-}
 
 function App() {
   const [user, setUser] = useState(null)
@@ -345,14 +332,7 @@ function App() {
   if (!user) return (
     <DeadlinePrisonLoader status="等候收容" statusEn="AWAITING INTAKE" procLabel="身分核對">
       <div className="dpl-gate">
-        {/* 真實 <a> 導航:行動端保留使用者手勢,較可能喚起 Discord App;URL 未就緒時 fallback JS 跳轉 */}
-        <a className="dpl-dc" href={oauthUrl ?? '#'}
-          onClick={e => { if (!oauthUrl) { e.preventDefault(); signIn() } }}>
-          <DiscordIcon />用 Discord 登入入獄
-        </a>
-
-        {/* Email 第二通道:登入 / 註冊 / 忘記密碼 切換式表單 */}
-        <div className="dpl-or"><span /><em>或使用信箱</em><span /></div>
+        {/* Email 主通道:登入 / 註冊 / 忘記密碼 切換式表單 */}
         {authMode === 'login' && (
           <form className="dpl-mail" onSubmit={emailSignIn}>
             <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
@@ -393,6 +373,14 @@ function App() {
             <p className="dpl-swap"><a className="dpl-lnk" onClick={() => switchAuthMode('login')}>← 返回登入</a></p>
           </form>
         )}
+
+        {/* Discord 輔助通道:真實 <a> 導航(行動端保留使用者手勢,較可能喚起 Discord App;URL 未就緒時 fallback JS 跳轉) */}
+        <div className="dpl-or"><span /><em>或使用 Discord</em><span /></div>
+        <a className="dpl-dc" href={oauthUrl ?? '#'}
+          onClick={e => { if (!oauthUrl) { e.preventDefault(); signIn() } }}>
+          <DiscordIcon />用 Discord 登入入獄
+        </a>
+        <p className="dpl-choose">請擇一方式註冊：信箱與 Discord 為兩個獨立帳號，請勿重複註冊。</p>
 
         <div className="dpl-privacy">
           <span className="dpl-pv-t">隱私說明</span>

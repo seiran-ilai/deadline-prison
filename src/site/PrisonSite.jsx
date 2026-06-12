@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
+import { zhAuthError } from '../authText'
 import { createBooking, cancelBooking } from '../bookingApi'
 import { toSessionView, splitDate } from '../prison'
 import AvatarInput from '../AvatarInput'
@@ -104,6 +105,13 @@ export default function PrisonSite() {
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
+  const [mAuthMode, setMAuthMode] = useState('login') // modal 內 email 通道:'login' | 'register'
+  const [mEmail, setMEmail] = useState('')
+  const [mPw, setMPw] = useState('')
+  const [mName, setMName] = useState('')              // 註冊用:獄中名號(display_name)
+  const [mAuthBusy, setMAuthBusy] = useState(false)
+  const [mAuthErr, setMAuthErr] = useState(null)
+  const [mAuthNotice, setMAuthNotice] = useState(null)
   const [wallPage, setWallPage] = useState(0)        // 犯人牆目前頁(0 起算)
   const wallTouch = useRef(null)                     // 犯人牆觸控起點(手機左右滑換頁)
   const rootRef = useRef(null)
@@ -199,14 +207,55 @@ export default function PrisonSite() {
   }
 
   const scrollTo = id => rootRef.current?.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' })
-  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null) }
-  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null) }
+  const resetModalAuth = () => { setMAuthMode('login'); setMPw(''); setMAuthBusy(false); setMAuthErr(null); setMAuthNotice(null) }
+  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
+  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
 
   async function loginWithDiscord() {
     await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: { redirectTo: `${window.location.origin}/?intake=${sel.id}`, scopes: 'identify' },
     })
+  }
+
+  // modal 內 email 登入:成功後不換頁,直接刷新 user / 資料,留在同一個 modal 繼續報名流程
+  async function modalEmailSignIn(e) {
+    e.preventDefault()
+    setMAuthErr(null); setMAuthNotice(null)
+    if (!mEmail.trim() || !mPw) { setMAuthErr('請輸入信箱與密碼'); return }
+    setMAuthBusy(true)
+    const { data, error } = await supabase.auth.signInWithPassword({ email: mEmail.trim(), password: mPw })
+    setMAuthBusy(false)
+    if (error) { setMAuthErr(zhAuthError(error.message)); return }
+    setUser(data.user)
+    loadData()
+  }
+
+  // modal 內 email 註冊:驗證信導回 /?intake=<id>,確認完回來 modal 會自動開、繼續報名
+  async function modalEmailSignUp(e) {
+    e.preventDefault()
+    setMAuthErr(null); setMAuthNotice(null)
+    const name = mName.trim()
+    if (!mEmail.trim()) { setMAuthErr('請輸入信箱'); return }
+    if (mPw.length < 8) { setMAuthErr('密碼至少需 8 碼'); return }
+    if (name.length < 2 || name.length > 20) { setMAuthErr('獄中名號需為 2–20 字'); return }
+    setMAuthBusy(true)
+    const { data, error } = await supabase.auth.signUp({
+      email: mEmail.trim(),
+      password: mPw,
+      options: {
+        data: { display_name: name },
+        emailRedirectTo: `${window.location.origin}/?intake=${sel.id}`,
+      },
+    })
+    setMAuthBusy(false)
+    if (error) { setMAuthErr(zhAuthError(error.message)); return }
+    // 信箱已註冊時 Supabase 不回錯誤(防探測),改回空 identities → 視同已註冊
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      setMAuthErr('此信箱已註冊過，請直接登入'); return
+    }
+    setMAuthNotice('驗證信已寄出，請至信箱完成確認後，再回來登入報名。')
+    setMPw('')
   }
 
   // 密鑰場:報名前先核對通行密鑰(RPC 只回對/錯,不外洩密鑰;送出報名時 /api/booking 會再驗一次)
@@ -587,8 +636,54 @@ export default function PrisonSite() {
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
                 <>
-                  <p className="m-note">入監採 <b style={{ color: 'var(--text)' }}>Discord 登入</b>，登入後自動帶入你的 DC 身分作為服刑名冊紀錄，無需另填聯絡方式。</p>
+                  <p className="m-note">報名前請先登入。可用<b style={{ color: 'var(--text)' }}>信箱</b>或 <b style={{ color: 'var(--text)' }}>Discord</b> 擇一登入／註冊。</p>
+                  {mAuthMode === 'login' ? (
+                    <form onSubmit={modalEmailSignIn}>
+                      <div className="m-field">
+                        <span className="m-field-lbl">信箱</span>
+                        <input className="m-input" type="email" autoComplete="email" placeholder="信箱"
+                          value={mEmail} onChange={e => setMEmail(e.target.value)} />
+                      </div>
+                      <div className="m-field">
+                        <span className="m-field-lbl">密碼</span>
+                        <input className="m-input" type="password" autoComplete="current-password" placeholder="密碼"
+                          value={mPw} onChange={e => setMPw(e.target.value)} />
+                      </div>
+                      {mAuthErr && <p className="m-note" style={{ color: 'var(--alarm)', margin: '10px 0' }}>{mAuthErr}</p>}
+                      {mAuthNotice && <p className="m-note" style={{ color: 'var(--text)', margin: '10px 0' }}>{mAuthNotice}</p>}
+                      <button className="m-dc m-confirm" type="submit" disabled={mAuthBusy}>
+                        {mAuthBusy ? '登入中…' : '用信箱登入'}
+                      </button>
+                      <p className="m-swap">還沒有帳號？<a className="m-lnk" onClick={() => { setMAuthMode('register'); setMAuthErr(null); setMAuthNotice(null) }}>用信箱註冊</a></p>
+                    </form>
+                  ) : (
+                    <form onSubmit={modalEmailSignUp}>
+                      <div className="m-field">
+                        <span className="m-field-lbl">信箱</span>
+                        <input className="m-input" type="email" autoComplete="email" placeholder="信箱"
+                          value={mEmail} onChange={e => setMEmail(e.target.value)} />
+                      </div>
+                      <div className="m-field">
+                        <span className="m-field-lbl">密碼（至少 8 碼）</span>
+                        <input className="m-input" type="password" autoComplete="new-password" placeholder="密碼"
+                          value={mPw} onChange={e => setMPw(e.target.value)} />
+                      </div>
+                      <div className="m-field">
+                        <span className="m-field-lbl">獄中名號（2–20 字，必填）</span>
+                        <input className="m-input" type="text" maxLength={20} placeholder="顯示在站內的名號"
+                          value={mName} onChange={e => setMName(e.target.value)} />
+                      </div>
+                      {mAuthErr && <p className="m-note" style={{ color: 'var(--alarm)', margin: '10px 0' }}>{mAuthErr}</p>}
+                      {mAuthNotice && <p className="m-note" style={{ color: 'var(--text)', margin: '10px 0' }}>{mAuthNotice}</p>}
+                      <button className="m-dc m-confirm" type="submit" disabled={mAuthBusy}>
+                        {mAuthBusy ? '註冊中…' : '用信箱註冊'}
+                      </button>
+                      <p className="m-swap">已有帳號？<a className="m-lnk" onClick={() => { setMAuthMode('login'); setMAuthErr(null); setMAuthNotice(null) }}>登入</a></p>
+                    </form>
+                  )}
+                  <div className="m-or"><span /><em>或</em><span /></div>
                   <button className="m-dc" onClick={loginWithDiscord}><DiscordIcon />以 Discord 登入入監</button>
+                  <p className="m-choose">請擇一方式註冊：信箱與 Discord 為兩個獨立帳號，請勿重複註冊。</p>
                 </>
               ) : active ? (
                 <>

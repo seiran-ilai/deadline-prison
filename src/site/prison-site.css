@@ -332,6 +332,14 @@
 .dp-modal .m-input{background:var(--concrete-0); border:1px solid var(--steel); color:var(--text);
   padding:10px 12px; font-family:var(--cjk); font-size:14px; width:100%}
 .dp-modal .m-input:focus{outline:none; border-color:var(--hazard)}
+/* modal 內 email/Discord 雙通道:分隔線 + 切換連結 + 擇一提示 */
+.dp-modal .m-or{display:flex; align-items:center; gap:12px; margin:16px 0; color:var(--dim); font-family:var(--mono); font-size:11px; letter-spacing:2px}
+.dp-modal .m-or span{flex:1; height:1px; background:var(--steel)}
+.dp-modal .m-or em{font-style:normal}
+.dp-modal .m-swap{margin:10px 0 0; font-size:12.5px; color:var(--dim); text-align:center}
+.dp-modal .m-lnk{color:var(--text); text-decoration:underline; text-underline-offset:3px; cursor:pointer}
+.dp-modal .m-lnk:hover{color:var(--hazard)}
+.dp-modal .m-choose{margin:12px 0 0; font-size:12px; color:var(--dim); line-height:1.7; text-align:center}
 
 /* AvatarInput 於形象站(.dp-site)的外觀:沿用元件 markup,改用形象站色票 */
 .dp-site .avatar-input{display:flex; gap:14px; align-items:flex-start; width:100%}
