@@ -4,7 +4,12 @@
 
 const CSS = `
 .dpl-root{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0b0b09;font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",ui-sans-serif,sans-serif;isolation:isolate}
-.dpl-root.dpl-fixed{position:fixed;inset:0;z-index:9999}
+/* fixed 模式:內容可能比螢幕高(登入頁含 email 表單)→ 改可垂直捲動,
+   置中改用 margin:auto(內容矮時居中、高時從頂部開始可完整捲到底,不會像 justify-content:center 把上緣裁掉) */
+.dpl-root.dpl-fixed{position:fixed;inset:0;z-index:9999;overflow-y:auto;flex-direction:column;align-items:stretch;justify-content:flex-start}
+.dpl-root.dpl-fixed .dpl-content{margin:auto;padding:46px 24px}
+/* 裝飾層釘在視窗(不跟內容捲走) */
+.dpl-root.dpl-fixed .dpl-bars,.dpl-root.dpl-fixed .dpl-vig,.dpl-root.dpl-fixed .dpl-scan,.dpl-root.dpl-fixed .dpl-haz{position:fixed}
 .dpl-root.dpl-inline{width:100%;min-height:500px;border-radius:14px}
 .dpl-bars{position:absolute;inset:0;z-index:0;background:repeating-linear-gradient(90deg,transparent 0 46px,rgba(255,255,255,.018) 46px 48px)}
 .dpl-vig{position:absolute;inset:0;z-index:1;background:radial-gradient(120% 90% at 50% 42%,transparent 40%,rgba(0,0,0,.7) 100%)}
