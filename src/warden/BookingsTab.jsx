@@ -20,7 +20,7 @@ export default function BookingsTab({ setMsg }) {
   async function load() {
     setLoading(true)
     const { data: bk } = await supabase.from('bookings')
-      .select('id, session_id, dc_id, dc_name, note, status, created_at, game_name, avatar_url').order('created_at')
+      .select('id, session_id, user_id, dc_id, dc_name, note, status, created_at, game_name, avatar_url').order('created_at')
     const grouped = {}
     for (const b of bk ?? []) (grouped[b.session_id] ??= []).push(b)
     const sids = Object.keys(grouped)
@@ -98,9 +98,11 @@ export default function BookingsTab({ setMsg }) {
                       return (
                         <div key={b.id} className="sub-row">
                           {b.avatar_url && <img className="avatar" src={b.avatar_url} alt="" />}
-                          <strong>{b.dc_name}</strong>
-                          {b.game_name && <span className="muted">暱稱：{b.game_name}</span>}
-                          <span className="faint">DC:{b.dc_id}</span>
+                          <strong>{b.dc_name ?? b.game_name ?? '（未填暱稱）'}</strong>
+                          {/* 訪客列(不註冊預約):user_id 為 null,只有遊戲暱稱 */}
+                          {!b.user_id && <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.12)', color: 'var(--dim, #aaa)' }}>訪客</span>}
+                          {b.dc_name && b.game_name && <span className="muted">暱稱：{b.game_name}</span>}
+                          {b.dc_id && <span className="faint">DC:{b.dc_id}</span>}
                           {b.note && <span className="muted">備註：{b.note}</span>}
                           <span className="tag tag-pill" style={{ background: st.bg, color: st.color }}>{st.label}</span>
                           <span className="faint">{new Date(b.created_at).toLocaleString()}</span>

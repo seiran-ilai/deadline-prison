@@ -16,6 +16,18 @@ export async function createBooking(sessionId, { note = null, game_name = null, 
   return { ok: res.ok, status: res.status, ...json }
 }
 
+// 不註冊預約:免登入,只留遊戲暱稱(伺服器端驗場次/容量/密鑰;同場同暱稱防重複)。
+// 回傳 { ok, status, error?, booked?, capacity? }
+export async function createGuestBooking(sessionId, { game_name, password = null } = {}) {
+  const res = await fetch('/api/booking-guest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, game_name, password: password || null }),
+  })
+  const json = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, ...json }
+}
+
 // 取消自己的預約(沿用 RLS:本人可改自己的列)
 export async function cancelBooking(bookingId) {
   const { error } = await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId)

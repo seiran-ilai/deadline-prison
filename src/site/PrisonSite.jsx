@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import { zhAuthError } from '../authText'
 import { SHOW_APP_ACCESS, INTERNAL_ACCOUNT_DOMAIN } from '../authConfig'
-import { createBooking, cancelBooking } from '../bookingApi'
+import { createBooking, createGuestBooking, cancelBooking } from '../bookingApi'
 import { toSessionView, splitDate } from '../prison'
 import AvatarInput from '../AvatarInput'
 import './prison-site.css'
@@ -100,10 +100,15 @@ export default function PrisonSite() {
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
-  const [mEmail, setMEmail] = useState('')            // modal 內登入:信箱或帳號名
+  const [mEmail, setMEmail] = useState('')            // modal 內登入:帳號名
   const [mPw, setMPw] = useState('')
   const [mAuthBusy, setMAuthBusy] = useState(false)
   const [mAuthErr, setMAuthErr] = useState(null)
+  const [gMode, setGMode] = useState(false)           // 不註冊預約:訪客表單開關
+  const [gName, setGName] = useState('')              // 不註冊預約:遊戲暱稱(唯一記錄的資料)
+  const [gPw, setGPw] = useState('')                  // 不註冊預約:密鑰場通行密鑰
+  const [gBusy, setGBusy] = useState(false)
+  const [gErr, setGErr] = useState(null)
   const [wallPage, setWallPage] = useState(0)        // 犯人牆目前頁(0 起算)
   const wallTouch = useRef(null)                     // 犯人牆觸控起點(手機左右滑換頁)
   const rootRef = useRef(null)
@@ -199,7 +204,10 @@ export default function PrisonSite() {
   }
 
   const scrollTo = id => rootRef.current?.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' })
-  const resetModalAuth = () => { setMPw(''); setMAuthBusy(false); setMAuthErr(null) }
+  const resetModalAuth = () => {
+    setMPw(''); setMAuthBusy(false); setMAuthErr(null)
+    setGMode(false); setGName(''); setGPw(''); setGBusy(false); setGErr(null)
+  }
   const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
   const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
 
@@ -220,6 +228,28 @@ export default function PrisonSite() {
     if (error) { setMAuthErr(zhAuthError(error.message)); return }
     setUser(data.user)
     loadData()
+  }
+
+  // 不註冊預約:免登入送出,只記錄遊戲暱稱(無帳號、無法登入系統、無法自行取消)。
+  // 密鑰場的通行密鑰直接在表單內填,由 /api/booking-guest 伺服器端核對。
+  async function submitGuestBooking(e) {
+    e.preventDefault()
+    setGErr(null)
+    const name = gName.trim()
+    if (!name) { setGErr('請輸入遊戲暱稱'); return }
+    if (sel.hasPassword && !gPw.trim()) { setGErr('本梯次為密鑰場，請輸入通行密鑰'); return }
+    setGBusy(true)
+    const r = await createGuestBooking(sel.id, { game_name: name, password: sel.hasPassword ? gPw.trim() : null })
+    setGBusy(false)
+    if (r.ok) {
+      setMsg('收監成功。鈴響時見。（不註冊預約如需取消，請至 Discord 聯繫典獄長）')
+      loadData()
+      return
+    }
+    if (r.error === 'already_booked') setGErr('此暱稱已在此梯次服刑名冊上。')
+    else if (r.error === 'full') setGErr('此梯次已停止收監。')
+    else if (r.error === 'wrong_password') setGErr('通行密鑰不正確，請確認後重試。')
+    else setGErr('收監失敗，請稍後再試。')
   }
 
   // 密鑰場:報名前先核對通行密鑰(RPC 只回對/錯,不外洩密鑰;送出報名時 /api/booking 會再驗一次)
@@ -600,26 +630,54 @@ export default function PrisonSite() {
               {msg ? (
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
-                <>
-                  <p className="m-note">報名前請先登入。請以<b style={{ color: 'var(--text)' }}>帳號密碼</b>登入；尚無帳密請向典獄長索取。</p>
-                  <form onSubmit={modalEmailSignIn}>
-                    <div className="m-field">
-                      <span className="m-field-lbl">帳號</span>
-                      <input className="m-input" type="text" autoComplete="username" placeholder="帳號"
-                        value={mEmail} onChange={e => setMEmail(e.target.value)} />
-                    </div>
-                    <div className="m-field">
-                      <span className="m-field-lbl">密碼</span>
-                      <input className="m-input" type="password" autoComplete="current-password" placeholder="密碼"
-                        value={mPw} onChange={e => setMPw(e.target.value)} />
-                    </div>
-                    {mAuthErr && <p className="m-note" style={{ color: 'var(--alarm)', margin: '10px 0' }}>{mAuthErr}</p>}
-                    <button className="m-dc m-confirm" type="submit" disabled={mAuthBusy}>
-                      {mAuthBusy ? '登入中…' : '登入'}
-                    </button>
-                  </form>
-                  <p className="m-choose">本系統不開放自行註冊，請向典獄長索取帳號密碼。</p>
-                </>
+                gMode ? (
+                  /* 不註冊預約:只填遊戲暱稱(+ 密鑰場通行密鑰),不建帳號 */
+                  <>
+                    <p className="m-note">不註冊預約：名冊只記錄你的<b style={{ color: 'var(--text)' }}>遊戲暱稱</b>，不會建立帳號、無法登入系統；如需取消請至 Discord 聯繫典獄長。</p>
+                    <form onSubmit={submitGuestBooking}>
+                      <div className="m-field">
+                        <span className="m-field-lbl">遊戲暱稱</span>
+                        <input className="m-input" type="text" maxLength={60} placeholder="顯示在名冊上的暱稱"
+                          value={gName} onChange={e => setGName(e.target.value)} />
+                      </div>
+                      {sel.hasPassword && (
+                        <div className="m-field">
+                          <span className="m-field-lbl">通行密鑰</span>
+                          <input className="m-input" type="password" placeholder="本梯次為密鑰場"
+                            value={gPw} onChange={e => setGPw(e.target.value)} />
+                        </div>
+                      )}
+                      {gErr && <p className="m-note" style={{ color: 'var(--alarm)', margin: '10px 0' }}>{gErr}</p>}
+                      <button className="m-dc m-confirm" type="submit" disabled={gBusy}>
+                        {gBusy ? '收監中…' : '確認入監（不註冊）'}
+                      </button>
+                      <p className="m-swap"><a className="m-lnk" onClick={() => { setGMode(false); setGErr(null) }}>← 改用帳號登入報名</a></p>
+                    </form>
+                  </>
+                ) : (
+                  <>
+                    <p className="m-note">報名前請先登入。請以<b style={{ color: 'var(--text)' }}>帳號密碼</b>登入；尚無帳密請向典獄長索取。</p>
+                    <form onSubmit={modalEmailSignIn}>
+                      <div className="m-field">
+                        <span className="m-field-lbl">帳號</span>
+                        <input className="m-input" type="text" autoComplete="username" placeholder="帳號"
+                          value={mEmail} onChange={e => setMEmail(e.target.value)} />
+                      </div>
+                      <div className="m-field">
+                        <span className="m-field-lbl">密碼</span>
+                        <input className="m-input" type="password" autoComplete="current-password" placeholder="密碼"
+                          value={mPw} onChange={e => setMPw(e.target.value)} />
+                      </div>
+                      {mAuthErr && <p className="m-note" style={{ color: 'var(--alarm)', margin: '10px 0' }}>{mAuthErr}</p>}
+                      <button className="m-dc m-confirm" type="submit" disabled={mAuthBusy}>
+                        {mAuthBusy ? '登入中…' : '登入'}
+                      </button>
+                    </form>
+                    <div className="m-or"><span /><em>或</em><span /></div>
+                    <button className="m-dc m-ghost" onClick={() => { setGMode(true); setMAuthErr(null) }}>不註冊，直接預約</button>
+                    <p className="m-choose">本系統不開放自行註冊，請向典獄長索取帳號密碼。</p>
+                  </>
+                )
               ) : active ? (
                 <>
                   <p className="m-note">你已在此梯次服刑名冊上。</p>
