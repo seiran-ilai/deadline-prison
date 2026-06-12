@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { adminCreateAccount, adminResetPassword, adminRenameAccount, zhAdminError } from '../adminAccountApi'
+import { adminCreateAccount, adminResetPassword, adminRenameAccount, adminIssueCredentials, zhAdminError } from '../adminAccountApi'
 
 // 典獄長代開帳號 UI(僅 warden 會被容器渲染):
-//   CreateAccountSection — 名單總覽頂部的「收監登記」區塊(開立帳號)
-//   ResetPasswordModal   — 名單卡片「重設密碼」(確認 → 一次性密碼卡)
-//   RenameAccountModal   — 名單卡片「修改帳號名」
+//   CreateAccountSection   — 名單總覽頂部的「收監登記」區塊(開立帳號)
+//   ResetPasswordModal     — 名單卡片「重設密碼」(確認 → 一次性密碼卡)
+//   RenameAccountModal     — 名單卡片「修改帳號名」
+//   IssueCredentialsModal  — 名單卡片「核發帳密」:為既有 Discord 用戶補帳號+密碼(uuid 不變)
 // 密碼只存在 API 回應與這裡的 state,關掉 modal 即消失,不落任何 log。
 
 const ACCOUNT_RE = /^[a-z0-9_]{3,20}$/
@@ -115,6 +116,53 @@ export function ResetPasswordModal({ member, onClose }) {
           <button onClick={onClose}>取消</button>
           <button className="btn-pri" onClick={run} disabled={busy}>{busy ? '重設中…' : '確認重設'}</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// 核發帳密:既有 Discord 註冊用戶 → 補帳號名+一次性密碼(原帳號 uuid 不變,編號/紀錄不動)。
+// 帳號名預填自 Discord 帳號(過濾為合法字元),典獄長可改;成功後顯示一次性密碼卡。
+export function IssueCredentialsModal({ member, onClose, reloadShared }) {
+  const suggested = (member.discord_account ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20)
+  const [account, setAccount] = useState(suggested)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const [result, setResult] = useState(null)   // { account, password }
+  const name = member.game_name ?? member.display_name ?? '（未命名）'
+
+  async function submit(e) {
+    e.preventDefault()
+    setErr(null)
+    const acc = account.trim().toLowerCase()
+    if (!ACCOUNT_RE.test(acc)) { setErr(zhAdminError('invalid_account')); return }
+    setBusy(true)
+    const r = await adminIssueCredentials(member.id, acc)
+    setBusy(false)
+    if (!r.ok) { setErr(zhAdminError(r.error)); return }
+    setResult({ account: r.account, password: r.password })
+    reloadShared?.()
+  }
+
+  if (result) {
+    return <PasswordModal title="帳號密碼已核發" account={result.account} password={result.password} onClose={onClose} />
+  }
+  return (
+    <div className="admin-modal-bg" onClick={onClose}>
+      <div className="admin-modal" onClick={e => e.stopPropagation()}>
+        <h3>核發帳號密碼</h3>
+        <p>為 Discord 用戶「{name}」核發站內帳號。核發後本人改以「帳號名＋密碼」登入，編號、名號與所有紀錄不變。</p>
+        <form onSubmit={submit}>
+          <label>帳號名
+            <input value={account} maxLength={20} autoComplete="off" autoFocus
+              placeholder="a-z 0-9 _，3–20 字" onChange={e => setAccount(e.target.value)} />
+          </label>
+          {err && <p className="warn">{err}</p>}
+          <div className="modal-acts">
+            <button type="button" onClick={onClose}>取消</button>
+            <button className="btn-pri" type="submit" disabled={busy}>{busy ? '核發中…' : '確認核發'}</button>
+          </div>
+        </form>
       </div>
     </div>
   )

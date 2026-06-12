@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ROLE_LABEL } from './constants'
-import { CreateAccountSection, ResetPasswordModal, RenameAccountModal } from './AccountAdmin'
+import { CreateAccountSection, ResetPasswordModal, RenameAccountModal, IssueCredentialsModal } from './AccountAdmin'
 
 // 名單總覽(卡片網格版):已配號清單,分獄卒區 / 犯人區。
 // 登入即建檔發號,不再有「未配對 / 預約中」待處理區;搜尋 / 排序作用於整份清單。
@@ -10,8 +10,9 @@ import { CreateAccountSection, ResetPasswordModal, RenameAccountModal } from './
 export default function OverviewTab({ inmates, loading, isWarden, onEditMember, setMsg, reloadShared }) {
   const [q, setQ] = useState('')                          // 清單搜尋(暱稱 / 編號)
   const [sortDir, setSortDir] = useState('asc')           // 排序:asc=編號舊→新(預設) / desc=新→舊
-  const [resetTarget, setResetTarget] = useState(null)    // 代開帳號:重設密碼對象
-  const [renameTarget, setRenameTarget] = useState(null)  // 代開帳號:改帳號名對象
+  const [resetTarget, setResetTarget] = useState(null)    // 代開/核發帳號:重設密碼對象
+  const [renameTarget, setRenameTarget] = useState(null)  // 代開/核發帳號:改帳號名對象
+  const [issueTarget, setIssueTarget] = useState(null)    // Discord 用戶:核發帳密對象
 
   // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序
   const ql = q.trim().toLowerCase()
@@ -46,12 +47,15 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
         {isWarden && (
           <div className="ov-acts">
             <button className="btn-sm" onClick={() => onEditMember(p)}>編輯</button>
-            {p.account_type === 'warden_created' && (
+            {p.account_type === 'warden_created' ? (
               <>
                 <button className="btn-sm" onClick={() => setResetTarget(p)}>重設密碼</button>
                 <button className="btn-sm" onClick={() => setRenameTarget(p)}>改帳號名</button>
               </>
-            )}
+            ) : p.discord_account ? (
+              // Discord 註冊的舊用戶(獄卒/犯人):核發站內帳密(DC 登入入口已移除)
+              <button className="btn-sm" onClick={() => setIssueTarget(p)}>核發帳密</button>
+            ) : null}
           </div>
         )}
       </div>
@@ -97,6 +101,9 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
       )}
       {isWarden && renameTarget && (
         <RenameAccountModal member={renameTarget} setMsg={setMsg} onClose={() => setRenameTarget(null)} />
+      )}
+      {isWarden && issueTarget && (
+        <IssueCredentialsModal member={issueTarget} reloadShared={reloadShared} onClose={() => setIssueTarget(null)} />
       )}
     </div>
   )

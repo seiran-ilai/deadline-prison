@@ -19,7 +19,8 @@ export default function ProfilePage({ userId, role, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [saved, setSaved] = useState(false)
-  // 修改密碼:僅 email 通道用戶顯示(Discord 登入者沒有密碼可改)
+  // 修改密碼:email 通道用戶 + 典獄長代開/核發的帳號顯示
+  // (核發帳密的舊 Discord 用戶 provider 仍是 discord,改以 user_metadata.account_type 補判)
   const [isEmailUser, setIsEmailUser] = useState(false)
   const [pw1, setPw1] = useState('')
   const [pw2, setPw2] = useState('')
@@ -30,7 +31,10 @@ export default function ProfilePage({ userId, role, onSaved }) {
   useEffect(() => {
     let alive = true
     supabase.auth.getSession().then(({ data }) => {
-      if (alive) setIsEmailUser(data.session?.user?.app_metadata?.provider === 'email')
+      const u = data.session?.user
+      if (alive) setIsEmailUser(
+        u?.app_metadata?.provider === 'email' || u?.user_metadata?.account_type === 'warden_created'
+      )
     })
     return () => { alive = false }
   }, [])

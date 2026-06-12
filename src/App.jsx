@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { zhAuthError } from './authText'
-import { EMAIL_SIGNUP_OPEN, DISCORD_LOGIN_OPEN, INTERNAL_ACCOUNT_DOMAIN } from './authConfig'
+import { INTERNAL_ACCOUNT_DOMAIN } from './authConfig'
 import ManuscriptManager from './ManuscriptManager'
 import SessionGoals from './SessionGoals'
 import GuardWork from './GuardWork'
@@ -57,12 +57,6 @@ function LockedSessionNote({ text, onGoToBooking }) {
   )
 }
 
-const DiscordIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-    <path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.3.5a18 18 0 0 1 4.3 1.4 16.6 16.6 0 0 0-14.9 0A18 18 0 0 1 8.9 3.5L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9 .1 13.4.3 17.8A20 20 0 0 0 6.4 21l.5-1.8a13 13 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4a13 13 0 0 1-2 1L17 21a20 20 0 0 0 6-3.2c.3-5.1-.5-9.4-2.7-13.4ZM8.4 15.3c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Zm7.2 0c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Z" />
-  </svg>
-)
-
 // ⚠️ 測試專用：開發測試帳號（只在 import.meta.env.DEV 時使用）
 // 這些是 Supabase 上真實的 Email 測試帳號，profiles 已建好（role=guard/member）
 // TODO: 把密碼填進來（測試帳號，明碼放前端沒關係，反正只在 npm run dev 出現）
@@ -86,14 +80,12 @@ function App() {
   const [tabResolved, setTabResolved] = useState(false) // 落地分頁是否已決定:決定前遮 loading,避免用初始 tab 先渲染一次(閃過 session/booking)
   const [msg, setMsg] = useState('')
   const [myLive, setMyLive] = useState(null) // { sessionId, roleInSession, status } | null:我所在「未結束」場次(0 或 1)
-  const [oauthUrl, setOauthUrl] = useState(null) // 預取的 Discord OAuth URL(登入鈕用真實 <a> 導航)
   const [testError, setTestError] = useState(null)
   const [testBusy, setTestBusy] = useState(false)
-  // ---- Email 登入/註冊/忘記密碼(Discord OAuth 之外的第二通道) ----
-  const [authMode, setAuthMode] = useState('login')  // 'login' | 'register' | 'forgot'
+  // ---- 信箱／帳號登入、忘記密碼(站內唯一登入通道;註冊已移除,帳號由典獄長開立) ----
+  const [authMode, setAuthMode] = useState('login')  // 'login' | 'forgot'
   const [emailVal, setEmailVal] = useState('')
   const [pwVal, setPwVal] = useState('')
-  const [nameVal, setNameVal] = useState('')         // 註冊用:獄中名號(display_name)
   const [authBusy, setAuthBusy] = useState(false)
   const [authErr, setAuthErr] = useState(null)
   const [authNotice, setAuthNotice] = useState(null) // 驗證信/重設信已寄出等成功提示
@@ -217,27 +209,6 @@ function App() {
     return () => { alive = false }
   }, [profile?.role, myLive?.roleInSession])
 
-  // 未登入時預取 OAuth URL:登入鈕用真實 <a href> 導航(保留使用者手勢),
-  // 行動端較可能由系統交給 Discord App 開授權頁,也避開非同步跳轉被瀏覽器擋下的情況。
-  useEffect(() => {
-    if (user || !DISCORD_LOGIN_OPEN) { setOauthUrl(null); return }
-    let alive = true
-    ;(async () => {
-      const redirectTo = window.location.origin + window.location.pathname  // 乾淨路徑,不帶 hash/query
-      const { data } = await supabase.auth.signInWithOAuth({
-        provider: 'discord',
-        options: { redirectTo, scopes: 'identify', skipBrowserRedirect: true },
-      })
-      if (alive && data?.url) setOauthUrl(data.url)
-    })()
-    return () => { alive = false }
-  }, [user])
-
-  // 登入後導回目前的監所系統頁(/app 或 /warden),而非公開首頁(預取失敗時的 fallback)
-  async function signIn() {
-    const redirectTo = window.location.origin + window.location.pathname  // 乾淨路徑,不帶 hash/query
-    await supabase.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo, scopes: 'identify' } })
-  }
   async function signOut() {
     await supabase.auth.signOut({ scope: 'local' })   // 先確實清掉本地 session 再導頁(避免跳太快、新頁面讀到殘留 session)
     window.location.replace('/')                       // replace 不留 /app 在瀏覽歷史
@@ -268,32 +239,6 @@ function App() {
     setAuthBusy(false)
     if (error) setAuthErr(zhAuthError(error.message))
     // 成功時 onAuthStateChange 會帶 user 進站,這裡不用做事
-  }
-  async function emailSignUp(e) {
-    e.preventDefault()
-    if (!EMAIL_SIGNUP_OPEN) { setAuthErr('目前暫停開放信箱註冊'); return }
-    setAuthErr(null); setAuthNotice(null)
-    const name = nameVal.trim()
-    if (!emailVal.trim()) { setAuthErr('請輸入信箱'); return }
-    if (pwVal.length < 8) { setAuthErr('密碼至少需 8 碼'); return }
-    if (name.length < 2 || name.length > 20) { setAuthErr('獄中名號需為 2–20 字'); return }
-    setAuthBusy(true)
-    const { data, error } = await supabase.auth.signUp({
-      email: emailVal.trim(),
-      password: pwVal,
-      options: {
-        data: { display_name: name },                          // 首次登入建檔時補進 profiles.display_name
-        emailRedirectTo: window.location.origin + '/app',      // 驗證完成導回監獄系統
-      },
-    })
-    setAuthBusy(false)
-    if (error) { setAuthErr(zhAuthError(error.message)); return }
-    // 信箱已註冊時 Supabase 不回錯誤(防探測),改回 identities 空陣列 → 視同已註冊
-    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      setAuthErr('此信箱已註冊過，請直接登入'); return
-    }
-    setAuthNotice('驗證信已寄出，請至信箱完成確認後再回來登入。')
-    setPwVal('')
   }
   async function sendReset(e) {
     e.preventDefault()
@@ -376,24 +321,7 @@ function App() {
             </div>
             {authErr && <p className="dpl-err">{authErr}</p>}
             {authNotice && <p className="dpl-ok">{authNotice}</p>}
-            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '用信箱登入入獄'}</button>
-            {EMAIL_SIGNUP_OPEN && (
-              <p className="dpl-swap">還沒有帳號？<a className="dpl-lnk" onClick={() => switchAuthMode('register')}>註冊</a></p>
-            )}
-          </form>
-        )}
-        {EMAIL_SIGNUP_OPEN && authMode === 'register' && (
-          <form className="dpl-mail" onSubmit={emailSignUp}>
-            <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
-              autoComplete="email" onChange={e => setEmailVal(e.target.value)} />
-            <input className="dpl-inp" type="password" placeholder="密碼（至少 8 碼）" value={pwVal}
-              autoComplete="new-password" onChange={e => setPwVal(e.target.value)} />
-            <input className="dpl-inp" type="text" placeholder="獄中名號（2–20 字，必填）" value={nameVal}
-              maxLength={20} onChange={e => setNameVal(e.target.value)} />
-            {authErr && <p className="dpl-err">{authErr}</p>}
-            {authNotice && <p className="dpl-ok">{authNotice}</p>}
-            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '註冊中…' : '註冊入獄'}</button>
-            <p className="dpl-swap">已有帳號？<a className="dpl-lnk" onClick={() => switchAuthMode('login')}>登入</a></p>
+            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '登入入獄'}</button>
           </form>
         )}
         {authMode === 'forgot' && (
@@ -408,27 +336,12 @@ function App() {
           </form>
         )}
 
-        {/* Discord 輔助通道:真實 <a> 導航(行動端保留使用者手勢,較可能喚起 Discord App;URL 未就緒時 fallback JS 跳轉) */}
-        {DISCORD_LOGIN_OPEN && (
-          <>
-            <div className="dpl-or"><span /><em>或使用 Discord</em><span /></div>
-            <a className="dpl-dc" href={oauthUrl ?? '#'}
-              onClick={e => { if (!oauthUrl) { e.preventDefault(); signIn() } }}>
-              <DiscordIcon />用 Discord 登入入獄
-            </a>
-          </>
-        )}
-        <p className="dpl-choose">{EMAIL_SIGNUP_OPEN
-          ? '請擇一方式註冊：信箱與 Discord 為兩個獨立帳號，請勿重複註冊。'
-          : DISCORD_LOGIN_OPEN
-            ? '信箱註冊已關閉：已有帳號請直接登入；新朋友請改用 Discord 登入，首次登入會自動建檔。'
-            : '目前暫停開放新帳號註冊，已有帳號請以信箱登入。'}</p>
+        <p className="dpl-choose">目前不開放自行註冊：已有帳號請直接登入；新帳號由典獄長開立後轉交。</p>
 
         <div className="dpl-privacy">
           <span className="dpl-pv-t">隱私說明</span>
-          <p>・我們只取用你的 Discord 使用者名稱與 ID,用來建立個人資料、避免重複註冊。</p>
-          <p>・Discord 授權會要求頭像、橫幅與 email,但本監獄不會儲存或使用其中任何一項。</p>
-          <p>・使用信箱註冊時,本站僅保存你的信箱與加密後的密碼,不會用於任何其他用途。</p>
+          <p>・本站僅保存你的信箱／帳號與加密後的密碼,不會用於任何其他用途。</p>
+          <p>・早期以 Discord 登入建立的帳號,僅保存其 Discord 使用者名稱與 ID,用於識別身分。</p>
         </div>
         <a className="dpl-back" href="/">← 回到監獄入口</a>
       </div>
