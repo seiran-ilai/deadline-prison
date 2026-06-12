@@ -66,11 +66,9 @@ const TEST_ACCOUNTS = [
   { label: '以犯人測試登入（T002）', email: 'test002@test.com', password: TEST_ACCOUNT_PASSWORD },
 ]
 
-// 密碼重設深連結偵測:模組載入當下「同步」記住 hash 是否為 recovery。
-// supabase-js 的 detectSessionInUrl 會在初始化時消化並清掉 hash,React 訂閱
-// onAuthStateChange 前事件可能已發完(時序競態),所以以這個同步嗅探為主、
-// PASSWORD_RECOVERY 事件為輔(雙保險),擇穩定者 —— 兩者任一命中都進「設定新密碼」。
-const HAD_RECOVERY_HASH = window.location.hash.includes('type=recovery')
+// 忘記密碼:不提供站內重設(寄信流程已移除),一律由本人透過 Discord 聯繫典獄長,
+// 由典獄長後台「重設密碼」核發一次性新密碼。
+const DISCORD_CONTACT_URL = 'https://discord.gg/tpRn7En9mk'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -82,19 +80,11 @@ function App() {
   const [myLive, setMyLive] = useState(null) // { sessionId, roleInSession, status } | null:我所在「未結束」場次(0 或 1)
   const [testError, setTestError] = useState(null)
   const [testBusy, setTestBusy] = useState(false)
-  // ---- 信箱／帳號登入、忘記密碼(站內唯一登入通道;註冊已移除,帳號由典獄長開立) ----
-  const [authMode, setAuthMode] = useState('login')  // 'login' | 'forgot'
+  // ---- 信箱／帳號登入(站內唯一登入通道;註冊與忘記密碼已移除,帳號/密碼由典獄長管理) ----
   const [emailVal, setEmailVal] = useState('')
   const [pwVal, setPwVal] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [authErr, setAuthErr] = useState(null)
-  const [authNotice, setAuthNotice] = useState(null) // 驗證信/重設信已寄出等成功提示
-  // ---- 密碼重設(recovery 深連結進站) ----
-  const [recovery, setRecovery] = useState(HAD_RECOVERY_HASH)
-  const [newPw, setNewPw] = useState('')
-  const [newPw2, setNewPw2] = useState('')
-  const [recoveryBusy, setRecoveryBusy] = useState(false)
-  const [recoveryErr, setRecoveryErr] = useState(null)
   // ---- 首次登入強制改密碼(典獄長代開帳號:user_metadata.must_change_password) ----
   const [mcPw, setMcPw] = useState('')
   const [mcPw2, setMcPw2] = useState('')
@@ -107,8 +97,6 @@ function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
     const { data: listener } = supabase.auth.onAuthStateChange((e, session) => {
-      // 雙保險之二:hash 已被 supabase-js 先清掉時,仍能由事件補捉 recovery
-      if (e === 'PASSWORD_RECOVERY') setRecovery(true)
       setUser(session?.user ?? null)
     })
     return () => listener.subscription.unsubscribe()
@@ -223,13 +211,10 @@ function App() {
     setTestBusy(false)
   }
 
-  // ---- Email 通道:登入 / 註冊 / 忘記密碼 ----
-  function switchAuthMode(mode) {
-    setAuthMode(mode); setAuthErr(null); setAuthNotice(null)
-  }
+  // ---- 信箱／帳號登入 ----
   async function emailSignIn(e) {
     e.preventDefault()
-    setAuthErr(null); setAuthNotice(null)
+    setAuthErr(null)
     const raw = emailVal.trim()
     if (!raw || !pwVal) { setAuthErr('請輸入信箱／帳號與密碼'); return }
     // 不含 @ → 視為典獄長代開的帳號名,補上內部後綴;含 @ → 一般 email,維持原行為
@@ -240,33 +225,6 @@ function App() {
     if (error) setAuthErr(zhAuthError(error.message))
     // 成功時 onAuthStateChange 會帶 user 進站,這裡不用做事
   }
-  async function sendReset(e) {
-    e.preventDefault()
-    setAuthErr(null); setAuthNotice(null)
-    if (!emailVal.trim()) { setAuthErr('請輸入信箱'); return }
-    // 代開帳號(無 @)的假 email 收不到信,密碼由典獄長後台重設
-    if (!emailVal.trim().includes('@')) { setAuthErr('此類帳號請聯繫典獄長重設密碼'); return }
-    setAuthBusy(true)
-    // redirectTo 指向 /app:連結點開後 hash 帶 type=recovery,由上方雙保險偵測進「設定新密碼」
-    const { error } = await supabase.auth.resetPasswordForEmail(emailVal.trim(), {
-      redirectTo: window.location.origin + '/app',
-    })
-    setAuthBusy(false)
-    if (error) { setAuthErr(zhAuthError(error.message)); return }
-    setAuthNotice('重設信已寄出，請至信箱開啟連結設定新密碼。')
-  }
-  async function submitNewPassword(e) {
-    e.preventDefault()
-    setRecoveryErr(null)
-    if (newPw.length < 8) { setRecoveryErr('密碼至少需 8 碼'); return }
-    if (newPw !== newPw2) { setRecoveryErr('兩次輸入的密碼不一致'); return }
-    setRecoveryBusy(true)
-    const { error } = await supabase.auth.updateUser({ password: newPw })
-    if (error) { setRecoveryBusy(false); setRecoveryErr(zhAuthError(error.message)); return }
-    // 沿用既有 replace 手法清掉殘留 hash(避免 # 汙染後續 OAuth redirect),並以乾淨 URL 重新進站
-    window.location.replace(window.location.pathname)
-  }
-
   // 首登強制改密碼:成功後同步清旗標,主畫面 gate 解除、走既有 tabResolved 流程進站
   async function submitFirstPassword(e) {
     e.preventDefault()
@@ -285,56 +243,23 @@ function App() {
     setMcPw(''); setMcPw2('')
   }
 
-  // 密碼重設深連結:不走一般登入/進站,先讓使用者把新密碼設完(成功後 replace 清 hash 重新進站)
-  if (recovery) return (
-    <DeadlinePrisonLoader status="重設密碼" statusEn="RESET PASSWORD" procLabel="身分核對">
-      <div className="dpl-gate">
-        <form className="dpl-mail" onSubmit={submitNewPassword}>
-          <p className="dpl-mail-t">設定新密碼</p>
-          <input className="dpl-inp" type="password" placeholder="新密碼（至少 8 碼）" value={newPw}
-            autoComplete="new-password" onChange={e => setNewPw(e.target.value)} />
-          <input className="dpl-inp" type="password" placeholder="再次輸入新密碼" value={newPw2}
-            autoComplete="new-password" onChange={e => setNewPw2(e.target.value)} />
-          {recoveryErr && <p className="dpl-err">{recoveryErr}</p>}
-          <button className="dpl-btn" type="submit" disabled={recoveryBusy}>
-            {recoveryBusy ? '設定中…' : '確認設定新密碼'}
-          </button>
-        </form>
-        <a className="dpl-back" href="/">← 回到監獄入口</a>
-      </div>
-    </DeadlinePrisonLoader>
-  )
-
   if (!user) return (
     <DeadlinePrisonLoader status="等候收容" statusEn="AWAITING INTAKE" procLabel="身分核對">
       <div className="dpl-gate">
-        {/* Email 主通道:登入 / 註冊 / 忘記密碼 切換式表單 */}
-        {authMode === 'login' && (
-          <form className="dpl-mail" onSubmit={emailSignIn}>
-            {/* type=text:代開帳號只輸入帳號名(不含 @),不能用瀏覽器的 email 格式驗證 */}
-            <input className="dpl-inp" type="text" placeholder="信箱或帳號" value={emailVal}
-              autoComplete="username" onChange={e => setEmailVal(e.target.value)} />
-            <input className="dpl-inp" type="password" placeholder="密碼" value={pwVal}
-              autoComplete="current-password" onChange={e => setPwVal(e.target.value)} />
-            <div className="dpl-mail-row">
-              <a className="dpl-lnk" onClick={() => switchAuthMode('forgot')}>忘記密碼？</a>
-            </div>
-            {authErr && <p className="dpl-err">{authErr}</p>}
-            {authNotice && <p className="dpl-ok">{authNotice}</p>}
-            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '登入入獄'}</button>
-          </form>
-        )}
-        {authMode === 'forgot' && (
-          <form className="dpl-mail" onSubmit={sendReset}>
-            <p className="dpl-mail-t">輸入信箱，我們會寄出密碼重設信</p>
-            <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
-              autoComplete="email" onChange={e => setEmailVal(e.target.value)} />
-            {authErr && <p className="dpl-err">{authErr}</p>}
-            {authNotice && <p className="dpl-ok">{authNotice}</p>}
-            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '寄送中…' : '寄送重設信'}</button>
-            <p className="dpl-swap"><a className="dpl-lnk" onClick={() => switchAuthMode('login')}>← 返回登入</a></p>
-          </form>
-        )}
+        <form className="dpl-mail" onSubmit={emailSignIn}>
+          {/* type=text:代開帳號只輸入帳號名(不含 @),不能用瀏覽器的 email 格式驗證 */}
+          <input className="dpl-inp" type="text" placeholder="信箱或帳號" value={emailVal}
+            autoComplete="username" onChange={e => setEmailVal(e.target.value)} />
+          <input className="dpl-inp" type="password" placeholder="密碼" value={pwVal}
+            autoComplete="current-password" onChange={e => setPwVal(e.target.value)} />
+          <div className="dpl-mail-row">
+            <a className="dpl-lnk" href={DISCORD_CONTACT_URL} target="_blank" rel="noopener noreferrer">
+              遺忘密碼？請至 Discord 聯繫典獄長
+            </a>
+          </div>
+          {authErr && <p className="dpl-err">{authErr}</p>}
+          <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '登入入獄'}</button>
+        </form>
 
         <p className="dpl-choose">目前不開放自行註冊：已有帳號請直接登入；新帳號由典獄長開立後轉交。</p>
 
@@ -363,7 +288,6 @@ function App() {
   )
   // 首次登入強制改密碼(典獄長代開帳號):在 auth 確立之後、主畫面之前全畫面攔截,
   // 不可跳過、不可進任何分頁;改完旗標清除,gate 自動解除走既有 tabResolved 流程。
-  // recovery 深連結分支在更前面 return,兩者不會同時出現。
   if (user.user_metadata?.must_change_password === true) return (
     <DeadlinePrisonLoader status="設定新密碼" statusEn="SET NEW PASSWORD" procLabel="首次登入">
       <div className="dpl-gate">
