@@ -69,6 +69,26 @@ const TEST_ACCOUNTS = [
   { label: '以犯人測試登入（T002）', email: 'test002@test.com', password: TEST_ACCOUNT_PASSWORD },
 ]
 
+// 密碼重設深連結偵測:模組載入當下「同步」記住 hash 是否為 recovery。
+// supabase-js 的 detectSessionInUrl 會在初始化時消化並清掉 hash,React 訂閱
+// onAuthStateChange 前事件可能已發完(時序競態),所以以這個同步嗅探為主、
+// PASSWORD_RECOVERY 事件為輔(雙保險),擇穩定者 —— 兩者任一命中都進「設定新密碼」。
+const HAD_RECOVERY_HASH = window.location.hash.includes('type=recovery')
+
+// Supabase auth 錯誤訊息中文化(登入/註冊/重設共用)
+function zhAuthError(message) {
+  const m = message ?? ''
+  if (m.includes('Invalid login credentials')) return '信箱或密碼錯誤'
+  if (m.includes('Email not confirmed')) return '請先完成信箱驗證'
+  if (m.includes('User already registered')) return '此信箱已註冊過，請直接登入'
+  if (m.includes('Password should be at least')) return '密碼至少需 8 碼'
+  if (m.includes('valid email') || m.includes('invalid format')) return '信箱格式不正確'
+  if (m.includes('Email rate limit') || m.includes('rate limit')) return '寄信次數已達上限，請稍後再試'
+  if (m.includes('same') && m.includes('password')) return '新密碼不可與舊密碼相同'
+  if (m.includes('session missing') || m.includes('expired')) return '重設連結已失效，請重新申請密碼重設'
+  return '操作失敗，請稍後再試'
+}
+
 function App() {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -80,32 +100,86 @@ function App() {
   const [oauthUrl, setOauthUrl] = useState(null) // 預取的 Discord OAuth URL(登入鈕用真實 <a> 導航)
   const [testError, setTestError] = useState(null)
   const [testBusy, setTestBusy] = useState(false)
+  // ---- Email 登入/註冊/忘記密碼(Discord OAuth 之外的第二通道) ----
+  const [authMode, setAuthMode] = useState('login')  // 'login' | 'register' | 'forgot'
+  const [emailVal, setEmailVal] = useState('')
+  const [pwVal, setPwVal] = useState('')
+  const [nameVal, setNameVal] = useState('')         // 註冊用:獄中名號(display_name)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authErr, setAuthErr] = useState(null)
+  const [authNotice, setAuthNotice] = useState(null) // 驗證信/重設信已寄出等成功提示
+  // ---- 密碼重設(recovery 深連結進站) ----
+  const [recovery, setRecovery] = useState(HAD_RECOVERY_HASH)
+  const [newPw, setNewPw] = useState('')
+  const [newPw2, setNewPw2] = useState('')
+  const [recoveryBusy, setRecoveryBusy] = useState(false)
+  const [recoveryErr, setRecoveryErr] = useState(null)
+  // ---- 建檔失敗重試(不讓使用者卡在空白畫面) ----
+  const [profileErr, setProfileErr] = useState(null)
+  const [profileRetry, setProfileRetry] = useState(0)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null))
+    const { data: listener } = supabase.auth.onAuthStateChange((e, session) => {
+      // 雙保險之二:hash 已被 supabase-js 先清掉時,仍能由事件補捉 recovery
+      if (e === 'PASSWORD_RECOVERY') setRecovery(true)
+      setUser(session?.user ?? null)
+    })
     return () => listener.subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
-    if (!user) { setProfile(null); setLoading(false); return }
+    if (!user) { setProfile(null); setProfileErr(null); setLoading(false); return }
+    let alive = true
     async function init() {
       setLoading(true)
-      const cols = 'inmate_no, display_name, game_name, role'
-      // 先查 profile：查得到就直接用，不跑配對。
-      // 這保護了測試帳號（profiles.id 已綁定）—— 它們不會被 claim_profile 影響/覆蓋。
-      let { data: p } = await supabase.from('profiles').select(cols).eq('id', user.id).maybeSingle()
-      // 查不到才是 Discord 首次登入者（profile 還是 pending）→ 跑配對再重撈
-      if (!p) {
-        await supabase.rpc('claim_profile')
-        const res = await supabase.from('profiles').select(cols).eq('id', user.id).maybeSingle()
-        p = res.data
+      setProfileErr(null)
+      const cols = 'inmate_no, display_name, avatar_url, game_name, role'
+      try {
+        // 先查 profile：查得到就直接用，不跑配對。
+        // 這保護了測試帳號（profiles.id 已綁定）—— 它們不會被 claim_profile 影響/覆蓋。
+        const first = await supabase.from('profiles').select(cols).eq('id', user.id).maybeSingle()
+        if (first.error) throw first.error
+        let p = first.data
+        // 查不到才是首次登入者（profile 還是 pending）→ 依登入通道建檔再重撈
+        if (!p) {
+          if (user.app_metadata?.provider === 'email') {
+            // email 首次登入:走同一個 claim_profile 建檔發號(與 Discord 同一條編號指派路徑),
+            // 頭像帶站內預設囚犯頭像;display_name 由下方回填段補進 profiles(RPC 無此參數)
+            const { error: claimErr } = await supabase.rpc('claim_profile', { p_avatar_url: '/default-avatar.svg' })
+            if (claimErr) throw claimErr
+          } else {
+            // Discord:維持現狀(RPC 內讀 OAuth metadata 填 display_name / discord_account)
+            const { error: claimErr } = await supabase.rpc('claim_profile')
+            if (claimErr) throw claimErr
+          }
+          const res = await supabase.from('profiles').select(cols).eq('id', user.id).maybeSingle()
+          if (res.error) throw res.error
+          p = res.data
+        }
+        if (!p) throw new Error('建檔後仍查無囚籍資料')
+        // email 通道:只對 null 欄位回填(獄中名號取註冊時 signUp options.data 留的 display_name)。
+        // 也涵蓋「先在官網報名(那裡的 claim_profile 不帶這些值)才首次進 /app」的情況;
+        // 透過既有 RLS profiles_update_self 由本人寫入,失敗不阻斷進站(顯示處有 fallback)。
+        if (user.app_metadata?.provider === 'email') {
+          const name = (user.user_metadata?.display_name ?? '').trim()
+          const patch = {}
+          if (!p.display_name && name) patch.display_name = name
+          if (!p.avatar_url) patch.avatar_url = '/default-avatar.svg'
+          if (Object.keys(patch).length) {
+            const { error: patchErr } = await supabase.from('profiles').update(patch).eq('id', user.id)
+            if (!patchErr) Object.assign(p, patch)
+          }
+        }
+        if (alive) setProfile(p)
+      } catch {
+        if (alive) setProfileErr('囚籍資料建立失敗，請重試。若持續失敗請聯繫典獄長。')
       }
-      setProfile(p)
-      setLoading(false)
+      if (alive) setLoading(false)
     }
     init()
-  }, [user])
+    return () => { alive = false }
+  }, [user, profileRetry])
 
   // 「我目前所在的未結束場次」即時輪詢(每 10 秒)—— tab 解鎖 + 落地分頁的唯一真相。
   // 典獄長更新場次狀態 / 把人收進場後,使用者不用重登,輪詢重算就會解鎖對應分頁。
@@ -184,6 +258,90 @@ function App() {
     setTestBusy(false)
   }
 
+  // ---- Email 通道:登入 / 註冊 / 忘記密碼 ----
+  function switchAuthMode(mode) {
+    setAuthMode(mode); setAuthErr(null); setAuthNotice(null)
+  }
+  async function emailSignIn(e) {
+    e.preventDefault()
+    setAuthErr(null); setAuthNotice(null)
+    if (!emailVal.trim() || !pwVal) { setAuthErr('請輸入信箱與密碼'); return }
+    setAuthBusy(true)
+    const { error } = await supabase.auth.signInWithPassword({ email: emailVal.trim(), password: pwVal })
+    setAuthBusy(false)
+    if (error) setAuthErr(zhAuthError(error.message))
+    // 成功時 onAuthStateChange 會帶 user 進站,這裡不用做事
+  }
+  async function emailSignUp(e) {
+    e.preventDefault()
+    setAuthErr(null); setAuthNotice(null)
+    const name = nameVal.trim()
+    if (!emailVal.trim()) { setAuthErr('請輸入信箱'); return }
+    if (pwVal.length < 8) { setAuthErr('密碼至少需 8 碼'); return }
+    if (name.length < 2 || name.length > 20) { setAuthErr('獄中名號需為 2–20 字'); return }
+    setAuthBusy(true)
+    const { data, error } = await supabase.auth.signUp({
+      email: emailVal.trim(),
+      password: pwVal,
+      options: {
+        data: { display_name: name },                          // 首次登入建檔時補進 profiles.display_name
+        emailRedirectTo: window.location.origin + '/app',      // 驗證完成導回監獄系統
+      },
+    })
+    setAuthBusy(false)
+    if (error) { setAuthErr(zhAuthError(error.message)); return }
+    // 信箱已註冊時 Supabase 不回錯誤(防探測),改回 identities 空陣列 → 視同已註冊
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      setAuthErr('此信箱已註冊過，請直接登入'); return
+    }
+    setAuthNotice('驗證信已寄出，請至信箱完成確認後再回來登入。')
+    setPwVal('')
+  }
+  async function sendReset(e) {
+    e.preventDefault()
+    setAuthErr(null); setAuthNotice(null)
+    if (!emailVal.trim()) { setAuthErr('請輸入信箱'); return }
+    setAuthBusy(true)
+    // redirectTo 指向 /app:連結點開後 hash 帶 type=recovery,由上方雙保險偵測進「設定新密碼」
+    const { error } = await supabase.auth.resetPasswordForEmail(emailVal.trim(), {
+      redirectTo: window.location.origin + '/app',
+    })
+    setAuthBusy(false)
+    if (error) { setAuthErr(zhAuthError(error.message)); return }
+    setAuthNotice('重設信已寄出，請至信箱開啟連結設定新密碼。')
+  }
+  async function submitNewPassword(e) {
+    e.preventDefault()
+    setRecoveryErr(null)
+    if (newPw.length < 8) { setRecoveryErr('密碼至少需 8 碼'); return }
+    if (newPw !== newPw2) { setRecoveryErr('兩次輸入的密碼不一致'); return }
+    setRecoveryBusy(true)
+    const { error } = await supabase.auth.updateUser({ password: newPw })
+    if (error) { setRecoveryBusy(false); setRecoveryErr(zhAuthError(error.message)); return }
+    // 沿用既有 replace 手法清掉殘留 hash(避免 # 汙染後續 OAuth redirect),並以乾淨 URL 重新進站
+    window.location.replace(window.location.pathname)
+  }
+
+  // 密碼重設深連結:不走一般登入/進站,先讓使用者把新密碼設完(成功後 replace 清 hash 重新進站)
+  if (recovery) return (
+    <DeadlinePrisonLoader status="重設密碼" statusEn="RESET PASSWORD" procLabel="身分核對">
+      <div className="dpl-gate">
+        <form className="dpl-mail" onSubmit={submitNewPassword}>
+          <p className="dpl-mail-t">設定新密碼</p>
+          <input className="dpl-inp" type="password" placeholder="新密碼（至少 8 碼）" value={newPw}
+            autoComplete="new-password" onChange={e => setNewPw(e.target.value)} />
+          <input className="dpl-inp" type="password" placeholder="再次輸入新密碼" value={newPw2}
+            autoComplete="new-password" onChange={e => setNewPw2(e.target.value)} />
+          {recoveryErr && <p className="dpl-err">{recoveryErr}</p>}
+          <button className="dpl-btn" type="submit" disabled={recoveryBusy}>
+            {recoveryBusy ? '設定中…' : '確認設定新密碼'}
+          </button>
+        </form>
+        <a className="dpl-back" href="/">← 回到監獄入口</a>
+      </div>
+    </DeadlinePrisonLoader>
+  )
+
   if (!user) return (
     <DeadlinePrisonLoader status="等候收容" statusEn="AWAITING INTAKE" procLabel="身分核對">
       <div className="dpl-gate">
@@ -192,10 +350,55 @@ function App() {
           onClick={e => { if (!oauthUrl) { e.preventDefault(); signIn() } }}>
           <DiscordIcon />用 Discord 登入入獄
         </a>
+
+        {/* Email 第二通道:登入 / 註冊 / 忘記密碼 切換式表單 */}
+        <div className="dpl-or"><span /><em>或使用信箱</em><span /></div>
+        {authMode === 'login' && (
+          <form className="dpl-mail" onSubmit={emailSignIn}>
+            <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
+              autoComplete="email" onChange={e => setEmailVal(e.target.value)} />
+            <input className="dpl-inp" type="password" placeholder="密碼" value={pwVal}
+              autoComplete="current-password" onChange={e => setPwVal(e.target.value)} />
+            <div className="dpl-mail-row">
+              <a className="dpl-lnk" onClick={() => switchAuthMode('forgot')}>忘記密碼？</a>
+            </div>
+            {authErr && <p className="dpl-err">{authErr}</p>}
+            {authNotice && <p className="dpl-ok">{authNotice}</p>}
+            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '用信箱登入入獄'}</button>
+            <p className="dpl-swap">還沒有帳號？<a className="dpl-lnk" onClick={() => switchAuthMode('register')}>註冊</a></p>
+          </form>
+        )}
+        {authMode === 'register' && (
+          <form className="dpl-mail" onSubmit={emailSignUp}>
+            <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
+              autoComplete="email" onChange={e => setEmailVal(e.target.value)} />
+            <input className="dpl-inp" type="password" placeholder="密碼（至少 8 碼）" value={pwVal}
+              autoComplete="new-password" onChange={e => setPwVal(e.target.value)} />
+            <input className="dpl-inp" type="text" placeholder="獄中名號（2–20 字，必填）" value={nameVal}
+              maxLength={20} onChange={e => setNameVal(e.target.value)} />
+            {authErr && <p className="dpl-err">{authErr}</p>}
+            {authNotice && <p className="dpl-ok">{authNotice}</p>}
+            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '註冊中…' : '註冊入獄'}</button>
+            <p className="dpl-swap">已有帳號？<a className="dpl-lnk" onClick={() => switchAuthMode('login')}>登入</a></p>
+          </form>
+        )}
+        {authMode === 'forgot' && (
+          <form className="dpl-mail" onSubmit={sendReset}>
+            <p className="dpl-mail-t">輸入信箱，我們會寄出密碼重設信</p>
+            <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
+              autoComplete="email" onChange={e => setEmailVal(e.target.value)} />
+            {authErr && <p className="dpl-err">{authErr}</p>}
+            {authNotice && <p className="dpl-ok">{authNotice}</p>}
+            <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '寄送中…' : '寄送重設信'}</button>
+            <p className="dpl-swap"><a className="dpl-lnk" onClick={() => switchAuthMode('login')}>← 返回登入</a></p>
+          </form>
+        )}
+
         <div className="dpl-privacy">
           <span className="dpl-pv-t">隱私說明</span>
           <p>・我們只取用你的 Discord 使用者名稱與 ID,用來建立個人資料、避免重複註冊。</p>
           <p>・Discord 授權會要求頭像、橫幅與 email,但本監獄不會儲存或使用其中任何一項。</p>
+          <p>・使用信箱註冊時,本站僅保存你的信箱與加密後的密碼,不會用於任何其他用途。</p>
         </div>
         <a className="dpl-back" href="/">← 回到監獄入口</a>
       </div>
@@ -217,9 +420,14 @@ function App() {
   )
   if (loading) return <DeadlinePrisonLoader status="收容中" statusEn="INTAKE OPEN" procLabel="核對身分" />
   if (!profile) {
+    // 建檔失敗:給中文錯誤 + 重試,不讓使用者卡在空白畫面
     return (
       <DeadlinePrisonLoader status="建檔中" statusEn="REGISTERING" procLabel="建立囚籍資料">
-        <button onClick={signOut}>登出</button>
+        <div className="dpl-gate">
+          {profileErr && <p className="dpl-err">{profileErr}</p>}
+          {profileErr && <button className="dpl-btn" onClick={() => setProfileRetry(n => n + 1)}>重試建檔</button>}
+          <a className="dpl-back" onClick={signOut} style={{ cursor: 'pointer' }}>登出</a>
+        </div>
       </DeadlinePrisonLoader>
     )
   }

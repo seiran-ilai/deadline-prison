@@ -19,6 +19,36 @@ export default function ProfilePage({ userId, role, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [saved, setSaved] = useState(false)
+  // 修改密碼:僅 email 通道用戶顯示(Discord 登入者沒有密碼可改)
+  const [isEmailUser, setIsEmailUser] = useState(false)
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwErr, setPwErr] = useState('')
+  const [pwSaved, setPwSaved] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    supabase.auth.getSession().then(({ data }) => {
+      if (alive) setIsEmailUser(data.session?.user?.app_metadata?.provider === 'email')
+    })
+    return () => { alive = false }
+  }, [])
+
+  async function changePassword() {
+    setPwErr(''); setPwSaved(false)
+    if (pw1.length < 8) { setPwErr('密碼至少需 8 碼'); return }
+    if (pw1 !== pw2) { setPwErr('兩次輸入的密碼不一致'); return }
+    setPwSaving(true)
+    const { error } = await supabase.auth.updateUser({ password: pw1 })
+    setPwSaving(false)
+    if (error) {
+      setPwErr(error.message.includes('different from the old')
+        ? '新密碼不可與舊密碼相同' : '修改失敗，請稍後再試')
+      return
+    }
+    setPwSaved(true); setPw1(''); setPw2('')
+  }
 
   useEffect(() => {
     let alive = true
@@ -95,6 +125,30 @@ export default function ProfilePage({ userId, role, onSaved }) {
           </div>
         </div>
       </div>
+
+      {/* 修改密碼:僅信箱註冊用戶(已登入狀態直接 updateUser,不需舊密碼) */}
+      {isEmailUser && (
+        <div className="card-panel" style={{ marginTop: 16 }}>
+          <div className="pf-form">
+            <h4 style={{ margin: 0 }}>修改密碼</h4>
+            <label className="pf-label">新密碼
+              <input type="password" autoComplete="new-password" value={pw1}
+                placeholder="至少 8 碼" onChange={e => { setPw1(e.target.value); setPwSaved(false) }} />
+            </label>
+            <label className="pf-label">再次輸入新密碼
+              <input type="password" autoComplete="new-password" value={pw2}
+                onChange={e => { setPw2(e.target.value); setPwSaved(false) }} />
+            </label>
+            {pwErr && <p className="warn">{pwErr}</p>}
+            <div className="pf-acts">
+              <button className="btn-pri" onClick={changePassword} disabled={pwSaving}>
+                {pwSaving ? '修改中…' : '修改密碼'}
+              </button>
+              {pwSaved && <span className="pf-saved">密碼已更新</span>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

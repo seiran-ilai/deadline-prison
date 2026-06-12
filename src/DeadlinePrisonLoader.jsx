@@ -43,6 +43,24 @@ const CSS = `
 .dpl-privacy{max-width:min(88vw,360px)}
 .dpl-privacy p{white-space:normal;text-align:left}
 }
+/* Email 第二通道:分隔線 + 切換式表單(登入/註冊/忘記密碼/設定新密碼共用) */
+.dpl-or{display:flex;align-items:center;gap:12px;width:min(320px,88vw);color:#5f6157;font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em}
+.dpl-or span{flex:1;height:1px;background:rgba(207,202,187,.18)}
+.dpl-or em{font-style:normal;white-space:nowrap}
+.dpl-mail{display:flex;flex-direction:column;gap:10px;width:min(320px,88vw)}
+.dpl-mail-t{margin:0;color:#cfcabb;font-size:13.5px;letter-spacing:.06em}
+.dpl-inp{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid rgba(207,202,187,.25);border-radius:4px;background:rgba(255,255,255,.045);color:#ededed;font-size:14.5px;outline:none;transition:border-color .2s ease}
+.dpl-inp:focus{border-color:rgba(232,182,0,.6)}
+.dpl-inp::placeholder{color:#6a6b61}
+.dpl-btn{width:100%;min-height:44px;padding:11px 18px;border:1px solid rgba(232,182,0,.55);border-radius:4px;background:rgba(232,182,0,.1);color:#E8B600;font-size:14.5px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:background .2s ease}
+.dpl-btn:hover{background:rgba(232,182,0,.18)}
+.dpl-btn:disabled{opacity:.55;cursor:default}
+.dpl-mail-row{display:flex;justify-content:flex-end;margin-top:-4px}
+.dpl-swap{margin:2px 0 0;color:#7c7d72;font-size:12.5px;text-align:center}
+.dpl-lnk{color:#cfcabb;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:12.5px}
+.dpl-lnk:hover{color:#E8B600}
+.dpl-err{margin:0;color:#E8553B;font-size:13px;line-height:1.6;text-align:center}
+.dpl-ok{margin:0;color:#9fc46a;font-size:13px;line-height:1.6;text-align:center}
 .dpl-back{display:inline-block;padding:8px 18px;border:1px solid rgba(207,202,187,.22);border-radius:3px;background:transparent;color:#9a9b90;font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-decoration:none;cursor:pointer;transition:border-color .2s ease,color .2s ease}
 .dpl-back:hover{border-color:rgba(232,182,0,.55);color:#cfcabb}
 @keyframes dpl-scan{0%{top:-30%}100%{top:120%}}
