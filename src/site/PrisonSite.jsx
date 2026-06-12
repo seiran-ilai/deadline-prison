@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
 import { zhAuthError } from '../authText'
+import { EMAIL_SIGNUP_OPEN, DISCORD_LOGIN_OPEN, SHOW_APP_ACCESS } from '../authConfig'
 import { createBooking, cancelBooking } from '../bookingApi'
 import { toSessionView, splitDate } from '../prison'
 import AvatarInput from '../AvatarInput'
@@ -234,6 +235,7 @@ export default function PrisonSite() {
   // modal 內 email 註冊:驗證信導回 /?intake=<id>,確認完回來 modal 會自動開、繼續報名
   async function modalEmailSignUp(e) {
     e.preventDefault()
+    if (!EMAIL_SIGNUP_OPEN) { setMAuthErr('目前暫停開放信箱註冊'); return }
     setMAuthErr(null); setMAuthNotice(null)
     const name = mName.trim()
     if (!mEmail.trim()) { setMAuthErr('請輸入信箱'); return }
@@ -334,7 +336,7 @@ export default function PrisonSite() {
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
           </div>
           <div className="nav-entries">
-            <a className="nav-access" href="/app">ACCESS · 監獄系統</a>
+            {SHOW_APP_ACCESS && <a className="nav-access" href="/app">ACCESS · 監獄系統</a>}
             <a className="nav-dc" href="https://discord.gg/tpRn7En9mk" target="_blank" rel="noopener noreferrer" aria-label="Discord">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.3.5a18 18 0 0 1 4.3 1.4 16.6 16.6 0 0 0-14.9 0A18 18 0 0 1 8.9 3.5L8.6 3a19.8 19.8 0 0 0-4.9 1.4C.6 9 .1 13.4.3 17.8A20 20 0 0 0 6.4 21l.5-1.8a13 13 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4a13 13 0 0 1-2 1L17 21a20 20 0 0 0 6-3.2c.3-5.1-.5-9.4-2.7-13.4ZM8.4 15.3c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Zm7.2 0c-1 0-1.7-.9-1.7-2s.8-2 1.7-2 1.7.9 1.7 2-.7 2-1.7 2Z" />
@@ -637,8 +639,14 @@ export default function PrisonSite() {
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
                 <>
-                  <p className="m-note">報名前請先登入。可用<b style={{ color: 'var(--text)' }}>信箱</b>或 <b style={{ color: 'var(--text)' }}>Discord</b> 擇一登入／註冊。</p>
-                  {mAuthMode === 'login' ? (
+                  <p className="m-note">{EMAIL_SIGNUP_OPEN ? (
+                    <>報名前請先登入。可用<b style={{ color: 'var(--text)' }}>信箱</b>或 <b style={{ color: 'var(--text)' }}>Discord</b> 擇一登入／註冊。</>
+                  ) : DISCORD_LOGIN_OPEN ? (
+                    <>報名前請先登入。已有帳號可用<b style={{ color: 'var(--text)' }}>信箱</b>登入；新朋友請以 <b style={{ color: 'var(--text)' }}>Discord</b> 登入，首次登入會自動建檔。</>
+                  ) : (
+                    <>報名前請先登入。已有帳號請以<b style={{ color: 'var(--text)' }}>信箱</b>登入；目前暫停開放新帳號註冊。</>
+                  )}</p>
+                  {(mAuthMode === 'login' || !EMAIL_SIGNUP_OPEN) ? (
                     <form onSubmit={modalEmailSignIn}>
                       <div className="m-field">
                         <span className="m-field-lbl">信箱</span>
@@ -655,7 +663,9 @@ export default function PrisonSite() {
                       <button className="m-dc m-confirm" type="submit" disabled={mAuthBusy}>
                         {mAuthBusy ? '登入中…' : '用信箱登入'}
                       </button>
-                      <p className="m-swap">還沒有帳號？<a className="m-lnk" onClick={() => { setMAuthMode('register'); setMAuthErr(null); setMAuthNotice(null) }}>用信箱註冊</a></p>
+                      {EMAIL_SIGNUP_OPEN && (
+                        <p className="m-swap">還沒有帳號？<a className="m-lnk" onClick={() => { setMAuthMode('register'); setMAuthErr(null); setMAuthNotice(null) }}>用信箱註冊</a></p>
+                      )}
                     </form>
                   ) : (
                     <form onSubmit={modalEmailSignUp}>
@@ -682,9 +692,17 @@ export default function PrisonSite() {
                       <p className="m-swap">已有帳號？<a className="m-lnk" onClick={() => { setMAuthMode('login'); setMAuthErr(null); setMAuthNotice(null) }}>登入</a></p>
                     </form>
                   )}
-                  <div className="m-or"><span /><em>或</em><span /></div>
-                  <button className="m-dc" onClick={loginWithDiscord}><DiscordIcon />以 Discord 登入入監</button>
-                  <p className="m-choose">請擇一方式註冊：信箱與 Discord 為兩個獨立帳號，請勿重複註冊。</p>
+                  {DISCORD_LOGIN_OPEN && (
+                    <>
+                      <div className="m-or"><span /><em>或</em><span /></div>
+                      <button className="m-dc" onClick={loginWithDiscord}><DiscordIcon />以 Discord 登入入監</button>
+                    </>
+                  )}
+                  <p className="m-choose">{EMAIL_SIGNUP_OPEN
+                    ? '請擇一方式註冊：信箱與 Discord 為兩個獨立帳號，請勿重複註冊。'
+                    : DISCORD_LOGIN_OPEN
+                      ? '信箱註冊已關閉：已有帳號請直接登入；新朋友請改用 Discord 登入。'
+                      : '目前暫停開放新帳號註冊。'}</p>
                 </>
               ) : active ? (
                 <>

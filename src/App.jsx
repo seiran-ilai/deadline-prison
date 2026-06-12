@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { zhAuthError } from './authText'
+import { EMAIL_SIGNUP_OPEN, DISCORD_LOGIN_OPEN } from './authConfig'
 import ManuscriptManager from './ManuscriptManager'
 import SessionGoals from './SessionGoals'
 import GuardWork from './GuardWork'
@@ -214,7 +215,7 @@ function App() {
   // 未登入時預取 OAuth URL:登入鈕用真實 <a href> 導航(保留使用者手勢),
   // 行動端較可能由系統交給 Discord App 開授權頁,也避開非同步跳轉被瀏覽器擋下的情況。
   useEffect(() => {
-    if (user) { setOauthUrl(null); return }
+    if (user || !DISCORD_LOGIN_OPEN) { setOauthUrl(null); return }
     let alive = true
     ;(async () => {
       const redirectTo = window.location.origin + window.location.pathname  // 乾淨路徑,不帶 hash/query
@@ -262,6 +263,7 @@ function App() {
   }
   async function emailSignUp(e) {
     e.preventDefault()
+    if (!EMAIL_SIGNUP_OPEN) { setAuthErr('目前暫停開放信箱註冊'); return }
     setAuthErr(null); setAuthNotice(null)
     const name = nameVal.trim()
     if (!emailVal.trim()) { setAuthErr('請輸入信箱'); return }
@@ -346,10 +348,12 @@ function App() {
             {authErr && <p className="dpl-err">{authErr}</p>}
             {authNotice && <p className="dpl-ok">{authNotice}</p>}
             <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '用信箱登入入獄'}</button>
-            <p className="dpl-swap">還沒有帳號？<a className="dpl-lnk" onClick={() => switchAuthMode('register')}>註冊</a></p>
+            {EMAIL_SIGNUP_OPEN && (
+              <p className="dpl-swap">還沒有帳號？<a className="dpl-lnk" onClick={() => switchAuthMode('register')}>註冊</a></p>
+            )}
           </form>
         )}
-        {authMode === 'register' && (
+        {EMAIL_SIGNUP_OPEN && authMode === 'register' && (
           <form className="dpl-mail" onSubmit={emailSignUp}>
             <input className="dpl-inp" type="email" placeholder="信箱" value={emailVal}
               autoComplete="email" onChange={e => setEmailVal(e.target.value)} />
@@ -376,12 +380,20 @@ function App() {
         )}
 
         {/* Discord 輔助通道:真實 <a> 導航(行動端保留使用者手勢,較可能喚起 Discord App;URL 未就緒時 fallback JS 跳轉) */}
-        <div className="dpl-or"><span /><em>或使用 Discord</em><span /></div>
-        <a className="dpl-dc" href={oauthUrl ?? '#'}
-          onClick={e => { if (!oauthUrl) { e.preventDefault(); signIn() } }}>
-          <DiscordIcon />用 Discord 登入入獄
-        </a>
-        <p className="dpl-choose">請擇一方式註冊：信箱與 Discord 為兩個獨立帳號，請勿重複註冊。</p>
+        {DISCORD_LOGIN_OPEN && (
+          <>
+            <div className="dpl-or"><span /><em>或使用 Discord</em><span /></div>
+            <a className="dpl-dc" href={oauthUrl ?? '#'}
+              onClick={e => { if (!oauthUrl) { e.preventDefault(); signIn() } }}>
+              <DiscordIcon />用 Discord 登入入獄
+            </a>
+          </>
+        )}
+        <p className="dpl-choose">{EMAIL_SIGNUP_OPEN
+          ? '請擇一方式註冊：信箱與 Discord 為兩個獨立帳號，請勿重複註冊。'
+          : DISCORD_LOGIN_OPEN
+            ? '信箱註冊已關閉：已有帳號請直接登入；新朋友請改用 Discord 登入，首次登入會自動建檔。'
+            : '目前暫停開放新帳號註冊，已有帳號請以信箱登入。'}</p>
 
         <div className="dpl-privacy">
           <span className="dpl-pv-t">隱私說明</span>
