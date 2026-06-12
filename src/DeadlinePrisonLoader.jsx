@@ -47,6 +47,7 @@ const CSS = `
 @media (max-width:640px){
 .dpl-privacy{max-width:min(88vw,360px)}
 .dpl-privacy p{white-space:normal;text-align:left}
+.dpl-choose{white-space:normal;max-width:min(88vw,360px)}
 }
 /* Email 第二通道:分隔線 + 切換式表單(登入/註冊/忘記密碼/設定新密碼共用) */
 .dpl-or{display:flex;align-items:center;gap:12px;width:min(320px,88vw);color:#5f6157;font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em}
@@ -61,7 +62,7 @@ const CSS = `
 .dpl-btn:hover{filter:brightness(1.08)}
 .dpl-btn:active{transform:translateY(1px)}
 .dpl-btn:disabled{opacity:.55;cursor:default}
-.dpl-choose{margin:0;max-width:min(88vw,360px);color:#7c7d72;font-size:12.5px;line-height:1.7;text-align:center}
+.dpl-choose{margin:0;color:#7c7d72;font-size:12.5px;line-height:1.7;text-align:center;white-space:nowrap}
 .dpl-mail-row{display:flex;justify-content:flex-end;margin-top:-4px}
 .dpl-swap{margin:2px 0 0;color:#7c7d72;font-size:12.5px;text-align:center}
 .dpl-lnk{color:#cfcabb;text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:12.5px}
