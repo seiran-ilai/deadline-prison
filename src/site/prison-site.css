@@ -305,10 +305,12 @@
 
 /* 入監服刑 Modal */
 .dp-modal-bg{position:fixed; inset:0; z-index:100; background:rgba(6,7,8,.84); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:24px}
-.dp-modal{background:var(--panel); border:1px solid var(--steel); max-width:430px; width:100%; position:relative; animation:dp-pop .22s ease; color:var(--text); font-family:var(--mono),var(--cjk)}
+/* 限高 + 內文捲動:內容(訪客預約/密鑰欄)變高時不撐破視窗,底部按鈕仍可達 */
+.dp-modal{background:var(--panel); border:1px solid var(--steel); max-width:430px; width:100%; position:relative; animation:dp-pop .22s ease; color:var(--text); font-family:var(--mono),var(--cjk);
+  display:flex; flex-direction:column; max-height:calc(100vh - 48px); max-height:calc(100dvh - 48px)}
 @keyframes dp-pop{from{opacity:0; transform:scale(.95) translateY(10px)}}
-.dp-modal .m-haz{height:8px; background:repeating-linear-gradient(45deg,var(--hazard) 0 16px,#0a0a0a 16px 32px)}
-.dp-modal .m-body{padding:30px 30px 34px}
+.dp-modal .m-haz{height:8px; flex:0 0 auto; background:repeating-linear-gradient(45deg,var(--hazard) 0 16px,#0a0a0a 16px 32px)}
+.dp-modal .m-body{padding:30px 30px 34px; overflow-y:auto; min-height:0; overscroll-behavior:contain}
 .dp-modal .m-eyebrow{font-family:var(--cond); letter-spacing:3px; color:var(--hazard); font-size:17px}
 .dp-modal h3{font-family:var(--cjk); font-weight:900; font-size:26px; letter-spacing:1px; margin:4px 0 18px}
 .dp-modal .m-row{font-family:var(--mono); font-size:13px; color:var(--dim); display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--line)}
