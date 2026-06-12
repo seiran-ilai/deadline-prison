@@ -262,7 +262,7 @@ function App() {
           <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '登入入獄'}</button>
         </form>
 
-        <p className="dpl-choose">目前不開放自行註冊：已有帳號請直接登入；新帳號由典獄長開立後轉交。</p>
+        <p className="dpl-choose">本系統不開放自行註冊，請向典獄長索取帳號密碼。</p>
 
         <div className="dpl-privacy">
           <span className="dpl-pv-t">隱私說明</span>

@@ -601,7 +601,7 @@ export default function PrisonSite() {
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
                 <>
-                  <p className="m-note">報名前請先登入。請以<b style={{ color: 'var(--text)' }}>典獄長核發的帳號</b>登入；尚無帳號請聯繫典獄長開立。</p>
+                  <p className="m-note">報名前請先登入。請以<b style={{ color: 'var(--text)' }}>帳號密碼</b>登入；尚無帳密請向典獄長索取。</p>
                   <form onSubmit={modalEmailSignIn}>
                     <div className="m-field">
                       <span className="m-field-lbl">帳號</span>
@@ -618,7 +618,7 @@ export default function PrisonSite() {
                       {mAuthBusy ? '登入中…' : '登入'}
                     </button>
                   </form>
-                  <p className="m-choose">目前不開放自行註冊，新帳號由典獄長開立後轉交。</p>
+                  <p className="m-choose">本系統不開放自行註冊，請向典獄長索取帳號密碼。</p>
                 </>
               ) : active ? (
                 <>
