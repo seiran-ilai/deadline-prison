@@ -7,10 +7,10 @@ import AvatarInput from '../AvatarInput'
 import './prison-site.css'
 
 const RULES = [
-  ['01', '入監上鎖', '選定梯次、以 Discord 登入入監。報到後鎖門，專注鈴響起，眾人同步服刑。'],
-  ['02', '放風有時', '專注 25 分鐘、放風 5 分鐘為一輪；每四輪一次長休 15 分鐘。鈴聲統一，不得擅自離場。'],
-  ['03', '全程直播', '典獄長控台同步大螢幕計時，犯人進度公開可見。被看著，就趕得動。'],
-  ['04', '刑滿釋放', '梯次結束即收尾放人。帶著趕完的稿離開——或自首下一場。'],
+  ['01', '自首入監', '註冊帳號、報名梯次，然後在指定時間抵達監獄大門，乖乖服刑。'],
+  ['02', '適度休息', '專注 25 分鐘、放風 5 分鐘為一輪；每四輪一次長休 15 分鐘。健康的身體才是創作的本錢。'],
+  ['03', '你不孤單', 'DC 開放同步進場，典獄長直播大螢幕倒數，開放親朋好友探監，你不是一個人。'],
+  ['04', '刑滿釋放', '梯次結束即收尾放人。趕完稿了嗎？記得帶走你的保釋金。還沒趕完稿？記得下次再來自首。'],
 ]
 
 // 營業項目價目(RP 店收費;費用單位 W)
@@ -373,7 +373,7 @@ export default function PrisonSite() {
           <div className="intake"><span className="dot" />收容中 · INTAKE OPEN · 24H</div>
           <h1>死線<span className="glow">監獄</span></h1>
           <div className="ensign">DEADLINE PRISON · NO.<span className="no">0118</span></div>
-          <p className="tag">把自己關進來，<b>服完這一頁死線</b>。<br />沒有逃獄，只有交稿。</p>
+          <p className="tag">死線之前，<b>人人平等</b>。<br />你選擇祈求奇蹟發生，還是讓我們鞭策你？</p>
           <div className="crime" role="group" aria-label="拘留登記">
             <span><em>罪名</em><b>慣性拖稿</b></span>
             <span><em>刑期</em><b>一個番茄鐘起</b></span>
@@ -390,8 +390,8 @@ export default function PrisonSite() {
         {/* 監獄介紹 */}
         <section id="about">
           <div className="eyebrow reveal">服刑須知 <span className="blk">// BLOCK 01</span></div>
-          <h2 className="title reveal">這裡關的，<br />是趕不完稿的人</h2>
-          <p className="subline reveal">死線監獄是一間以「番茄鐘」執行的趕稿收容所。入監即上鎖，鈴響才放風，全程同步直播犯人服刑進度——你不是一個人在趕，是一群人一起服刑。</p>
+          <h2 className="title reveal">挖坑一時爽，<br />一直挖坑一直爽。</h2>
+          <p className="subline reveal">人總要為自己的挖坑負責任。死線監獄是一間以「番茄鐘」執行的趕稿收容所。入獄後定時休息，互相督促，並由帥氣的獄卒鼓勵你趕稿，也有其他犯人和你努力，你能感受到積極向上的力量！不論糖果或者鞭子，只要能達到目標，獄卒們都不會吝嗇給予。</p>
           <p className="place reveal">服刑地點：<b>巴哈姆特 - 薰衣草苗園 - 1區 - 18號</b></p>
           <div className="rules reveal">
             {RULES.map(([n, h, p]) => (
