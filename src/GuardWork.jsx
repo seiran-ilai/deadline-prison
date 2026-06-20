@@ -27,8 +27,8 @@ export default function GuardWork({ userId }) {
   const [expanded, setExpanded] = useState([])      // 展開中的目標(session_goals.id)
   const [msg, setMsg] = useState('')
 
-  async function load() {
-    setLoading(true)
+  async function load(silent) {
+    if (!silent) setLoading(true)   // silent=true:10 秒輪詢的背景刷新,不翻回整頁 loading(資料原地替換,使用者不會看到重整畫面)
     // 1) 找我所在的 open 場次 + 我本場記錄
     const { data: si } = await supabase.from('session_inmates')
       .select('id, session_id, role_in_session, state').eq('member_id', userId)
@@ -100,7 +100,7 @@ export default function GuardWork({ userId }) {
   useEffect(() => {
     if (!userId) return
     load()
-    const t = setInterval(load, 10000)
+    const t = setInterval(() => load(true), 10000)   // 首次顯示 loading,之後靜默輪詢
     return () => clearInterval(t)
   }, [userId])
 
