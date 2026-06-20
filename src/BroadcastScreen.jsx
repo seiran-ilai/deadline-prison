@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { pomodoroState, PHASE_LABEL, fmt, FOCUS, BREAK, LONGBREAK } from './pomodoro'
+import { useTransitionBell } from './useTransitionBell'
 
 // 直播大螢幕:獨立視窗(不在 .admin 底下),為 1920×1080 投放設計。
 // 版面(上→下):警示斜紋 / 標題列 / 大鐘 + 階段進度條 + 輪次刻度(主角,置中) / 本場獄卒列 / 警示斜紋。
@@ -132,6 +133,14 @@ export default function BroadcastScreen({ sessionId }) {
     const t = setInterval(() => setVisitIdx(i => (i + 1) % visits.length), 7000)
     return () => clearInterval(t)
   }, [visits.length])
+
+  // 番茄鐘階段切換鈴聲(大螢幕):階段或輪次一變就響;尚未開始/已結束不響。
+  // 每秒的 setTick 會驅動重算,故 bellKey 會即時反映切換。
+  const bellSt = session?.timer_started_at && !session?.timer_ended_at
+    ? pomodoroState(Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000), session.total_rounds ?? 8, session.timer_ended_at)
+    : null
+  const bellKey = bellSt && !bellSt.ended ? `${bellSt.phase}-${bellSt.round}` : null
+  const { armed: bellArmed, arm: armBell } = useTransitionBell(bellKey)
 
   // 標記完成:結束這則廣播在大螢幕/犯人頁/獄卒頁的輪播(此視窗為典獄長開啟,沿用其權限)
   async function markVisitDone(v) {
@@ -282,6 +291,16 @@ export default function BroadcastScreen({ sessionId }) {
         <span style={{ fontSize: 14, color: C.faint, fontFamily: MONO, letterSpacing: 3 }}>DEADLINE PRISON</span>
         <span style={{ fontSize: 24, color: C.dim }}>｜ {session.title}</span>
         <span style={{ flex: 1 }} />
+        {/* 鈴聲開關:瀏覽器需先點一次才能自動播放;armed 後顯示已啟用 */}
+        <button onClick={armBell} disabled={bellArmed} title="番茄鐘切換階段時響鈴(需先點一次解鎖)"
+          style={{
+            cursor: bellArmed ? 'default' : 'pointer', fontFamily: CJK, fontSize: 15, letterSpacing: 1,
+            borderRadius: 6, padding: '6px 14px', whiteSpace: 'nowrap',
+            border: `1px solid ${bellArmed ? C.line : C.hazard}`,
+            background: 'transparent', color: bellArmed ? C.faint : C.hazard,
+          }}>
+          {bellArmed ? '🔔 鈴聲已啟用' : '🔔 點我啟用鈴聲'}
+        </button>
         <span className="bc-live-dot" style={{
           width: 12, height: 12, borderRadius: '50%', background: C.alarm,
           boxShadow: `0 0 10px ${C.alarm}`, animation: 'bc-blink 1.2s steps(1,end) infinite',

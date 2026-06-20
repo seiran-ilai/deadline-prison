@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { pomodoroState, PHASE_LABEL, fmt } from './pomodoro'
 import { normalizeStatus } from './warden/constants'
+import { useTransitionBell } from './useTransitionBell'
 
 // 計時器階段徽章配色(底色淡、文字濃)
 const PHASE_BADGE = {
@@ -80,10 +81,27 @@ export default function SessionStatus({ userId }) {
     return () => clearInterval(t)
   }, [])
 
+  // 番茄鐘階段切換鈴聲(本人裝置):階段或輪次一變就響。
+  // hook 必須在任何 early return 之前;bellKey 由 data 安全推算(尚未開始/已結束 → null 不響)。
+  const bellSess = data?.session
+  const bellSt = bellSess?.timer_started_at && !bellSess?.timer_ended_at
+    ? pomodoroState(Math.floor((Date.now() - new Date(bellSess.timer_started_at).getTime()) / 1000), bellSess.total_rounds ?? 8, bellSess.timer_ended_at)
+    : null
+  const { armed: bellArmed, arm: armBell } = useTransitionBell(bellSt && !bellSt.ended ? `${bellSt.phase}-${bellSt.round}` : null)
+
   // 防呆:userId 尚未就緒(首次登入流程)時不掛載狀態卡
   if (!userId) return null
   if (loading) return <div className="ses-timer waiting"><div className="st-sub">讀取本場狀態中…</div></div>
   const { session, role, hasGuard, hasInmates } = data
+
+  // 鈴聲啟用鈕(尚未啟用才顯示;瀏覽器需先點一次才能自動播放)
+  const bellBtn = !bellArmed ? (
+    <button onClick={armBell} style={{
+      display: 'block', margin: '10px auto 0', cursor: 'pointer', fontSize: 13, letterSpacing: 1,
+      background: 'transparent', border: '1px solid var(--hazard)', color: 'var(--hazard)',
+      borderRadius: 6, padding: '6px 14px',
+    }}>🔔 點我啟用切換鈴聲</button>
+  ) : null
 
   // 階段1:還沒報到進任何未結束場次 → 統一文字
   if (!session) return <TimerWaiting text="等待身分核對" sub="尚未加入任何場次，請等待典獄長為你報到" />
@@ -91,12 +109,16 @@ export default function SessionStatus({ userId }) {
   // 狀態一律看 normalizeStatus,不再用 timer_started_at 有無當狀態判斷
   const ds = normalizeStatus(session)
 
-  // intake(等待室):番茄鐘尚未開始,依本場身分顯示對應等待文字
+  // intake(等待室):番茄鐘尚未開始,依本場身分顯示對應等待文字。
+  // 等待室就先放啟用鈕,讓使用者在服刑開始前先解鎖鈴聲。
   if (ds === 'intake') {
-    if (role === 'guard') {
-      return <TimerWaiting text={hasInmates ? '等待服刑開始' : '監管犯人配對中'} sub={`本場：${session.title}`} />
-    }
-    return <TimerWaiting text={hasGuard ? '等待服刑開始' : '等待配對專屬獄卒'} sub={`本場：${session.title}`} />
+    const waitText = role === 'guard'
+      ? (hasInmates ? '等待服刑開始' : '監管犯人配對中')
+      : (hasGuard ? '等待服刑開始' : '等待配對專屬獄卒')
+    return <>
+      <TimerWaiting text={waitText} sub={`本場：${session.title}`} />
+      {bellBtn}
+    </>
   }
 
   // ended:理論上犯人頁外層會擋,保險起見顯示收尾文字
@@ -111,19 +133,22 @@ export default function SessionStatus({ userId }) {
   }
   const badge = PHASE_BADGE[st.phase] ?? PHASE_BADGE.focus
   return (
-    <div className={`ses-timer${st.phase === 'focus' ? ' focus' : ''}`}>
-      <div className="st-phase">
-        <span className="st-badge" style={{ background: badge.bg, color: badge.color }}>{PHASE_LABEL[st.phase]}</span>
-        <span className="st-round">第 {st.round} / {N} 輪</span>
+    <>
+      <div className={`ses-timer${st.phase === 'focus' ? ' focus' : ''}`}>
+        <div className="st-phase">
+          <span className="st-badge" style={{ background: badge.bg, color: badge.color }}>{PHASE_LABEL[st.phase]}</span>
+          <span className="st-round">第 {st.round} / {N} 輪</span>
+        </div>
+        <div className="st-clock">{fmt(st.remainingSeconds)}</div>
+        <div className="st-dots">
+          {Array.from({ length: N }, (_, i) => {
+            const n = i + 1
+            const cls = n < st.round ? 'done' : n === st.round ? 'cur' : ''
+            return <i key={n} className={cls} />
+          })}
+        </div>
       </div>
-      <div className="st-clock">{fmt(st.remainingSeconds)}</div>
-      <div className="st-dots">
-        {Array.from({ length: N }, (_, i) => {
-          const n = i + 1
-          const cls = n < st.round ? 'done' : n === st.round ? 'cur' : ''
-          return <i key={n} className={cls} />
-        })}
-      </div>
-    </div>
+      {bellBtn}
+    </>
   )
 }
