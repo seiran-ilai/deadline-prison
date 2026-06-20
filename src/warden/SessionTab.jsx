@@ -28,6 +28,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   const [visits, setVisits] = useState([])               // 本場探監(新→舊)
   const [vForm, setVForm] = useState({ inmate_id: '', guard_id: '', visitor_name: '', message: '' }) // 探監登錄表單(guard_id 選填)
   const [editingVisit, setEditingVisit] = useState(null) // inline 編輯中的探監 {id, guard_id, visitor_name, message}
+  const [startingServe, setStartingServe] = useState(false) // 「開始服刑」處理中:即時回饋 + 防連點
 
   async function loadRoster(sid) {
     if (!sid) { setRoster([]); return }
@@ -239,6 +240,19 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     loadRoster(currentSession)
   }
 
+  // 直接開始服刑(僅 warden,intake 狀態用):不必跳到「場次總覽」,在本分頁就能啟動番茄鐘。
+  // 走與「場次總覽」相同的 set_session_status(serving)(後端會設 timer_started_at);
+  // 成功後 reloadShared 刷新共用 sessions → currentSessionObj 變 serving → 自動切換成番茄鐘控台。
+  async function startServing() {
+    if (!currentSession) return
+    setStartingServe(true)
+    const { error } = await supabase.rpc('set_session_status', { p_session: currentSession, p_new_status: 'serving' })
+    setStartingServe(false)
+    if (error) { setMsg('開始服刑失敗：' + error.message); return }
+    setMsg('已開始服刑')
+    reloadShared()
+  }
+
   // 重新帶入預約名單(僅 warden):intake 後又有人新預約時手動補帶。
   async function rematerialize() {
     if (!currentSession) return
@@ -279,15 +293,27 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
         {/* 番茄鐘控台:只有場次 = serving 時才有意義(計時資料),故只在 serving 渲染。
             其餘狀態在此顯示提示,實際狀態機操作在「場次總覽」分頁。
             key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
-        {currentSessionObj && (
-          normalizeStatus(currentSessionObj) === 'serving'
-            ? <SessionTimerControl key={currentSessionObj.id} session={currentSessionObj}
-                setMsg={setMsg} reloadShared={reloadShared} />
-            : <div className="seg">
-                <span className="lbl">番茄鐘</span>
-                <div className="row timer-state"><span className="muted">{TIMER_HINT[normalizeStatus(currentSessionObj)] ?? '本場尚未開始服刑'}</span></div>
+        {currentSessionObj && (() => {
+          const st = normalizeStatus(currentSessionObj)
+          if (st === 'serving')
+            return <SessionTimerControl key={currentSessionObj.id} session={currentSessionObj}
+              setMsg={setMsg} reloadShared={reloadShared} />
+          return (
+            <div className="seg">
+              <span className="lbl">番茄鐘</span>
+              <div className="row timer-state">
+                {/* intake:本分頁直接開始服刑(不必跳「場次總覽」);其餘狀態維持提示文字 */}
+                {isWarden && st === 'intake' ? (
+                  <button className="btn-sm btn-pri" disabled={startingServe} onClick={startServing}>
+                    {startingServe ? '啟動中…' : '開始服刑（啟動番茄鐘）'}
+                  </button>
+                ) : (
+                  <span className="muted">{TIMER_HINT[st] ?? '本場尚未開始服刑'}</span>
+                )}
               </div>
-        )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* 左右兩欄:左=加入本場候選清單,右=本場名單 */}
