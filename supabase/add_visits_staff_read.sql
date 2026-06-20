@@ -12,6 +12,8 @@
 --   permissive 多條是 OR 關係,不影響既有 participant policy(犯人/獄卒的「本場廣播」照舊)。
 --   只放行 is_warden()(後台探監登錄面板本就是典獄長專用),維持最小授權。
 
+-- ⚠️ 用不加前綴的 is_warden()(與 add_bookings.sql / add_session_password.sql 一致)。
+--    若加成 public.is_warden() 而該函式不在 public schema,整段會報「函式不存在」而失敗。
 drop policy if exists visits_select_staff on visits;
 create policy visits_select_staff on visits
-  for select using (public.is_warden());
+  for select using (is_warden());
