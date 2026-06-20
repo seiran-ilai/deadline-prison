@@ -95,9 +95,19 @@ function App() {
   const [profileRetry, setProfileRetry] = useState(0)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
+    // ⚠️ 只在「使用者真的變了(id 不同 / 登入登出)」時換 user reference。
+    // Supabase 在分頁重新取得焦點時會刷新 token(TOKEN_REFRESHED / SIGNED_IN),
+    // 每次給的是「同一人但全新的 user 物件」;若每次都 setUser 新物件,下游 profile effect
+    // 會被 reference 變動觸發重跑 → setLoading(true) → 分頁內容重掛載、表單輸入被清空。
+    // 用 id 比對沿用舊物件,切分頁回來就不會再重整、不會清掉正在輸入的資料。
+    const sameUser = (prev, next) => (prev?.id === next?.id ? prev : next)
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user ?? null
+      setUser(prev => sameUser(prev, u))
+    })
     const { data: listener } = supabase.auth.onAuthStateChange((e, session) => {
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      setUser(prev => sameUser(prev, u))
     })
     return () => listener.subscription.unsubscribe()
   }, [])
