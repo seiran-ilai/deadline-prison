@@ -46,8 +46,16 @@ export default async function handler(req, res) {
     // insert(DB 唯一鍵兜底重複)
     // game_name / avatar_url:前端帶來的展示值(暱稱/頭像),僅供該筆預約顯示,不作身分依據;
     // 身分一律以上方 JWT 驗證的 user.id / dc_* 為準。長度做基本上限,避免過長字串。
-    const gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : null
-    const av = typeof avatar_url === 'string' ? avatar_url.trim().slice(0, 500) : null
+    let gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : null
+    let av = typeof avatar_url === 'string' ? avatar_url.trim().slice(0, 500) : null
+    // 後端兜底:前端沒帶到暱稱/頭像時,從本人 profile 補上(本人讀本人列走 RLS)。
+    // 確保每筆預約都留有頭像/暱稱快照,不依賴前端是否成功預填(修正部分預約沒帶到頭像的問題)。
+    if (!gn || !av) {
+      const { data: prof } = await supabase.from('profiles')
+        .select('game_name, avatar_url').eq('id', user.id).maybeSingle()
+      if (!gn) gn = prof?.game_name?.trim().slice(0, 60) || null
+      if (!av) av = prof?.avatar_url?.trim().slice(0, 500) || null
+    }
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: user.id, dc_id, dc_name, note: note || null,
       game_name: gn || null, avatar_url: av || null,
