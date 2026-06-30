@@ -3,11 +3,11 @@ import { supabase } from './supabaseClient'
 import AvatarInput from './AvatarInput'
 import { renameSelfAccount, zhAdminError } from './adminAccountApi'
 
-// 「個人資料」分頁:本人編輯自己那列 profiles(頭貼 / 暱稱 / 自我介紹 /(犯人才有)公開到犯人牆)。
+// 「個人資料」分頁:本人編輯自己那列 profiles(頭貼 / 暱稱 / 自我介紹)。
 // RLS profiles_update_self 限制只能改自己(id = auth.uid());role 不在此頁變更。
 // 角色差異:
-//   犯人(member)— 自介為「犯人牆」用,並可開關 on_wall(公開到犯人牆)。
-//   獄方(guard/warden)— 自介為「官網人員牆」用,獄方一律公開,不顯示 on_wall 開關。
+//   獄方(guard/warden)— 自介顯示於官網「監獄人員」;犯人自介目前不對外公開。
+// 註:犯人牆/名人堂已下架,on_wall / on_leaderboard 欄位保留於 DB 但不再於此頁編輯。
 // props:userId、role、onSaved(patch)— 讓上層(App topbar 暱稱顯示)同步更新
 export default function ProfilePage({ userId, role, onSaved }) {
   const isStaff = role === 'guard' || role === 'warden'
@@ -15,8 +15,6 @@ export default function ProfilePage({ userId, role, onSaved }) {
   const [gameName, setGameName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [bio, setBio] = useState('')
-  const [onWall, setOnWall] = useState(false)
-  const [onLeaderboard, setOnLeaderboard] = useState(true)  // 排行榜顯示名字(預設公開)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
   const [saved, setSaved] = useState(false)
@@ -79,15 +77,13 @@ export default function ProfilePage({ userId, role, onSaved }) {
 
   useEffect(() => {
     let alive = true
-    supabase.from('profiles').select('game_name, avatar_url, bio, on_wall, on_leaderboard').eq('id', userId).maybeSingle()
+    supabase.from('profiles').select('game_name, avatar_url, bio').eq('id', userId).maybeSingle()
       .then(({ data }) => {
         if (!alive) return
         if (data) {
           setGameName(data.game_name ?? '')
           setAvatarUrl(data.avatar_url ?? '')
           setBio(data.bio ?? '')
-          setOnWall(!!data.on_wall)
-          setOnLeaderboard(data.on_leaderboard !== false)   // null/undefined 視為公開
         }
         setLoading(false)
       })
@@ -102,7 +98,6 @@ export default function ProfilePage({ userId, role, onSaved }) {
       avatar_url: avatarUrl.trim() || null,
       bio: bio.trim() || null,
     }
-    if (role === 'member') { patch.on_wall = onWall; patch.on_leaderboard = onLeaderboard }   // 獄方一律公開,不寫這兩欄
     const { error } = await supabase.from('profiles').update(patch).eq('id', userId)
     setSaving(false)
     if (error) { setErr('儲存失敗：' + error.message); return }
@@ -126,25 +121,12 @@ export default function ProfilePage({ userId, role, onSaved }) {
           </label>
           <label className="pf-label">
             <span className="pf-label-row">
-              {isStaff ? '個人介紹（官網人員牆用）' : '自我介紹（犯人牆用）'}
+              {isStaff ? '個人介紹（官網人員牆用）' : '自我介紹'}
               <span className="pf-count">{bio.length} / 100</span>
             </span>
             <textarea rows={4} maxLength={100} value={bio} onChange={e => { setBio(e.target.value); setSaved(false) }}
-              placeholder={isStaff ? '寫一句介紹，顯示在官網人員牆上' : '寫一句自我介紹，公開時顯示在犯人牆上'} />
+              placeholder={isStaff ? '寫一句介紹，顯示在官網人員牆上' : '寫一句自我介紹'} />
           </label>
-          {role === 'member' && (
-            <>
-              <label className="pf-toggle">
-                <input type="checkbox" checked={onWall} onChange={e => { setOnWall(e.target.checked); setSaved(false) }} />
-                公開到犯人牆
-              </label>
-              <label className="pf-toggle">
-                <input type="checkbox" checked={onLeaderboard} onChange={e => { setOnLeaderboard(e.target.checked); setSaved(false) }} />
-                排行榜顯示我的名字
-              </label>
-              <p className="pf-hint">關閉時，你的次數仍會計入排行榜，但名字顯示為〔機密犯人〕。</p>
-            </>
-          )}
           {err && <p className="warn">{err}</p>}
           <div className="pf-acts">
             <button className="btn-pri" onClick={save} disabled={saving}>{saving ? '儲存中…' : '儲存'}</button>

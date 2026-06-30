@@ -25,6 +25,7 @@ export function toSessionView(r) {
     displayStatus: r.display_status,
     canBook: r.can_book === true,
     hasPassword: r.has_password === true,   // 密鑰場:報名前須通過密鑰核對
+    kind: r.kind ?? 'crunch',               // 場次類型(僅標籤);缺值視為集體趕稿
   }
 }
 

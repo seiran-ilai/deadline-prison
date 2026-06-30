@@ -9,6 +9,10 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 const WEBHOOK = process.env.DISCORD_BOOKING_WEBHOOK_URL
 
+// 場次類型標籤(對照 src/sessionKind.js;serverless 不能 import src,故在此複製一份)
+const KIND_LABEL = { crunch: '集體趕稿', named: '指名互動', free: '自由入場' }
+const kindLabel = k => KIND_LABEL[k] || KIND_LABEL.crunch
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
   try {
@@ -70,11 +74,12 @@ export default async function handler(req, res) {
       const n = (sess.booked ?? 0) + 1
       const cap = sess.capacity != null ? `/${sess.capacity}` : ''
       const date = sess.session_date ? `（${sess.session_date}）` : ''
+      const kind = `〔${kindLabel(sess.kind)}〕`
       try {
         await fetch(WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了【${sess.title}】${date}目前 ${n}${cap}` }),
+          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}` }),
         })
       } catch { /* 通知失敗不影響預約 */ }
     }

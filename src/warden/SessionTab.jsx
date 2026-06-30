@@ -122,7 +122,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     }
     const { error } = await supabase.from('visits').insert({
       session_id: currentSession, inmate_id: vForm.inmate_id,
-      guard_id: vForm.guard_id || null,   // 慰問品互動指定獄卒(選填)
+      guard_id: vForm.guard_id || null,   // 指定互動指定獄卒(選填)
       visitor_name: vForm.visitor_name.trim(), message: vForm.message.trim(),
     })
     if (error) { setMsg('登錄探監失敗：' + error.message); return }

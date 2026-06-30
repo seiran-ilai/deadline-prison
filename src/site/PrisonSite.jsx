@@ -4,6 +4,7 @@ import { zhAuthError } from '../authText'
 import { SHOW_APP_ACCESS, INTERNAL_ACCOUNT_DOMAIN } from '../authConfig'
 import { createBooking, createGuestBooking, cancelBooking } from '../bookingApi'
 import { toSessionView, splitDate } from '../prison'
+import { sessionKindLabel } from '../sessionKind'
 import AvatarInput from '../AvatarInput'
 import './prison-site.css'
 
@@ -11,23 +12,18 @@ const RULES = [
   ['01', '自首入監', '註冊帳號、報名梯次，然後在指定時間抵達監獄大門，乖乖服刑。'],
   ['02', '適度休息', '專注 25 分鐘、放風 5 分鐘為一輪；每四輪一次長休 15 分鐘。健康的身體才是創作的本錢。'],
   ['03', '你不孤單', 'DC 開放同步進場，典獄長直播大螢幕倒數，開放親朋好友探監，你不是一個人。'],
-  ['04', '刑滿釋放', '梯次結束即收尾放人。趕完稿了嗎？記得帶走你的保釋金。還沒趕完稿？記得下次再來自首。'],
+  ['04', '刑滿釋放', '梯次結束即收尾放人。趕完稿了嗎？拍拍屁股出獄去。還沒趕完稿？記得下次再來自首。'],
 ]
 
 // 營業項目價目(RP 店收費;費用單位 W)
 const PRICING = [
   {
-    code: 'A', name: '基本入獄', sub: '自首', price: '50W', unit: '/ 人', featured: true,
-    desc: '自行前來報到入獄，含 2 小時監獄作業體驗。費用內含基本費 20W ＋ 保釋金 30W。',
-    bail: [
-      ['完成 100%', '退還 30W', '實付 20W'],
-      ['完成 50% 以上', '退還 15W', '實付 35W'],
-      ['低於 50%', '全額沒收', '實付 50W'],
-    ],
+    code: 'A', name: '基本入獄', sub: '自首', price: '20W', unit: '/ 人', featured: true,
+    desc: '自行前來報到入獄，含 2 小時監獄作業體驗。費用 20W（兩小時），不另收保釋金。',
     items: [
       '入獄時自行登記今日目標（例：寫 2000 字、完成線稿）',
       '出獄時自行回報進度＋截圖佐證，獄卒確認即可',
-      '所有紀錄計入「小本本」，影響排行榜成績',
+      '所有紀錄計入「小本本」，留作服刑見證',
     ],
   },
   {
@@ -36,8 +32,7 @@ const PRICING = [
     items: [
       '探監合照 ×1：在鐵欄內外與囚犯、獄卒合照',
       '探監留言：替囚犯留下一段話，記入後台資料',
-      '慰問品互動：指定一名獄卒對囚犯即興演出（鼓勵系／責罵系）',
-      '進階客製化演出（如整人劇場、假裝放人結果沒有）可加購 5W',
+      '指定互動：指定一名獄卒對囚犯即興演出（鼓勵系／責罵系）',
     ],
   },
   {
@@ -45,11 +40,12 @@ const PRICING = [
     desc: '2 小時刑期結束後，可申請自願續刑或由獄卒判定加刑（RP 演出）。',
     items: [
       '視獄卒排班狀況開放，不保證每次可用',
-      '延長時段的進度同樣計入保釋金判定，可逆轉結果',
+      '延長時段的進度同樣計入「小本本」紀錄',
     ],
   },
 ]
 const PRICE_EXTRAS = [
+  ['指定互動', '10W', '指定一名獄卒對你即興演出（鼓勵系／責罵系）。犯人本人亦可加購，不限探監者；視獄卒排班狀況開放。'],
   ['監獄外抓捕', '30W 起', '想把朋友抓進監獄？委託人下單付費，獄卒出動至指定地點上演約 15 分鐘逮捕劇場（白頻演出）。2 名獄卒 30W，每追加 1 人 +15W；被捕者入獄費另計，需當事人配合前往店舖，不論是否到店費用不退還'],
   ['拍立得合照', '5W / 張', '基本包含 TO 角色名稱＋簽名，其餘由獄卒個人發揮。並非所有人都有提供此服務，請在購買前與獄卒本人或典獄長確認是否有提供此服務。'],
   ['入獄肖像照', '80W', '入獄紀念肖像照［負責獄卒　鄰居］'],
@@ -63,29 +59,9 @@ const SESS_STATUS = {
   serving:        { label: '服刑中',   cls: 'serving' },  // 服刑中(強調色)
 }
 
-// 犯人牆每頁張數(人多時分頁,左右切換;桌機約 4 欄 × 2 列、手機 2 欄 × 4 列)
-const WALL_PAGE_SIZE = 8
-
-// 名人堂榜單圖示(取代 emoji ⛓/💌,維持工業線稿調性)
-const ChainIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
-    <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
-  </svg>
-)
-const MailIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="5" width="18" height="14" rx="1" />
-    <path d="m3 7 9 6 9-6" />
-  </svg>
-)
-
 export default function PrisonSite() {
   const [sessions, setSessions] = useState([])
   const [staff, setStaff] = useState([])
-  const [wall, setWall] = useState([])  // 犯人牆(願意公開服刑紀錄的犯人)
-  const [crime, setCrime] = useState([])    // 名人堂 · 慣犯榜(入監次數 Top10)
-  const [popular, setPopular] = useState([]) // 名人堂 · 人氣榜(收到探監 Top10)
   const [user, setUser] = useState(undefined)  // undefined=載入中, null=未登入
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState(null)         // 開著的入監 modal 對應場次
@@ -109,34 +85,21 @@ export default function PrisonSite() {
   const [gPw, setGPw] = useState('')                  // 不註冊預約:密鑰場通行密鑰
   const [gBusy, setGBusy] = useState(false)
   const [gErr, setGErr] = useState(null)
-  const [wallPage, setWallPage] = useState(0)        // 犯人牆目前頁(0 起算)
-  const wallTouch = useRef(null)                     // 犯人牆觸控起點(手機左右滑換頁)
   const rootRef = useRef(null)
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     setUser(session?.user ?? null)
-    const [{ data: sess }, { data: st }, { data: wl }, { data: crimeData }, { data: popData }] = await Promise.all([
+    const [{ data: sess }, { data: st }] = await Promise.all([
       supabase.rpc('public_sessions'),
       supabase.rpc('public_staff'),
-      supabase.rpc('public_wall'),
-      supabase.rpc('leaderboard_visits_count'),
-      supabase.rpc('leaderboard_popularity'),
     ])
-    setCrime(crimeData ?? [])
-    setPopular(popData ?? [])
     setSessions((sess ?? []).map(toSessionView))
     setStaff((st ?? []).map(r => ({
       role: r.role === 'warden' ? '典獄長' : '獄卒',
       name: r.game_name || r.display_name || '——',
       img: r.avatar_url || '',
       bio: r.bio || '',   // 真實 bio;空則由顯示端補 fallback
-    })))
-    setWall((wl ?? []).map(r => ({
-      no: r.inmate_no,
-      name: r.game_name || r.display_name || '——',
-      img: r.avatar_url || '',
-      bio: r.bio || '',
     })))
     setLoading(false)
   }, [])
@@ -160,7 +123,7 @@ export default function PrisonSite() {
           a.classList.toggle('active', a.getAttribute('data-sec') === e.target.id))
       }
     }), { rootMargin: '-50% 0px -50% 0px' });
-    ['about', 'staff', 'wall', 'hall', 'pricing', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
+    ['about', 'staff', 'pricing', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
     return () => { io.disconnect(); navIO.disconnect() }
   }, [loading])
 
@@ -187,21 +150,6 @@ export default function PrisonSite() {
     const id = new URLSearchParams(window.location.search).get('intake')
     if (id) { const s = sessions.find(x => x.id === id); if (s) setSel(s) }
   }, [loading, sessions])
-
-  // 犯人牆分頁:人數多時左右翻頁,不讓牆無限變長
-  const wallPages = Math.max(1, Math.ceil(wall.length / WALL_PAGE_SIZE))
-  useEffect(() => { setWallPage(p => Math.min(p, wallPages - 1)) }, [wallPages])
-  const flipWall = dir => setWallPage(p => Math.min(Math.max(p + dir, 0), wallPages - 1))
-  const onWallTouchStart = e => { wallTouch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY } }
-  const onWallTouchEnd = e => {
-    if (!wallTouch.current) return
-    const dx = e.changedTouches[0].clientX - wallTouch.current.x
-    const dy = e.changedTouches[0].clientY - wallTouch.current.y
-    wallTouch.current = null
-    // 位移過小、或偏垂直(使用者在捲頁面)→ 不觸發翻頁
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.2) return
-    flipWall(dx < 0 ? 1 : -1)
-  }
 
   const scrollTo = id => rootRef.current?.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' })
   const resetModalAuth = () => {
@@ -322,8 +270,6 @@ export default function PrisonSite() {
           <div className="links">
             <a data-sec="about" onClick={() => scrollTo('about')}>服刑須知</a>
             <a data-sec="staff" onClick={() => scrollTo('staff')}>監獄人員</a>
-            <a data-sec="wall" onClick={() => scrollTo('wall')}>犯人牆</a>
-            <a data-sec="hall" onClick={() => scrollTo('hall')}>名人堂</a>
             <a data-sec="pricing" onClick={() => scrollTo('pricing')}>收費價目</a>
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
           </div>
@@ -353,8 +299,8 @@ export default function PrisonSite() {
         {menuOpen && (
           <div className="nav-drawer">
             {[
-              ['about', '服刑須知'], ['staff', '監獄人員'], ['wall', '犯人牆'],
-              ['hall', '名人堂'], ['pricing', '收費價目'], ['sessions', '趕稿場次'],
+              ['about', '服刑須知'], ['staff', '監獄人員'],
+              ['pricing', '收費價目'], ['sessions', '趕稿場次'],
             ].map(([id, label]) => (
               <a key={id} onClick={() => { scrollTo(id); setMenuOpen(false) }}>{label}</a>
             ))}
@@ -431,96 +377,11 @@ export default function PrisonSite() {
 
         <div className="hazard" />
 
-        {/* 犯人牆(自願公開服刑紀錄的犯人;人多時分頁,按鈕/左右滑動切換) */}
-        <section id="wall">
-          <div className="eyebrow reveal">服刑紀錄 <span className="blk">// BLOCK 03</span></div>
-          <h2 className="title reveal">犯人牆</h2>
-          <p className="subline reveal">自願把服刑紀錄公開示眾的犯人。沒被趕完的稿，大家一起看著。</p>
-          {loading ? <p style={{ color: 'var(--dim)' }}>調閱服刑紀錄中…</p>
-            : wall.length === 0 ? <p style={{ color: 'var(--dim)' }}>目前無人願意公開服刑紀錄</p>
-              : <>
-                <div className="wall-bar reveal">
-                  <span className="wall-count">收容人數 <b>{wall.length}</b> 人</span>
-                  {wallPages > 1 && (
-                    <div className="wall-nav">
-                      <button onClick={() => flipWall(-1)} disabled={wallPage === 0} aria-label="上一頁">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
-                      </button>
-                      <span className="wall-pageno">{wallPage + 1} / {wallPages}</span>
-                      <button onClick={() => flipWall(1)} disabled={wallPage === wallPages - 1} aria-label="下一頁">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="wall-pager reveal" onTouchStart={onWallTouchStart} onTouchEnd={onWallTouchEnd}>
-                  <div className="wall-track" style={{ transform: `translateX(-${wallPage * 100}%)` }}>
-                    {Array.from({ length: wallPages }, (_, pg) => (
-                      <div className="roster wall-page" key={pg} aria-hidden={pg !== wallPage}>
-                        {wall.slice(pg * WALL_PAGE_SIZE, (pg + 1) * WALL_PAGE_SIZE).map((p, i) => (
-                          <div className="card" key={pg * WALL_PAGE_SIZE + i}>
-                            <div className="mug">
-                              {p.img ? <img src={p.img} alt={p.name} /> : <div className="initial">{p.name[0] || '?'}</div>}
-                            </div>
-                            <div className="body">
-                              <div className="role">No.{String(p.no ?? 0).padStart(4, '0')}</div>
-                              <h4>{p.name}</h4>
-                              <p className="bio">{p.bio || '〔機密資料未公開〕'}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>}
-        </section>
-
-        <div className="perforation" />
-
-        {/* 監獄名人堂(排行榜:慣犯榜 / 人氣榜) */}
-        <section id="hall">
-          <div className="eyebrow reveal">監獄名人堂 <span className="blk">// BLOCK 04</span></div>
-          <h2 className="title reveal">名人堂</h2>
-          <p className="subline reveal">服刑最勤、人氣最高的犯人。次數照實計入，名字是否公開由本人決定。</p>
-          <div className="halls reveal">
-            {[
-              { key: 'crime', icon: ChainIcon, title: '慣犯榜', sub: '入監次數 TOP 10', rows: crime },
-              { key: 'popular', icon: MailIcon, title: '人氣榜', sub: '收到探監 TOP 10', rows: popular },
-            ].map(board => (
-              <div className="hall-board" key={board.key}>
-                <div className="hall-head">
-                  <span className="hall-icon"><board.icon /></span>{board.title}
-                  <span className="hall-sub">{board.sub}</span>
-                </div>
-                {loading ? <p className="hall-empty">名冊整備中…</p>
-                  : board.rows.length === 0 ? <p className="hall-empty">名冊整備中…</p>
-                    : (
-                      <ol className="hall-list">
-                        {board.rows.map(r => (
-                          <li className={`hall-row${r.rank <= 3 ? ' top' : ''}${r.rank === 1 ? ' r1' : ''}`} key={r.rank}>
-                            <span className="hall-rank">{r.rank}</span>
-                            <span className={`hall-name${r.display_name ? '' : ' masked'}`}>
-                              {r.display_name ?? '〔機密犯人〕'}
-                              {r.rank === 1 && <span className="hall-badge">重刑犯</span>}
-                            </span>
-                            <span className="hall-count">{r.count} 次</span>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <div className="hazard" />
-
         {/* 營業項目價目 */}
         <section id="pricing">
-          <div className="eyebrow reveal">營業項目 <span className="blk">// BLOCK 05</span></div>
+          <div className="eyebrow reveal">營業項目 <span className="blk">// BLOCK 03</span></div>
           <h2 className="title reveal">收費價目</h2>
-          <p className="subline reveal">把自己關起來也要明碼標價。保釋金制度為增加體驗之設計，非強制消費；所有互動皆為角色扮演，請保持良好的 RP 禮儀。</p>
+          <p className="subline reveal">把自己關起來也要明碼標價。所有互動皆為角色扮演，請保持良好的 RP 禮儀。</p>
           <div className="price-grid reveal">
             {PRICING.map(c => (
               <div className={`price-card${c.featured ? ' featured' : ''}`} key={c.code}>
@@ -536,14 +397,6 @@ export default function PrisonSite() {
                   </div>
                 </div>
                 <p className="price-desc">{c.desc}</p>
-                {c.bail && (
-                  <div className="price-bail">
-                    <div className="pb-lbl">保釋金退還規則</div>
-                    {c.bail.map(([cond, refund, paid]) => (
-                      <div className="pb-row" key={cond}><span>{cond}</span><b>{refund}</b><em>{paid}</em></div>
-                    ))}
-                  </div>
-                )}
                 <ul className="price-items">
                   {c.items.map(t => <li key={t}>{t}</li>)}
                 </ul>
@@ -567,7 +420,7 @@ export default function PrisonSite() {
 
         {/* 趕稿場次 */}
         <section id="sessions">
-          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 06</span></div>
+          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 04</span></div>
           <h2 className="title reveal">近期趕稿場次</h2>
           <p className="subline reveal">選一個梯次自首入監。額滿停止收監，過期梯次已結案。</p>
           <div className="sessions reveal">
@@ -586,7 +439,7 @@ export default function PrisonSite() {
                     <div className={`sess ${meta.cls}`} key={s.id}>
                       <div className="when"><div className="d">{dd}</div><div className="m">{mm}</div></div>
                       <div className="meta">
-                        <div className="batch">{s.batch}</div>
+                        <div className="batch">{s.batch}<span className="sess-kind">{sessionKindLabel(s.kind)}</span></div>
                         <h4>{s.title}</h4>
                         <div className="cap">{capTxt}{limited && <span className="gauge"><i style={{ width: `${pct}%` }} /></span>}</div>
                       </div>
@@ -623,6 +476,7 @@ export default function PrisonSite() {
               <div className="m-eyebrow">{sel.hasPassword ? '密鑰入獄 · INTAKE' : '入監服刑 · INTAKE'}</div>
               <h3>{sel.title}</h3>
               <div className="m-row"><span>梯次編號</span><b>{sel.batch}</b></div>
+              <div className="m-row"><span>場次類型</span><b>{sessionKindLabel(sel.kind)}</b></div>
               <div className="m-row"><span>服刑日期</span><b>{sel.dateISO || '未定'}</b></div>
               <div className="m-row"><span>收容情況</span><b>{sel.capacity > 0 ? `${sel.booked} / ${sel.capacity}` : `${sel.booked} ／ 不限`}</b></div>
               <p className="m-remark">備註：獄卒將會在休息時間處理公務，此時你可以與全場有空閒的獄卒互動。</p>

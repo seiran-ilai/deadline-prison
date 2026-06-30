@@ -178,45 +178,6 @@
 .dp-site .card h4{font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:10px}
 .dp-site .card .bio{font-size:13px; color:var(--dim); line-height:1.7}
 
-/* 犯人牆分頁:收容人數列 + 左右翻頁(桌機按鈕/手機滑動) */
-.dp-site .wall-bar{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:18px}
-.dp-site .wall-count{font-family:var(--cond); font-size:18px; letter-spacing:2px; color:var(--dim)}
-.dp-site .wall-count b{font-family:var(--mono); font-size:20px; color:var(--hazard); margin:0 4px}
-.dp-site .wall-nav{display:flex; align-items:center; gap:10px}
-.dp-site .wall-nav button{width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center;
-  background:var(--panel); border:1px solid var(--line); color:var(--text); cursor:pointer;
-  transition:border-color .2s, color .2s}
-.dp-site .wall-nav button:hover:not(:disabled){border-color:var(--hazard); color:var(--hazard)}
-.dp-site .wall-nav button:disabled{opacity:.35; cursor:default}
-.dp-site .wall-pageno{font-family:var(--mono); font-size:12px; letter-spacing:1px; color:var(--dim)}
-.dp-site .wall-pager{overflow:hidden; touch-action:pan-y}
-.dp-site .wall-track{display:flex; transition:transform .35s ease}
-.dp-site .wall-page{flex:0 0 100%; min-width:100%; align-content:start}
-
-/* 監獄名人堂(排行榜:慣犯榜 / 人氣榜)*/
-.dp-site .halls{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px}
-.dp-site .hall-board{background:var(--panel); border:1px solid var(--line); padding:24px 22px}
-.dp-site .hall-head{display:flex; align-items:center; gap:10px; font-family:var(--cjk); font-weight:700; font-size:20px; letter-spacing:1px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--line)}
-.dp-site .hall-head .hall-icon{display:inline-flex; align-items:center; color:var(--hazard)}
-.dp-site .hall-head .hall-icon svg{display:block}
-.dp-site .hall-head .hall-sub{margin-left:auto; font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--faint)}
-.dp-site .hall-list{list-style:none; display:flex; flex-direction:column}
-.dp-site .hall-row{display:flex; align-items:center; gap:14px; padding:11px 8px; border-bottom:1px solid var(--line)}
-.dp-site .hall-row:last-child{border-bottom:none}
-.dp-site .hall-rank{font-family:var(--stamp); font-size:20px; color:var(--steel-2); min-width:36px; text-align:center; line-height:1}
-/* 第 2、3 名:銀鋼色、略大 */
-.dp-site .hall-row.top .hall-rank{font-size:24px; color:var(--steel-2)}
-/* 第 1 名:鐵欄黃強調(黃條 + 左側 hazard 邊) */
-.dp-site .hall-row.r1{border-left:4px solid var(--hazard); background:linear-gradient(90deg,rgba(245,197,24,.07),transparent)}
-.dp-site .hall-row.r1 .hall-rank{font-size:30px; color:var(--hazard)}
-.dp-site .hall-name{flex:1; min-width:0; font-family:var(--cjk); font-size:15px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.dp-site .hall-row.r1 .hall-name{display:flex; align-items:center; gap:8px}
-/* 第 1 名徽章 */
-.dp-site .hall-badge{flex:0 0 auto; font-family:var(--mono); font-size:10px; letter-spacing:2px; color:#0a0a0a; background:var(--hazard); padding:2px 6px}
-.dp-site .hall-name.masked{color:var(--dim); font-style:italic}
-.dp-site .hall-count{font-family:var(--mono); font-size:13px; color:var(--hazard); white-space:nowrap}
-.dp-site .hall-empty{color:var(--dim); font-size:14px}
-
 /* 趕稿場次 */
 .dp-site .sessions{display:flex; flex-direction:column; gap:14px}
 .dp-site .sess{display:grid; grid-template-columns:118px 1fr auto; align-items:center; gap:24px; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--steel); padding:22px 26px; transition:border-color .25s, background .25s}
@@ -230,6 +191,7 @@
 .dp-site .sess .when .d{font-size:26px; font-weight:700; color:var(--text); line-height:1}
 .dp-site .sess .when .m{font-size:12px; color:var(--dim); letter-spacing:2px; margin-top:4px}
 .dp-site .sess .meta .batch{font-family:var(--mono); font-size:11px; letter-spacing:2px; color:var(--faint); margin-bottom:6px}
+.dp-site .sess .meta .batch .sess-kind{font-family:var(--cond); letter-spacing:1px; color:#c2a3ff; border:1px solid rgba(180,120,255,.45); padding:1px 7px; margin-left:8px}
 .dp-site .sess .meta h4{font-family:var(--cjk); font-weight:700; font-size:21px; letter-spacing:1px; margin-bottom:8px}
 .dp-site .sess .meta .cap{font-family:var(--mono); font-size:12.5px; color:var(--dim); display:flex; align-items:center; gap:12px}
 .dp-site .sess .meta .cap .gauge{width:120px; height:6px; background:var(--concrete-0); border:1px solid var(--line); position:relative}
@@ -399,14 +361,6 @@
   .dp-site .hero .crime{grid-template-columns:1fr; width:100%}
   .dp-site .hero .crime span{flex-direction:row; align-items:baseline; justify-content:space-between; border-right:none; border-bottom:1px solid var(--line); padding:12px 18px}
   .dp-site .hero .crime span:last-child{border-bottom:none}
-  /* 犯人牆:手機改 2 欄縮小卡片,一頁 8 人不至於過長,左右滑動換頁 */
-  .dp-site .wall-page{grid-template-columns:repeat(2,1fr); gap:12px}
-  .dp-site .wall-page .mug{height:140px}
-  .dp-site .wall-page .mug .initial{font-size:48px}
-  .dp-site .wall-page .body{padding:12px 12px 16px}
-  .dp-site .wall-page .role{font-size:13px; padding:2px 10px}
-  .dp-site .wall-page h4{font-size:16px; margin-bottom:6px}
-  .dp-site .wall-page .bio{font-size:11px}
   .dp-site .sess{grid-template-columns:78px 1fr; gap:16px}
   .dp-site .sess .act{grid-column:1/-1; text-align:left}
   .dp-site .btn-book{width:100%}
