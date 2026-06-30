@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import AvatarInput from '../AvatarInput'
+import { slotLabel } from '../slots'
 
 const STATUS_STYLE = {
   pending: { label: '待確認', bg: '#e0b04a', color: '#1a1a1a' },
@@ -16,20 +17,29 @@ export default function BookingsTab({ setMsg }) {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
   const [editing, setEditing] = useState(null)   // 編輯暱稱/頭像中的 booking { id, game_name, avatar_url }
+  const [guardNames, setGuardNames] = useState({})  // 指名互動:guard_id -> 顯示名
 
   async function load() {
     setLoading(true)
     const { data: bk } = await supabase.from('bookings')
-      .select('id, session_id, user_id, dc_id, dc_name, note, status, created_at, game_name, avatar_url').order('created_at')
+      .select('id, session_id, user_id, dc_id, dc_name, note, status, created_at, game_name, avatar_url, requested_guard_id, requested_slot').order('created_at')
     const grouped = {}
     for (const b of bk ?? []) (grouped[b.session_id] ??= []).push(b)
     const sids = Object.keys(grouped)
     let sess = []
     if (sids.length) {
       const { data: ss } = await supabase.from('sessions')
-        .select('id, title, session_date, capacity, status').in('id', sids)
+        .select('id, title, session_date, capacity, status, start_time').in('id', sids)
       sess = ss ?? []
     }
+    // 指名互動:把被指名的獄卒 id 解析成顯示名(分開查 profiles 再 JS 合併)
+    const gids = [...new Set((bk ?? []).map(b => b.requested_guard_id).filter(Boolean))]
+    if (gids.length) {
+      const { data: gp } = await supabase.from('profiles')
+        .select('id, game_name, display_name').in('id', gids)
+      const gm = {}; for (const p of gp ?? []) gm[p.id] = p.game_name || p.display_name || '獄卒'
+      setGuardNames(gm)
+    } else setGuardNames({})
     const rank = s => (s.status === 'open' ? 0 : 1)
     const dk = s => new Date(s.session_date ?? '2999-12-31').getTime()
     sess.sort((a, b) => rank(a) - rank(b) || dk(b) - dk(a))
@@ -104,6 +114,11 @@ export default function BookingsTab({ setMsg }) {
                           {b.dc_name && b.game_name && <span className="muted">暱稱：{b.game_name}</span>}
                           {b.dc_id && <span className="faint">DC:{b.dc_id}</span>}
                           {b.note && <span className="muted">備註：{b.note}</span>}
+                          {/* 指名互動:顯示這筆預約指名了哪位獄卒(無 = 不指定,由典獄長安排) */}
+                          {b.requested_guard_id && (
+                            <span className="tag tag-pill" style={{ background: 'rgba(180,120,255,.16)', color: '#c2a3ff' }}>
+                              指名：{guardNames[b.requested_guard_id] ?? '獄卒'}{b.requested_slot != null ? `（${slotLabel(s.start_time, b.requested_slot)}）` : ''}</span>
+                          )}
                           <span className="tag tag-pill" style={{ background: st.bg, color: st.color }}>{st.label}</span>
                           <span className="faint">{new Date(b.created_at).toLocaleString()}</span>
                           <span className="spacer" />

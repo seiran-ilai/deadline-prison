@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     const supabase = getServiceClient()
     if (!supabase) return res.status(500).json({ error: 'server_not_configured' })
 
-    const { session_id, game_name, password } = req.body || {}
+    const { session_id, game_name, password, requested_guard_id, requested_slot } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
     const gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : ''
     if (gn.length < 1) return res.status(400).json({ error: 'missing_game_name' })
@@ -34,6 +34,19 @@ export default async function handler(req, res) {
       if (!pwOk) return res.status(403).json({ error: 'wrong_password' })
     }
 
+    // 指名互動場:核對指名(獄卒, 時格)在本場可指名清單、且尚未被搶(非指名場/沒帶齊一律忽略)
+    let reqGuardId = null, reqSlotIdx = null, reqName = null, reqSlotLabel = null
+    if (requested_guard_id != null && requested_slot != null && sess.kind === 'named') {
+      const { data: ns } = await supabase.rpc('session_named_slots', { p_session: session_id })
+      const hit = (ns || []).find(r => r.guard_id === requested_guard_id && r.slot_index === requested_slot)
+      if (!hit) return res.status(403).json({ error: 'guard_not_nameable' })
+      if (hit.taken) return res.status(409).json({ error: 'slot_taken' })
+      reqGuardId = requested_guard_id
+      reqSlotIdx = requested_slot
+      reqName = hit.game_name || hit.display_name || null
+      reqSlotLabel = hit.slot_label || `第 ${requested_slot + 1} 節`
+    }
+
     // 防重複(訪客沒有身分,以同場+同暱稱兜底;有帳號的列不在此列)
     const { data: dup } = await supabase.from('bookings')
       .select('id').eq('session_id', session_id).is('user_id', null)
@@ -43,8 +56,13 @@ export default async function handler(req, res) {
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: null, dc_id: null, dc_name: null,
       game_name: gn, avatar_url: null, note: null,
+      requested_guard_id: reqGuardId, requested_slot: reqSlotIdx,
     })
-    if (insErr) return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
+    if (insErr) {
+      if (insErr.code === '23505' && (insErr.message || '').includes('bookings_named_slot_uniq'))
+        return res.status(409).json({ error: 'slot_taken' })
+      return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
+    }
 
     // Discord 通知(失敗不擋預約)
     if (WEBHOOK) {
@@ -52,11 +70,14 @@ export default async function handler(req, res) {
       const cap = sess.capacity != null ? `/${sess.capacity}` : ''
       const date = sess.session_date ? `（${sess.session_date}）` : ''
       const kind = `〔${kindLabel(sess.kind)}〕`
+      const req = sess.kind === 'named'
+        ? (reqName ? `｜指名：${reqName}（${reqSlotLabel}）` : '｜指名：不指定（由典獄長安排）')
+        : ''
       try {
         await fetch(WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `🔒 新收監（訪客）｜${gn} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}` }),
+          body: JSON.stringify({ content: `🔒 新收監（訪客）｜${gn} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}${req}` }),
         })
       } catch { /* 通知失敗不影響預約 */ }
     }

@@ -3,12 +3,15 @@ import { supabase } from '../supabaseClient'
 import { normalizeStatus, SESSION_STATUS_LABEL, materializeResultMsg } from './constants'
 import { SESSION_KINDS, SESSION_KIND_LABEL, DEFAULT_SESSION_KIND } from '../sessionKind'
 import GuardAssign from './GuardAssign'
+import SessionGuardPlan from './SessionGuardPlan'
 
 // 場次總覽(僅典獄長):列出所有場次、開新場、編輯(標題/日期)、五態狀態機、刪除。
 // 不放番茄鐘控制與直播(那些屬「進行中場次」分頁的控場,避免重複)。
 // 未結束場次可展開唯讀檢視本場名單(犯人列可就地指派/移除專屬獄卒);已結束場次不可展開。
 // 場次狀態一律以 normalizeStatus(s) 判斷,不直接比對 s.status。
-export default function SessionsOverviewTab({ setMsg, reloadShared }) {
+export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = [] }) {
+  // 指名互動場排班用:全體獄方人員(role = guard / warden)
+  const staffPool = inmates.filter(p => p.role === 'guard' || p.role === 'warden')
   const [sessions, setSessions] = useState([])
   const [counts, setCounts] = useState({})        // session_id -> 報到人數
   const [loading, setLoading] = useState(true)
@@ -16,7 +19,9 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [newDate, setNewDate] = useState('')
   const [newCap, setNewCap] = useState('')          // 人數上限(空 = 不限)
   const [newPublic, setNewPublic] = useState(true)  // 對外公開(預設公開)
-  const [newKind, setNewKind] = useState(DEFAULT_SESSION_KIND)  // 場次類型(僅標籤)
+  const [newKind, setNewKind] = useState(DEFAULT_SESSION_KIND)  // 場次類型
+  const [newStart, setNewStart] = useState('')      // 指名場:開始時間(HH:MM)
+  const [newSlots, setNewSlots] = useState('4')     // 指名場:半小時時格數
   const [newPw, setNewPw] = useState('')            // 通行密鑰(僅公開場可設;空 = 不設)
   const [editId, setEditId] = useState(null)       // 編輯中的場次 id
   const [editTitle, setEditTitle] = useState('')
@@ -24,6 +29,8 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   const [editCap, setEditCap] = useState('')
   const [editPublic, setEditPublic] = useState(true)
   const [editKind, setEditKind] = useState(DEFAULT_SESSION_KIND)
+  const [editStart, setEditStart] = useState('')
+  const [editSlots, setEditSlots] = useState('4')
   const [editPw, setEditPw] = useState('')
   const [pwById, setPwById] = useState({})          // session_id -> 通行密鑰(RLS 僅典獄長可讀,後台直接顯示)
   const [expandedId, setExpandedId] = useState(null) // 展開檢視中的場次 id(僅 open)
@@ -33,7 +40,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
   async function load() {
     setLoading(true)
     const { data: sess } = await supabase.from('sessions')
-      .select('id, title, session_date, status, timer_started_at, opened_by, capacity, created_at, is_public, kind')
+      .select('id, title, session_date, status, timer_started_at, opened_by, capacity, created_at, is_public, kind, start_time, slot_count')
     const { data: si } = await supabase.from('session_inmates').select('session_id')
     const { data: pws } = await supabase.from('session_passwords').select('session_id, password')
     const pwMap = {}
@@ -73,12 +80,15 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
 
   // 把上限輸入轉成 int 或 null(空白 / 非正整數 → null = 不限)
   const capValue = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : null }
+  // 時格數:正整數,上限 48(預設 4 = 兩小時)
+  const slotValue = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? Math.min(n, 48) : 4 }
 
   async function openNew() {
     if (!newTitle) { setMsg('請填場次名'); return }
     const payload = { title: newTitle, is_public: newPublic, kind: newKind }
     if (newDate) payload.session_date = newDate
     payload.capacity = capValue(newCap)
+    if (newKind === 'named') { payload.start_time = newStart || null; payload.slot_count = slotValue(newSlots) }
     const { data, error } = await supabase.from('sessions').insert(payload).select().single()
     if (error) { setMsg('開場失敗：' + error.message); return }
     setSessions(prev => [data, ...prev])   // 新場插入頂端,不整頁重抓
@@ -90,7 +100,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
       if (pwErr) setMsg('已開場，但密鑰設定失敗：' + pwErr.message)
       else setPwById(prev => ({ ...prev, [data.id]: pwVal }))
     }
-    setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true); setNewKind(DEFAULT_SESSION_KIND); setNewPw('')
+    setNewTitle(''); setNewDate(''); setNewCap(''); setNewPublic(true); setNewKind(DEFAULT_SESSION_KIND); setNewStart(''); setNewSlots('4'); setNewPw('')
     reloadShared()   // 背景同步共用清單
   }
 
@@ -98,14 +108,17 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
     setEditId(s.id); setEditTitle(s.title ?? ''); setEditDate(s.session_date ?? ''); setEditCap(s.capacity ?? '')
     setEditPublic(s.is_public !== false)   // 帶入現值(null/undefined 視為公開)
     setEditKind(s.kind ?? DEFAULT_SESSION_KIND)
+    setEditStart(s.start_time ? String(s.start_time).slice(0, 5) : '')   // 'HH:MM:SS' → 'HH:MM'
+    setEditSlots(String(s.slot_count ?? 4))
     setEditPw(pwById[s.id] ?? '')
   }
-  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate(''); setEditCap(''); setEditPublic(true); setEditKind(DEFAULT_SESSION_KIND); setEditPw('') }
+  function cancelEdit() { setEditId(null); setEditTitle(''); setEditDate(''); setEditCap(''); setEditPublic(true); setEditKind(DEFAULT_SESSION_KIND); setEditStart(''); setEditSlots('4'); setEditPw('') }
 
   async function saveEdit(id) {
     if (!editTitle) { setMsg('場次名不能空白'); return }
     const snapshot = sessions
     const patch = { title: editTitle, session_date: editDate || null, capacity: capValue(editCap), is_public: editPublic, kind: editKind }
+    if (editKind === 'named') { patch.start_time = editStart || null; patch.slot_count = slotValue(editSlots) }
     const pwVal = editPublic ? editPw.trim() : ''   // 取消公開 = 一併移除密鑰
     setSessions(prev => prev.map(x => x.id === id ? { ...x, ...patch } : x))   // 樂觀更新
     cancelEdit(); setMsg('已更新場次')
@@ -198,6 +211,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
         <select className="inp" value={newKind} onChange={e => setNewKind(e.target.value)} style={{ width: 130 }}>
           {SESSION_KINDS.map(k => <option key={k} value={k}>{SESSION_KIND_LABEL[k]}</option>)}
         </select>
+        {newKind === 'named' && (<>
+          <input type="time" value={newStart} onChange={e => setNewStart(e.target.value)} title="開始時間" />
+          <input type="number" min="1" max="48" placeholder="時格數" value={newSlots} onChange={e => setNewSlots(e.target.value)} title="半小時時格數" style={{ width: 100 }} />
+        </>)}
         <label><input type="checkbox" checked={newPublic} onChange={e => { setNewPublic(e.target.checked); if (!e.target.checked) setNewPw('') }} />對外公開</label>
         {/* 通行密鑰:僅對外公開可設;設了官網會顯示「密鑰入獄」,需輸入密鑰才能報名 */}
         <input className="inp" placeholder={newPublic ? '通行密鑰（留空＝不設）' : '內部場不可設密鑰'} value={newPw}
@@ -222,6 +239,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
                   <select className="inp" value={editKind} onChange={e => setEditKind(e.target.value)} style={{ width: 120 }}>
                     {SESSION_KINDS.map(k => <option key={k} value={k}>{SESSION_KIND_LABEL[k]}</option>)}
                   </select>
+                  {editKind === 'named' && (<>
+                    <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)} title="開始時間" />
+                    <input type="number" min="1" max="48" placeholder="時格數" value={editSlots} onChange={e => setEditSlots(e.target.value)} title="半小時時格數" style={{ width: 90 }} />
+                  </>)}
                   <label><input type="checkbox" checked={editPublic} onChange={e => { setEditPublic(e.target.checked); if (!e.target.checked) setEditPw('') }} />對外公開</label>
                   <input className="inp" placeholder={editPublic ? '通行密鑰（留空＝不設）' : '內部場不可設密鑰'} value={editPw}
                     disabled={!editPublic} onChange={e => setEditPw(e.target.value)} style={{ width: 160 }} />
@@ -263,6 +284,11 @@ export default function SessionsOverviewTab({ setMsg, reloadShared }) {
               {/* 展開:唯讀檢視本場名單(犯人列右側嵌 GuardAssign 指派/移除專屬獄卒)。已結束場次不可展開。 */}
               {isOpen && !ended && (
                 <div className="row-detail">
+                  {/* 指名互動場:當日上班 / 可指名獄卒排班(預約頁據此顯示可指名清單) */}
+                  {s.kind === 'named' && (
+                    <SessionGuardPlan sessionId={s.id} staff={staffPool}
+                      slotCount={s.slot_count ?? 4} startTime={s.start_time} setMsg={setMsg} />
+                  )}
                   {!roster ? <p className="empty">讀取本場名單中…</p> : (<>
                     <div className="group-lbl">本場犯人 ({roster.inmates.length})<span className="ln" /></div>
                     {roster.inmates.length === 0 ? <p className="empty">本場沒有犯人</p> : roster.inmates.map(r => (

@@ -67,7 +67,7 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
           setMsg={setMsg} reloadShared={load} onGoToManuscripts={onGoToManuscripts} />
       )}
       {wtab === 'sessions' && isWarden && (
-        <SessionsOverviewTab setMsg={setMsg} reloadShared={load} />
+        <SessionsOverviewTab setMsg={setMsg} reloadShared={load} inmates={inmates} />
       )}
       {wtab === 'overview' && (
         <OverviewTab inmates={inmates}

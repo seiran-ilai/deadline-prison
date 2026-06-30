@@ -73,6 +73,9 @@ export default function PrisonSite() {
   const [bkAvatar, setBkAvatar] = useState('')       // 入監頭像 URL(預設帶既有 avatar_url)
   const [menuOpen, setMenuOpen] = useState(false)    // 手機版漢堡選單開合
   const [pw, setPw] = useState('')                   // 密鑰場:輸入中的通行密鑰
+  const [namedGuards, setNamedGuards] = useState([]) // 指名互動場:[{ guard_id, name, avatar, slots:[{index,label,taken}] }]
+  const [reqGuard, setReqGuard] = useState('')       // 指名獄卒 id('' = 不指定,由典獄長安排)
+  const [reqSlot, setReqSlot] = useState(null)       // 指名時格 index(null = 不指定)
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
@@ -144,6 +147,21 @@ export default function PrisonSite() {
     return () => { alive = false }
   }, [sel, user])
 
+  // 指名互動場:載入本場每位可指名獄卒的時格(含是否已被搶);依獄卒分組(SECURITY DEFINER RPC,匿名亦可叫)
+  const loadNamedSlots = useCallback(async (sessionId) => {
+    const { data } = await supabase.rpc('session_named_slots', { p_session: sessionId })
+    const byG = new Map()
+    for (const r of data ?? []) {
+      if (!byG.has(r.guard_id)) byG.set(r.guard_id, { guard_id: r.guard_id, name: r.game_name || r.display_name || '獄卒', avatar: r.avatar_url || '', slots: [] })
+      byG.get(r.guard_id).slots.push({ index: r.slot_index, label: r.slot_label || `第 ${r.slot_index + 1} 節`, taken: r.taken })
+    }
+    setNamedGuards([...byG.values()])
+  }, [])
+  useEffect(() => {
+    if (sel && sel.kind === 'named') loadNamedSlots(sel.id)
+    else setNamedGuards([])
+  }, [sel, loadNamedSlots])
+
   // 深連結:OAuth 登入後導回 /?intake=<id>,自動開該場 modal
   useEffect(() => {
     if (loading) return
@@ -156,8 +174,8 @@ export default function PrisonSite() {
     setMPw(''); setMAuthBusy(false); setMAuthErr(null)
     setGMode(false); setGName(''); setGPw(''); setGBusy(false); setGErr(null)
   }
-  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
-  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetModalAuth() }
+  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); setReqGuard(''); setReqSlot(null); resetModalAuth() }
+  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); setReqGuard(''); setReqSlot(null); setNamedGuards([]); resetModalAuth() }
 
   // modal 內帳號登入:成功後不換頁,直接刷新 user / 資料,留在同一個 modal 繼續報名流程。
   // 僅收帳號名(信箱登入已移除),後綴由程式補。
@@ -187,7 +205,8 @@ export default function PrisonSite() {
     if (!name) { setGErr('請輸入遊戲暱稱'); return }
     if (sel.hasPassword && !gPw.trim()) { setGErr('本梯次為密鑰場，請輸入通行密鑰'); return }
     setGBusy(true)
-    const r = await createGuestBooking(sel.id, { game_name: name, password: sel.hasPassword ? gPw.trim() : null })
+    const named = sel.kind === 'named' && reqGuard
+    const r = await createGuestBooking(sel.id, { game_name: name, password: sel.hasPassword ? gPw.trim() : null, requested_guard_id: named ? reqGuard : null, requested_slot: named ? reqSlot : null })
     setGBusy(false)
     if (r.ok) {
       setMsg('收監成功。鈴響時見。（不註冊預約如需取消，請至 Discord 聯繫典獄長）')
@@ -197,6 +216,8 @@ export default function PrisonSite() {
     if (r.error === 'already_booked') setGErr('此暱稱已在此梯次服刑名冊上。')
     else if (r.error === 'full') setGErr('此梯次已停止收監。')
     else if (r.error === 'wrong_password') setGErr('通行密鑰不正確，請確認後重試。')
+    else if (r.error === 'slot_taken') { setGErr('這個時段剛被別人選走了，請改選其他時段。'); setReqGuard(''); setReqSlot(null); loadNamedSlots(sel.id) }
+    else if (r.error === 'guard_not_nameable') setGErr('指名的獄卒/時段已不開放,請重新選擇。')
     else setGErr('收監失敗，請稍後再試。')
   }
 
@@ -221,9 +242,11 @@ export default function PrisonSite() {
       p_avatar_url: bkAvatar || null,
     })
     // 暱稱/頭像僅作該筆預約展示值(伺服器仍以 JWT 驗身分);沿用既有 profile 值或 modal 補填的值
+    const named = sel.kind === 'named' && reqGuard
     const r = await createBooking(sel.id, {
       game_name: bkName.trim() || null, avatar_url: bkAvatar || null,
       password: sel.hasPassword ? pw.trim() : null,
+      requested_guard_id: named ? reqGuard : null, requested_slot: named ? reqSlot : null,
     })
     setSubmitting(false)
     if (r.ok) setMsg('收監成功。鈴響時見。')
@@ -231,6 +254,8 @@ export default function PrisonSite() {
     else if (r.error === 'full') setMsg('此梯次已停止收監。')
     else if (r.error === 'wrong_password') setMsg('通行密鑰不正確，請重新開啟報名並輸入密鑰。')
     else if (r.error === 'not_authenticated') setMsg('請先登入。')
+    else if (r.error === 'slot_taken') setMsg('這個時段剛被別人選走了，請改選其他時段。')
+    else if (r.error === 'guard_not_nameable') setMsg('指名的獄卒/時段已不開放,請重新選擇。')
     else setMsg('收監失敗，請稍後再試。')
     loadData()
     if (user) {
@@ -252,7 +277,13 @@ export default function PrisonSite() {
   async function rebook() {
     if (sel.capacity > 0 && sel.booked >= sel.capacity) { setMsg('此梯次已停止收監。'); return }
     setSubmitting(true)
-    const { error } = await supabase.from('bookings').update({ status: 'pending' }).eq('id', selBooking.id)
+    const patch = { status: 'pending' }
+    if (sel.kind === 'named') {   // 重新報名時一併更新指名(獄卒+時格;不指定則清空)
+      const named = !!reqGuard
+      patch.requested_guard_id = named ? reqGuard : null
+      patch.requested_slot = named ? reqSlot : null
+    }
+    const { error } = await supabase.from('bookings').update(patch).eq('id', selBooking.id)
     setSubmitting(false)
     setMsg(error ? '重新報名失敗，請稍後再試。' : '已重新登記入監名冊。')
     setSelBooking(error ? selBooking : { ...selBooking, status: 'pending' })
@@ -480,6 +511,44 @@ export default function PrisonSite() {
               <div className="m-row"><span>服刑日期</span><b>{sel.dateISO || '未定'}</b></div>
               <div className="m-row"><span>收容情況</span><b>{sel.capacity > 0 ? `${sel.booked} / ${sel.capacity}` : `${sel.booked} ／ 不限`}</b></div>
               <p className="m-remark">備註：獄卒將會在休息時間處理公務，此時你可以與全場有空閒的獄卒互動。</p>
+
+              {/* 指名互動場:報名時可指名一位獄卒的某個半小時時段,或不指定由典獄長安排。
+                  已被別人選走的時段顯示「已滿」且不可點。已在名冊/報名完成後不再顯示。 */}
+              {sel.kind === 'named' && !msg && !active && (
+                <div className="m-namepick">
+                  <div className="m-field-lbl">指名獄卒 · 半小時時段</div>
+                  {namedGuards.length === 0 ? (
+                    <p className="m-note" style={{ margin: '4px 0 0' }}>本場暫未開放指名，將由典獄長安排獄卒。</p>
+                  ) : (<>
+                    <button type="button" className={`m-none ${reqGuard === '' ? 'on' : ''}`} onClick={() => { setReqGuard(''); setReqSlot(null) }}>
+                      不指定（由典獄長安排）
+                    </button>
+                    {namedGuards.map(g => (
+                      <div className="m-guardrow" key={g.guard_id}>
+                        <div className="m-guard-id">
+                          {g.avatar
+                            ? <img className="m-guard-av" src={g.avatar} alt="" />
+                            : <span className="m-guard-av none">{g.name[0]}</span>}
+                          <span className="m-guard-nm">{g.name}</span>
+                        </div>
+                        <div className="m-slots">
+                          {g.slots.length === 0 ? <span className="m-slot-empty">無開放時段</span>
+                            : g.slots.map(s => {
+                              const on = reqGuard === g.guard_id && reqSlot === s.index
+                              return (
+                                <button type="button" key={s.index} disabled={s.taken && !on}
+                                  className={`m-slot ${on ? 'on' : ''} ${s.taken ? 'taken' : ''}`}
+                                  onClick={() => { setReqGuard(g.guard_id); setReqSlot(s.index) }}>
+                                  {s.label}{s.taken ? '·已滿' : ''}
+                                </button>
+                              )
+                            })}
+                        </div>
+                      </div>
+                    ))}
+                  </>)}
+                </div>
+              )}
 
               {msg ? (
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>

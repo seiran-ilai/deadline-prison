@@ -601,3 +601,16 @@
   .admin .ses-mid{grid-template-columns:1fr}
   .admin .ses-timer .st-clock{font-size:52px}
 }
+
+/* 指名互動場:獄卒排班(上班 + 每位可指名的半小時時格)— SessionGuardPlan */
+.admin .guard-plan{margin-bottom:18px}
+.admin .gp-row{display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-bottom:1px solid var(--line)}
+.admin .gp-row:last-child{border-bottom:none}
+.admin .gp-onduty{display:flex; align-items:center; gap:8px; cursor:pointer; margin:0; flex:0 0 auto}
+.admin .gp-onduty input{margin:0}
+.admin .gp-name{font-size:14px}
+.admin .gp-slots{display:flex; flex-wrap:wrap; gap:6px; margin-left:auto; max-width:70%; justify-content:flex-end}
+.admin .gp-slot{font-family:var(--mono,monospace); font-size:12px; padding:4px 9px; background:var(--concrete-2,#1b1e23); border:1px solid var(--line); color:var(--text); cursor:pointer; transition:border-color .15s, background .15s}
+.admin .gp-slot:hover:not(:disabled){border-color:var(--steel-2)}
+.admin .gp-slot.on{border-color:var(--hazard,#f5c518); background:var(--hazard,#f5c518); color:#0a0a0a}
+.admin .gp-slot:disabled{opacity:.4; cursor:not-allowed}

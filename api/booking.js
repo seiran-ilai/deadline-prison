@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   try {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!token) return res.status(401).json({ error: 'not_authenticated' })
-    const { session_id, note, game_name, avatar_url, password } = req.body || {}
+    const { session_id, note, game_name, avatar_url, password, requested_guard_id, requested_slot } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
 
     // 以使用者 JWT 建立 client → insert 走 RLS(user_id = auth.uid())
@@ -47,6 +47,20 @@ export default async function handler(req, res) {
       if (!pwOk) return res.status(403).json({ error: 'wrong_password' })
     }
 
+    // 指名互動場:核對指名(獄卒, 時格)必須在本場可指名清單、且尚未被搶(伺服器端驗,不只靠前端)。
+    // 非指名場、或沒帶齊獄卒+時格 → 視為不指定。reqName/reqSlotLabel 供 Discord 通知顯示。
+    let reqGuardId = null, reqSlotIdx = null, reqName = null, reqSlotLabel = null
+    if (requested_guard_id != null && requested_slot != null && sess.kind === 'named') {
+      const { data: ns } = await supabase.rpc('session_named_slots', { p_session: session_id })
+      const hit = (ns || []).find(r => r.guard_id === requested_guard_id && r.slot_index === requested_slot)
+      if (!hit) return res.status(403).json({ error: 'guard_not_nameable' })
+      if (hit.taken) return res.status(409).json({ error: 'slot_taken' })
+      reqGuardId = requested_guard_id
+      reqSlotIdx = requested_slot
+      reqName = hit.game_name || hit.display_name || null
+      reqSlotLabel = hit.slot_label || `第 ${requested_slot + 1} 節`
+    }
+
     // insert(DB 唯一鍵兜底重複)
     // game_name / avatar_url:前端帶來的展示值(暱稱/頭像),僅供該筆預約顯示,不作身分依據;
     // 身分一律以上方 JWT 驗證的 user.id / dc_* 為準。長度做基本上限,避免過長字串。
@@ -63,9 +77,14 @@ export default async function handler(req, res) {
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: user.id, dc_id, dc_name, note: note || null,
       game_name: gn || null, avatar_url: av || null,
+      requested_guard_id: reqGuardId, requested_slot: reqSlotIdx,
     })
     if (insErr) {
-      if (insErr.code === '23505') return res.status(409).json({ error: 'already_booked' })
+      if (insErr.code === '23505') {
+        // 區分:撞到指名時格唯一索引 = 時段被搶;否則為本人本場重複預約
+        if ((insErr.message || '').includes('bookings_named_slot_uniq')) return res.status(409).json({ error: 'slot_taken' })
+        return res.status(409).json({ error: 'already_booked' })
+      }
       return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
     }
 
@@ -75,11 +94,14 @@ export default async function handler(req, res) {
       const cap = sess.capacity != null ? `/${sess.capacity}` : ''
       const date = sess.session_date ? `（${sess.session_date}）` : ''
       const kind = `〔${kindLabel(sess.kind)}〕`
+      const req = sess.kind === 'named'
+        ? (reqName ? `｜指名：${reqName}（${reqSlotLabel}）` : '｜指名：不指定（由典獄長安排）')
+        : ''
       try {
         await fetch(WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}` }),
+          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}${req}` }),
         })
       } catch { /* 通知失敗不影響預約 */ }
     }
