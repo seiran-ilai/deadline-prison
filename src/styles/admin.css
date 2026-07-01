@@ -457,6 +457,14 @@
 .admin .gw-switch-btn .gw-title{font-weight:600}
 /* 獄卒作業 · 指名互動:我的服務對象(每位犯人:預約時段 / 購買項目 / 目標稿件代勾) */
 .admin .serve-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:10px; align-items:start}
+/* 即時收入卡(獄卒作業:各項薪資 + 個人薪資 + 獎金 = 總金額) */
+.admin .work-income{margin-top:12px; border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); padding:10px 14px}
+.admin .work-income .wi-title{font-size:12px; letter-spacing:1px; color:var(--faint); margin-bottom:6px}
+.admin .work-income .wi-row{display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:4px 0; font-size:13px; color:var(--dim)}
+.admin .work-income .wi-row b{font-family:var(--mono); color:var(--text)}
+.admin .work-income .wi-row.sub{border-top:1px dashed var(--line); margin-top:3px; padding-top:7px; color:var(--text); font-weight:700}
+.admin .work-income .wi-row.total{border-top:1px solid var(--hazard-d); margin-top:3px; padding-top:8px; color:var(--hazard); font-weight:700}
+.admin .work-income .wi-row.total b{color:var(--hazard)}
 .admin .serve-card{border:1px solid var(--line); border-radius:8px; background:var(--panel-2); padding:12px 14px; display:flex; flex-direction:column; gap:8px}
 .admin .serve-head{display:flex; align-items:center; gap:8px}
 .admin .serve-head .serve-nm{font-size:15px; font-weight:700; color:var(--text)}

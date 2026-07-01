@@ -4,11 +4,11 @@ import { ProgressBar } from './ManuscriptManager'
 import { computeProgress, goalStatusLabel } from './progress'
 import SessionStatus from './SessionStatus'
 import SessionMemoPanel from './SessionMemoPanel'
-import SessionVisits from './SessionVisits'
 import ProfileCard from './ProfileCard'
 import { normalizeStatus } from './warden/constants'
 import { SESSION_KIND_LABEL } from './sessionKind'
 import { slotLabel } from './slots'
+import { calcSettlement, money } from './warden/salaryRules'
 
 // 犯人列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
 const PRESENCE_STYLE = {
@@ -43,6 +43,7 @@ export default function GuardWork({ userId }) {
   const [session, setSession] = useState(null)
   const [myInmate, setMyInmate] = useState(null)   // 我在本場的 session_inmates 記錄(僅排班則為合成)
   const [allGuards, setAllGuards] = useState([])    // 本場 role_in_session='guard'
+  const [dutyGuards, setDutyGuards] = useState([])  // 上班獄卒名冊(session_named_slots 去重):即時收入均分獎金人數
   const [allInmates, setAllInmates] = useState([])  // 本場 role_in_session='inmate'
   const [myInmates, setMyInmates] = useState([])    // 指派給我的犯人(含本場目標+進度)
   const [stepsByMs, setStepsByMs] = useState({})    // manuscript_id -> [steps]
@@ -89,7 +90,7 @@ export default function GuardWork({ userId }) {
   async function loadSession(sess) {
     if (!sess) {
       setSession(null); setMyInmate(null)
-      setAllGuards([]); setAllInmates([]); setMyInmates([]); setStepsByMs({}); setPosItems([]); setBookingByMember({})
+      setAllGuards([]); setAllInmates([]); setMyInmates([]); setStepsByMs({}); setPosItems([]); setBookingByMember({}); setDutyGuards([])
       return
     }
     // 我在本場的記錄(僅排班而無 session_inmates 列時,合成 guard 身分供在場判定)
@@ -145,18 +146,25 @@ export default function GuardWork({ userId }) {
     setMyInmates(assignedRows.map(withGoals))
     setStepsByMs(grouped)
 
-    // 5) 指名互動場:本場 POS 購入 + 預約內容(獄卒讀不到別人的原表,走 security definer RPC 兜底)
-    if (sess.kind === 'named') {
-      const [{ data: pos }, { data: bks }] = await Promise.all([
+    // 5) 指名 / 集體場:本場 POS 購入 + 上班獄卒名冊(即時收入用)。走 security definer RPC(獄卒讀不到別人的原表)。
+    if (sess.kind === 'named' || sess.kind === 'crunch') {
+      const [{ data: pos }, { data: ns }] = await Promise.all([
         supabase.rpc('session_pos_items', { p_session: sess.id }),
-        supabase.rpc('session_bookings_view', { p_session: sess.id }),
+        supabase.rpc('session_named_slots', { p_session: sess.id }),
       ])
       setPosItems(pos ?? [])
-      const bm = {}
-      for (const b of bks ?? []) if (b.status !== 'cancelled') bm[b.user_id] = b
-      setBookingByMember(bm)
+      // 上班獄卒去重(均分獎金人數 / 結算名冊)
+      const gm = new Map()
+      for (const r of ns ?? []) if (!gm.has(r.guard_id)) gm.set(r.guard_id, { id: r.guard_id, name: r.game_name || r.display_name || '獄卒' })
+      setDutyGuards([...gm.values()])
+      if (sess.kind === 'named') {
+        const { data: bks } = await supabase.rpc('session_bookings_view', { p_session: sess.id })
+        const bm = {}
+        for (const b of bks ?? []) if (b.status !== 'cancelled') bm[b.user_id] = b
+        setBookingByMember(bm)
+      } else setBookingByMember({})
     } else {
-      setPosItems([]); setBookingByMember({})
+      setPosItems([]); setBookingByMember({}); setDutyGuards([])
     }
   }
 
@@ -234,6 +242,35 @@ export default function GuardWork({ userId }) {
       slots.sort((a, b) => a - b)
       serveTargets.push({ ...t, slots, inmate })
     }
+  }
+
+  // 即時收入(估算):以本場全部 POS + 上班獄卒名冊重算結算,取本人結果(個人薪資 + 均分獎金)。
+  const myIncome = (() => {
+    if (!session || (session.kind !== 'named' && session.kind !== 'crunch') || !dutyGuards.length) return null
+    const items = posItems.map(it => ({
+      target_guard_id: it.guard_id, item_type: it.item_type, qty: it.qty,
+      with_signature: it.with_signature, amount: it.amount, slot_times: it.slot_times,
+      supervise: it.item_type === 'signup',   // 指派給獄卒的 signup 即指定監督
+      _customer: it.customer_name || it.person_name, person_name: it.person_name, visitor_name: it.visitor_name,
+    }))
+    return calcSettlement({ kind: session.kind, guards: dutyGuards, items }).guards.find(g => g.id === userId) ?? null
+  })()
+
+  // 即時收入卡:各項薪資明細 + 個人薪資 + 獎金薪資 = 總金額
+  const renderIncome = (my) => {
+    if (!my) return null
+    const detail = my.segments.filter(s => s.title !== '均分獎金')
+    return (
+      <div className="work-income">
+        <div className="wi-title">即時收入（估算）</div>
+        {detail.map((seg, i) => (
+          <div key={i} className="wi-row"><span>{seg.title}{seg.note ? `（${seg.note}）` : ''}</span><b>{money(seg.amount)}</b></div>
+        ))}
+        <div className="wi-row sub"><span>個人薪資</span><b>{money(my.direct)}</b></div>
+        <div className="wi-row"><span>獎金薪資（均分獎金池）</span><b>{money(my.pool)}</b></div>
+        <div className="wi-row total"><span>個人薪資 ＋ 獎金薪資 = 總金額</span><b>{money(my.final)}</b></div>
+      </div>
+    )
   }
 
   // 目標稿件列(集體/指名共用:進度條 + 展開子項目代勾)
@@ -357,6 +394,7 @@ export default function GuardWork({ userId }) {
                     })}
                   </div>
                 )}
+                {renderIncome(myIncome)}
               </div>
             </div>
           ) : (
@@ -455,10 +493,56 @@ export default function GuardWork({ userId }) {
             </div>
           )}
 
-          {/* === 本場廣播(指定由我執行的,唯讀)=== 指名互動無探監廣播,不顯示 */}
-          {session.kind !== 'named' && (
-            <SessionVisits sessionId={session.id} userId={userId} role="guard" />
-          )}
+          {/* === 集體趕稿:本場工作(指派給我的被指名 / 拍立得 / 互動探監 + 即時收入)=== */}
+          {session.kind === 'crunch' && (() => {
+            const mine = posItems.filter(it => it.guard_id === userId)
+            // 指派給獄卒的 signup 即指定監督;RPC 未帶 supervise,故本地判定核對項
+            const fieldsFor = (it) => {
+              const f = []
+              if (it.item_type === 'polaroid') f.push(['status_polaroid', '拍立得'])
+              if (it.item_type === 'visit' || it.item_type === 'signup') f.push(['status_interact', '互動'])
+              if (it.item_type === 'visit') f.push(['status_photo', '合照'])
+              return f
+            }
+            const descOf = (it) => it.item_type === 'signup' ? '指定監督' : posItemDesc(it)
+            return (
+              <div className="card-panel">
+                <div className="head"><h2>本場工作</h2>{mine.length > 0 && <span className="count">{mine.length} 項</span>}
+                  <span className="muted" style={{ fontSize: 12 }}>指派給你的被指名 / 拍立得 / 互動探監</span>
+                </div>
+                <div className="body">
+                  {mine.length === 0 ? <p className="empty">目前沒有指派給你的工作項目</p> : (
+                    <div className="serve-list">
+                      {mine.map(it => {
+                        const fields = fieldsFor(it)
+                        const who = it.item_type === 'visit'
+                          ? `${it.visitor_name ?? '?'} → ${it.person_name ?? it.customer_name ?? '?'}`
+                          : (it.customer_name || it.person_name || '（未指定）')
+                        return (
+                          <div key={it.id} className="serve-card">
+                            <div className="serve-head">
+                              <span className="serve-nm">{who}</span>
+                              <span className="spacer" />
+                              <span className="serve-no mono">{descOf(it)}{it.amount ? `（${it.amount} 萬）` : ''}</span>
+                            </div>
+                            <div className="serve-buy">
+                              {fields.length === 0 ? <span className="faint sb-na">無需確認</span>
+                                : fields.map(([f, lbl]) => (
+                                  <label key={f} className={`sb-chk${it[f] ? ' on' : ''}`}>
+                                    <input type="checkbox" checked={!!it[f]} onChange={() => togglePosStatus(it, f)} />{lbl}完成
+                                  </label>
+                                ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {renderIncome(myIncome)}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* === 底部:本場獄卒(頭貼格狀,同犯人端) === */}
           <div className="card-panel">
