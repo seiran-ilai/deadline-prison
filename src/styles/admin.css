@@ -614,3 +614,37 @@
 .admin .gp-slot:hover:not(:disabled){border-color:var(--steel-2)}
 .admin .gp-slot.on{border-color:var(--hazard,#f5c518); background:var(--hazard,#f5c518); color:#0a0a0a}
 .admin .gp-slot:disabled{opacity:.4; cursor:not-allowed}
+
+/* ---- 場次薪資結算 ---- */
+.admin .settle-tools{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.admin .settle-tools label{gap:8px}
+.admin .settle-warn{margin-top:12px; padding:10px 12px; font-size:12.5px; line-height:1.7; color:var(--hazard);
+  background:rgba(245,197,24,.06); border:1px solid rgba(245,197,24,.35); border-left:3px solid var(--hazard); border-radius:var(--r)}
+.admin .settle-warn code{font-family:var(--mono); color:var(--text)}
+.admin .settle-capture{display:flex; flex-wrap:wrap; gap:8px}
+.admin .cap-chip{font-size:13px; color:var(--text); border:1px solid var(--line-2); background:var(--panel-2);
+  padding:6px 12px; border-radius:16px; cursor:pointer; gap:8px; transition:border-color .15s, background .15s}
+.admin .cap-chip.on{border-color:var(--hazard); background:rgba(245,197,24,.08)}
+/* 警示斜紋分隔:結算數字表頂線 */
+.admin .settle-table{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums}
+.admin .settle-table th,.admin .settle-table td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line)}
+.admin .settle-table.overview th{color:var(--dim); font-weight:500; width:60%}
+.admin .settle-table.overview td{font-family:var(--mono); font-size:15px; color:var(--text); text-align:right}
+.admin .settle-table.detail thead th{font-size:12px; color:var(--faint); font-weight:700; letter-spacing:1px; border-bottom:1px solid var(--line-2)}
+.admin .settle-table.detail td{font-family:var(--mono); font-size:14px; color:var(--text)}
+.admin .settle-table.detail td:not(.g-name){text-align:right}
+.admin .settle-table.detail th:not(:first-child){text-align:right}
+.admin .settle-table .g-name{font-family:var(--ui)}
+.admin .settle-table .g-name .g-tag{font-family:var(--ui); font-size:11px; color:var(--hazard); border:1px solid var(--hazard-d); border-radius:10px; padding:1px 8px; margin-left:8px}
+.admin .settle-table .g-final{color:var(--hazard); font-weight:700}
+.admin .settle-table .g-detail > td{background:var(--bg); padding:0}
+.admin .settle-table td.neg{color:var(--alarm)}
+.admin .settle-lines{list-style:none; margin:0; padding:8px 14px}
+.admin .settle-lines li{display:flex; align-items:baseline; gap:12px; padding:5px 0; font-family:var(--mono); font-size:13px; color:var(--dim); border-bottom:1px dashed var(--line)}
+.admin .settle-lines li:last-child{border-bottom:none}
+.admin .settle-lines .ln-lbl{flex:0 0 130px; font-family:var(--ui); color:var(--text)}
+.admin .settle-lines .ln-det{flex:1; color:var(--faint)}
+.admin .settle-lines .ln-amt{font-family:var(--mono); color:var(--text); text-align:right}
+.admin .settle-lines .ln-sub{color:var(--dim)}
+.admin .settle-lines .ln-total .ln-lbl,.admin .settle-lines .ln-total .ln-amt{color:var(--hazard); font-weight:700}
+.admin .settle-note{margin-top:12px; font-size:12px; color:var(--faint); line-height:1.7}

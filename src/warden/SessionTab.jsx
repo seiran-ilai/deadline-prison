@@ -5,6 +5,7 @@ import { computeProgress } from '../progress'
 import { ROLE_LABEL, normalizeStatus, materializeResultMsg } from './constants'
 import SessionTimerControl from './SessionTimerControl'
 import GuardAssign from './GuardAssign'
+import NamedSessionDesk from './NamedSessionDesk'
 
 // 非 serving 狀態時,控制條番茄鐘區的提示(實際狀態機按鈕在「場次總覽」分頁)
 const TIMER_HINT = {
@@ -295,6 +296,16 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
             key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
         {currentSessionObj && (() => {
           const st = normalizeStatus(currentSessionObj)
+          // 指名場不使用番茄鐘:改由下方「指名現場」面板確認到場/品項。
+          if (currentSessionObj.kind === 'named')
+            return (
+              <div className="seg">
+                <span className="lbl">指名場</span>
+                <div className="row timer-state">
+                  <span className="muted">指名場不使用番茄鐘，請於下方「指名現場」確認到場與品項</span>
+                </div>
+              </div>
+            )
           if (st === 'serving')
             return <SessionTimerControl key={currentSessionObj.id} session={currentSessionObj}
               setMsg={setMsg} reloadShared={reloadShared} />
@@ -458,6 +469,12 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
           </div>
         </div>
       </div>
+
+      {/* 指名場現場核對:進行中(入場後)顯示到場/品項面板,取代番茄鐘流程 */}
+      {isWarden && currentSession && currentSessionObj?.kind === 'named'
+        && ['intake', 'serving'].includes(normalizeStatus(currentSessionObj)) && (
+        <NamedSessionDesk sessionId={currentSession} startTime={currentSessionObj.start_time} setMsg={setMsg} />
+      )}
 
       {/* 探監登錄(僅 warden;選本場犯人 + 探監者 + 廣播內容 → visits) */}
       {isWarden && currentSession && (

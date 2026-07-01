@@ -22,7 +22,7 @@ export default function BookingsTab({ setMsg }) {
   async function load() {
     setLoading(true)
     const { data: bk } = await supabase.from('bookings')
-      .select('id, session_id, user_id, dc_id, dc_name, note, status, created_at, game_name, avatar_url, requested_guard_id, requested_slot').order('created_at')
+      .select('id, session_id, user_id, dc_id, dc_name, note, status, created_at, game_name, avatar_url, requested_guard_id, requested_slot, arrived, item_polaroid, item_polaroid_sign').order('created_at')
     const grouped = {}
     for (const b of bk ?? []) (grouped[b.session_id] ??= []).push(b)
     const sids = Object.keys(grouped)
@@ -119,6 +119,9 @@ export default function BookingsTab({ setMsg }) {
                             <span className="tag tag-pill" style={{ background: 'rgba(180,120,255,.16)', color: '#c2a3ff' }}>
                               指名：{guardNames[b.requested_guard_id] ?? '獄卒'}{b.requested_slot != null ? `（${slotLabel(s.start_time, b.requested_slot)}）` : ''}</span>
                           )}
+                          {/* 指名場現場核對狀態(到場/加購品項;唯讀,實際操作在「進行中場次 → 指名現場」) */}
+                          {b.arrived && <span className="tag tag-pill" style={{ background: 'rgba(63,179,107,.15)', color: 'var(--ok)' }}>已到場</span>}
+                          {b.item_polaroid && <span className="tag tag-pill" style={{ background: 'rgba(63,140,255,.14)', color: '#7fb0ff' }}>拍立得{b.item_polaroid_sign ? '＋簽繪' : ''}</span>}
                           <span className="tag tag-pill" style={{ background: st.bg, color: st.color }}>{st.label}</span>
                           <span className="faint">{new Date(b.created_at).toLocaleString()}</span>
                           <span className="spacer" />

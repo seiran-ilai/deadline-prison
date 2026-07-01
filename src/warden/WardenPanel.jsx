@@ -5,6 +5,7 @@ import OverviewTab from './OverviewTab'
 import SessionTab from './SessionTab'
 import SessionsOverviewTab from './SessionsOverviewTab'
 import BookingsTab from './BookingsTab'
+import SalarySettlement from './SalarySettlement'
 import EditMemberModal from './EditMemberModal'
 import ProfileCard from '../ProfileCard'
 import { normalizeStatus } from './constants'
@@ -57,6 +58,7 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
         {isWarden && <button className={wtab === 'sessions' ? 'on' : ''} onClick={() => setWtab('sessions')}>場次總覽</button>}
         <button className={wtab === 'session' ? 'on' : ''} onClick={() => setWtab('session')}>進行中場次</button>
         {isWarden && <button className={wtab === 'bookings' ? 'on' : ''} onClick={() => setWtab('bookings')}>預約總覽</button>}
+        {isWarden && <button className={wtab === 'settlement' ? 'on' : ''} onClick={() => setWtab('settlement')}>薪資結算</button>}
       </div>
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
@@ -76,6 +78,9 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
       )}
       {wtab === 'bookings' && isWarden && (
         <BookingsTab setMsg={setMsg} />
+      )}
+      {wtab === 'settlement' && isWarden && (
+        <SalarySettlement currentSession={currentSession} setMsg={setMsg} />
       )}
 
       {isWarden && editingMember && (

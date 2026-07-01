@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     const supabase = getServiceClient()
     if (!supabase) return res.status(500).json({ error: 'server_not_configured' })
 
-    const { session_id, game_name, password, requested_guard_id, requested_slot } = req.body || {}
+    const { session_id, game_name, password, requested_guard_id, requested_slot, item_polaroid, item_polaroid_sign } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
     const gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : ''
     if (gn.length < 1) return res.status(400).json({ error: 'missing_game_name' })
@@ -53,10 +53,15 @@ export default async function handler(req, res) {
       .ilike('game_name', gn).neq('status', 'cancelled').limit(1)
     if (dup && dup.length) return res.status(409).json({ error: 'already_booked' })
 
+    // 購買品項:僅指名場採計(簽繪依附拍立得,伺服器端兜底 sign → polaroid)。
+    const named = sess.kind === 'named'
+    const polaroid = named && (!!item_polaroid || !!item_polaroid_sign)
+    const polaroidSign = named && !!item_polaroid_sign
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: null, dc_id: null, dc_name: null,
       game_name: gn, avatar_url: null, note: null,
       requested_guard_id: reqGuardId, requested_slot: reqSlotIdx,
+      item_polaroid: polaroid, item_polaroid_sign: polaroidSign,
     })
     if (insErr) {
       if (insErr.code === '23505' && (insErr.message || '').includes('bookings_named_slot_uniq'))

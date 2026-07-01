@@ -11,44 +11,51 @@ import './prison-site.css'
 const RULES = [
   ['01', '自首入監', '註冊帳號、報名梯次，然後在指定時間抵達監獄大門，乖乖服刑。'],
   ['02', '適度休息', '專注 25 分鐘、放風 5 分鐘為一輪；每四輪一次長休 15 分鐘。健康的身體才是創作的本錢。'],
-  ['03', '你不孤單', 'DC 開放同步進場，典獄長直播大螢幕倒數，開放親朋好友探監，你不是一個人。'],
-  ['04', '刑滿釋放', '梯次結束即收尾放人。趕完稿了嗎？拍拍屁股出獄去。還沒趕完稿？記得下次再來自首。'],
+  ['03', '刑滿釋放', '梯次結束即收尾放人。趕完稿了嗎？拍拍屁股出獄去。還沒趕完稿？記得下次再來自首。'],
 ]
 
 // 營業項目價目(RP 店收費;費用單位 W)
-const PRICING = [
-  {
-    code: 'A', name: '基本入獄', sub: '自首', price: '20W', unit: '/ 人', featured: true,
-    desc: '自行前來報到入獄，含 2 小時監獄作業體驗。費用 20W（兩小時），不另收保釋金。',
-    items: [
-      '入獄時自行登記今日目標（例：寫 2000 字、完成線稿）',
-      '出獄時自行回報進度＋截圖佐證，獄卒確認即可',
-      '所有紀錄計入「小本本」，留作服刑見證',
-    ],
-  },
-  {
-    code: 'B', name: '探監', sub: '慰問服刑友人', price: '10W', unit: '/ 人',
-    desc: '探望正在服刑中的囚犯朋友。不佔囚犯名額，限當梯次營業時間內。',
-    items: [
-      '探監合照 ×1：在鐵欄內外與囚犯、獄卒合照',
-      '探監留言：替囚犯留下一段話，記入後台資料',
-      '指定互動：指定一名獄卒對囚犯即興演出（鼓勵系／責罵系）',
-    ],
-  },
-  {
-    code: 'C', name: '刑期延長', sub: '自願續刑', price: '10W', unit: '/ hr',
-    desc: '2 小時刑期結束後，可申請自願續刑或由獄卒判定加刑（RP 演出）。',
-    items: [
-      '視獄卒排班狀況開放，不保證每次可用',
-      '延長時段的進度同樣計入「小本本」紀錄',
-    ],
-  },
+// 預約須知(文字照抄不改寫)。每條拆成 [序號, 標題, 內文]。集體趕稿與指名場皆適用。
+const BOOKING_NOTICE = [
+  ['一', '請加入官方 Discord', '每場營運都會在 DC 開設專屬頻道，當次的取消或異動一律在頻道內公告。加入後請把暱稱改成你的遊戲角色名，方便典獄長與獄卒點名辨識。'],
+  ['二', '囚犯臨時無法出席', '請盡早在官方 DC 告知，方便典獄長重新安排當次的名額。'],
+  ['三', '獄卒臨時無法執勤', '一般獄卒臨時無法執勤時，典獄長會協調其他有空的獄卒接手，並在 DC 公告。若無法執勤的是你的指名對象，典獄長會直接與你討論，看是改指名其他獄卒，或是擇日安排並保留你的優先指名權。'],
+  ['四', '關於演繹的共同語言', '死線監獄的演繹，建立在「監獄」這項元素之上，並保留大量空白。這是本店刻意為之的設計，為的是讓每一位不同帶入程度的犯人都能立刻入戲、用自己喜愛的方式參與。演繹時請以監獄設定和遊戲內相關世界觀為主。若想帶入外部作品或圈外的梗也很歡迎，但請考量到在場獄卒、犯人能理解的程度不同，不要預設在場所有人都懂。我們希望這個空間裡的每一句話，在場的每個人都能一起參與。'],
 ]
-const PRICE_EXTRAS = [
-  ['指定互動', '10W', '指定一名獄卒對你即興演出（鼓勵系／責罵系）。犯人本人亦可加購，不限探監者；視獄卒排班狀況開放。'],
-  ['監獄外抓捕', '30W 起', '想把朋友抓進監獄？委託人下單付費，獄卒出動至指定地點上演約 15 分鐘逮捕劇場（白頻演出）。2 名獄卒 30W，每追加 1 人 +15W；被捕者入獄費另計，需當事人配合前往店舖，不論是否到店費用不退還'],
-  ['拍立得合照', '5W / 張', '基本包含 TO 角色名稱＋簽名，其餘由獄卒個人發揮。並非所有人都有提供此服務，請在購買前與獄卒本人或典獄長確認是否有提供此服務。'],
-  ['入獄肖像照', '80W', '入獄紀念肖像照［負責獄卒　鄰居］'],
+
+// 場次介紹:三種場次類型的「場次類型 / 場次介紹 / 場次品項」。文字照抄不改寫;品項以 [名稱, 價格] 兩欄呈現。
+const SESSION_TYPES = [
+  {
+    code: '01', kind: '集體趕稿', tagline: '番茄鐘團體趕稿',
+    intro: '以番茄鐘節奏進行的團體監督趕稿，25 分鐘 × 4 循環，約 2 小時，獄卒在場監督記錄。人數上限 5 人／場。適合需要有人盯、喜歡一起衝節奏的囚犯。',
+    items: [
+      ['入場費', '20 萬'],
+      ['互動探監', '10 萬（由探監者支付）'],
+      ['無互動探監', '免費（純參觀）'],
+      ['拍立得（空白）', '5 萬／張（不限定當場獄卒，請等休息時間拍攝）'],
+      ['拍立得加購簽繪', '+3 萬／張（於空白拍立得加購）'],
+      ['監獄外抓捕', '30 萬起'],
+      ['肖像畫', '80 萬（限定負責獄卒上班日，無須入場即可繪製）'],
+    ],
+  },
+  {
+    code: '02', kind: '指名互動', tagline: '獄卒 × 囚犯',
+    intro: '指定一位獄卒的一對一互動時段，30 分鐘為一個時段，最少一個時段，可視情況延長。可聊天、演繹、討論進度，內容依需求安排。適合想要專屬陪伴、有特定指名對象的囚犯。',
+    items: [
+      ['指名費', '15 萬／30 分鐘（最少一個時段）'],
+      ['無指名入場', '1 萬'],
+      ['拍立得（空白）', '5 萬／張（不限定當場獄卒，請等休息時間拍攝）'],
+      ['拍立得加購簽繪', '+3 萬／張（於空白拍立得加購）'],
+      ['肖像畫', '80 萬（限定負責獄卒上班日，無須入場即可繪製）'],
+    ],
+  },
+  {
+    code: '03', kind: '自由入場', tagline: '開放趕稿',
+    intro: '開放 DC 自由進出的趕稿空間，無番茄鐘、無獄卒管理。自行安排節奏、自由來去。適合只想低壓力默默趕稿的囚犯。',
+    items: [
+      ['入場', '免費（無獄卒管理）'],
+    ],
+  },
 ]
 
 // 場次狀態徽章(依 public_sessions 的 display_status;後端已過濾已結束場)
@@ -76,6 +83,8 @@ export default function PrisonSite() {
   const [namedGuards, setNamedGuards] = useState([]) // 指名互動場:[{ guard_id, name, avatar, slots:[{index,label,taken}] }]
   const [reqGuard, setReqGuard] = useState('')       // 指名獄卒 id('' = 不指定,由典獄長安排)
   const [reqSlot, setReqSlot] = useState(null)       // 指名時格 index(null = 不指定)
+  const [reqPolaroid, setReqPolaroid] = useState(false)       // 加購拍立得
+  const [reqPolaroidSign, setReqPolaroidSign] = useState(false) // 加購拍立得簽繪(依附拍立得)
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
@@ -126,7 +135,7 @@ export default function PrisonSite() {
           a.classList.toggle('active', a.getAttribute('data-sec') === e.target.id))
       }
     }), { rootMargin: '-50% 0px -50% 0px' });
-    ['about', 'staff', 'pricing', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
+    ['about', 'staff', 'pricing', 'notice', 'sessions'].forEach(id => { const el = root.querySelector('#' + id); if (el) navIO.observe(el) })
     return () => { io.disconnect(); navIO.disconnect() }
   }, [loading])
 
@@ -174,8 +183,8 @@ export default function PrisonSite() {
     setMPw(''); setMAuthBusy(false); setMAuthErr(null)
     setGMode(false); setGName(''); setGPw(''); setGBusy(false); setGErr(null)
   }
-  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); setReqGuard(''); setReqSlot(null); resetModalAuth() }
-  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); setReqGuard(''); setReqSlot(null); setNamedGuards([]); resetModalAuth() }
+  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); setReqGuard(''); setReqSlot(null); setReqPolaroid(false); setReqPolaroidSign(false); resetModalAuth() }
+  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); setReqGuard(''); setReqSlot(null); setReqPolaroid(false); setReqPolaroidSign(false); setNamedGuards([]); resetModalAuth() }
 
   // modal 內帳號登入:成功後不換頁,直接刷新 user / 資料,留在同一個 modal 繼續報名流程。
   // 僅收帳號名(信箱登入已移除),後綴由程式補。
@@ -206,7 +215,8 @@ export default function PrisonSite() {
     if (sel.hasPassword && !gPw.trim()) { setGErr('本梯次為密鑰場，請輸入通行密鑰'); return }
     setGBusy(true)
     const named = sel.kind === 'named' && reqGuard
-    const r = await createGuestBooking(sel.id, { game_name: name, password: sel.hasPassword ? gPw.trim() : null, requested_guard_id: named ? reqGuard : null, requested_slot: named ? reqSlot : null })
+    const namedSess = sel.kind === 'named'
+    const r = await createGuestBooking(sel.id, { game_name: name, password: sel.hasPassword ? gPw.trim() : null, requested_guard_id: named ? reqGuard : null, requested_slot: named ? reqSlot : null, item_polaroid: namedSess && reqPolaroid, item_polaroid_sign: namedSess && reqPolaroidSign })
     setGBusy(false)
     if (r.ok) {
       setMsg('收監成功。鈴響時見。（不註冊預約如需取消，請至 Discord 聯繫典獄長）')
@@ -243,10 +253,12 @@ export default function PrisonSite() {
     })
     // 暱稱/頭像僅作該筆預約展示值(伺服器仍以 JWT 驗身分);沿用既有 profile 值或 modal 補填的值
     const named = sel.kind === 'named' && reqGuard
+    const namedSess = sel.kind === 'named'
     const r = await createBooking(sel.id, {
       game_name: bkName.trim() || null, avatar_url: bkAvatar || null,
       password: sel.hasPassword ? pw.trim() : null,
       requested_guard_id: named ? reqGuard : null, requested_slot: named ? reqSlot : null,
+      item_polaroid: namedSess && reqPolaroid, item_polaroid_sign: namedSess && reqPolaroidSign,
     })
     setSubmitting(false)
     if (r.ok) setMsg('收監成功。鈴響時見。')
@@ -278,10 +290,12 @@ export default function PrisonSite() {
     if (sel.capacity > 0 && sel.booked >= sel.capacity) { setMsg('此梯次已停止收監。'); return }
     setSubmitting(true)
     const patch = { status: 'pending' }
-    if (sel.kind === 'named') {   // 重新報名時一併更新指名(獄卒+時格;不指定則清空)
+    if (sel.kind === 'named') {   // 重新報名時一併更新指名(獄卒+時格;不指定則清空)+ 加購品項
       const named = !!reqGuard
       patch.requested_guard_id = named ? reqGuard : null
       patch.requested_slot = named ? reqSlot : null
+      patch.item_polaroid = reqPolaroid || reqPolaroidSign
+      patch.item_polaroid_sign = reqPolaroidSign
     }
     const { error } = await supabase.from('bookings').update(patch).eq('id', selBooking.id)
     setSubmitting(false)
@@ -301,7 +315,8 @@ export default function PrisonSite() {
           <div className="links">
             <a data-sec="about" onClick={() => scrollTo('about')}>服刑須知</a>
             <a data-sec="staff" onClick={() => scrollTo('staff')}>監獄人員</a>
-            <a data-sec="pricing" onClick={() => scrollTo('pricing')}>收費價目</a>
+            <a data-sec="pricing" onClick={() => scrollTo('pricing')}>營業項目</a>
+            <a data-sec="notice" onClick={() => scrollTo('notice')}>預約須知</a>
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
           </div>
           <div className="nav-entries">
@@ -331,7 +346,7 @@ export default function PrisonSite() {
           <div className="nav-drawer">
             {[
               ['about', '服刑須知'], ['staff', '監獄人員'],
-              ['pricing', '收費價目'], ['sessions', '趕稿場次'],
+              ['pricing', '營業項目'], ['notice', '預約須知'], ['sessions', '趕稿場次'],
             ].map(([id, label]) => (
               <a key={id} onClick={() => { scrollTo(id); setMenuOpen(false) }}>{label}</a>
             ))}
@@ -408,42 +423,48 @@ export default function PrisonSite() {
 
         <div className="hazard" />
 
-        {/* 營業項目價目 */}
+        {/* 營業項目:三種場次類型(類型 / 介紹 / 品項);收費價目併入此區 */}
         <section id="pricing">
           <div className="eyebrow reveal">營業項目 <span className="blk">// BLOCK 03</span></div>
-          <h2 className="title reveal">收費價目</h2>
-          <p className="subline reveal">把自己關起來也要明碼標價。所有互動皆為角色扮演，請保持良好的 RP 禮儀。</p>
-          <div className="price-grid reveal">
-            {PRICING.map(c => (
-              <div className={`price-card${c.featured ? ' featured' : ''}`} key={c.code}>
-                <div className="price-head">
-                  <span className="price-code">{c.code}</span>
-                  <div className="price-name">
-                    <h4>{c.name}</h4>
-                    <span>{c.sub}</span>
-                  </div>
-                  <div className="price-tag">
-                    {c.was && <s>{c.was}</s>}
-                    <b>{c.price}</b>{c.unit && <em>{c.unit}</em>}
-                  </div>
+          <h2 className="title reveal">場次類型</h2>
+          <p className="subline reveal">依你的趕稿需求，選一種入監方式。三種場次的類型、介紹與品項如下；所有互動皆為角色扮演，請保持良好的 RP 禮儀。</p>
+          <div className="stype-grid reveal">
+            {SESSION_TYPES.map(t => (
+              <div className="stype-card" key={t.code}>
+                <div className="stype-head">
+                  <span className="stype-code">{t.code}</span>
+                  <div className="stype-name"><h4>{t.kind}</h4><span>{t.tagline}</span></div>
                 </div>
-                <p className="price-desc">{c.desc}</p>
-                <ul className="price-items">
-                  {c.items.map(t => <li key={t}>{t}</li>)}
+                <div className="stype-seclbl">場次介紹 <span className="stype-en">// INTRO</span></div>
+                <p className="stype-intro">{t.intro}</p>
+                <div className="stype-seclbl">場次品項 <span className="stype-en">// ITEMS</span></div>
+                <ul className="stype-items">
+                  {t.items.map(([name, price]) => (
+                    <li key={name}><span className="it-name">{name}</span><span className="it-price">{price}</span></li>
+                  ))}
                 </ul>
               </div>
             ))}
           </div>
-          <div className="price-extras reveal">
-            <div className="px-head">加購項目 <span className="px-en">// ADD-ON</span></div>
-            <div className="px-grid">
-              {PRICE_EXTRAS.map(([name, price, desc]) => (
-                <div className="px-item" key={name}>
-                  <div className="px-top"><b>{name}</b><span className="px-price">{price}</span></div>
-                  <p className="px-desc">{desc}</p>
+        </section>
+
+        <div className="perforation" />
+
+        {/* 預約須知(集體趕稿與指名場皆適用) */}
+        <section id="notice">
+          <div className="eyebrow reveal">預約須知 <span className="blk">// BLOCK 04</span></div>
+          <h2 className="title reveal">【死線監獄・預約須知】</h2>
+          <p className="subline reveal">報名場次前，請先詳閱以下須知。</p>
+          <div className="notice reveal">
+            {BOOKING_NOTICE.map(([no, title, body]) => (
+              <div className="notice-item" key={no}>
+                <div className="notice-no">{no}</div>
+                <div className="notice-body">
+                  <h3>{title}</h3>
+                  <p>{body}</p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -451,7 +472,7 @@ export default function PrisonSite() {
 
         {/* 趕稿場次 */}
         <section id="sessions">
-          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 04</span></div>
+          <div className="eyebrow reveal">服刑梯次 <span className="blk">// BLOCK 05</span></div>
           <h2 className="title reveal">近期趕稿場次</h2>
           <p className="subline reveal">選一個梯次自首入監。額滿停止收監，過期梯次已結案。</p>
           <div className="sessions reveal">
@@ -511,6 +532,10 @@ export default function PrisonSite() {
               <div className="m-row"><span>服刑日期</span><b>{sel.dateISO || '未定'}</b></div>
               <div className="m-row"><span>收容情況</span><b>{sel.capacity > 0 ? `${sel.booked} / ${sel.capacity}` : `${sel.booked} ／ 不限`}</b></div>
               <p className="m-remark">備註：獄卒將會在休息時間處理公務，此時你可以與全場有空閒的獄卒互動。</p>
+              {/* DC 同步進場僅自由入場場開放(指名/趕稿場不顯示) */}
+              {sel.kind === 'free' && (
+                <p className="m-remark">本場為自由入場，DC 開放同步進場、典獄長直播大螢幕倒數，歡迎親朋好友探監，你不是一個人。</p>
+              )}
 
               {/* 指名互動場:報名時可指名一位獄卒的某個半小時時段,或不指定由典獄長安排。
                   已被別人選走的時段顯示「已滿」且不可點。已在名冊/報名完成後不再顯示。 */}
@@ -547,6 +572,23 @@ export default function PrisonSite() {
                       </div>
                     ))}
                   </>)}
+                </div>
+              )}
+
+              {/* 指名互動場:加購拍立得 / 拍立得簽繪(簽繪依附拍立得)。報名完成/已在名冊後不再顯示。 */}
+              {sel.kind === 'named' && !msg && !active && (
+                <div className="m-addon">
+                  <div className="m-field-lbl">加購項目（選填）</div>
+                  <label className="m-addon-row">
+                    <input type="checkbox" checked={reqPolaroid}
+                      onChange={e => { const v = e.target.checked; setReqPolaroid(v); if (!v) setReqPolaroidSign(false) }} />
+                    <span>拍立得合照</span>
+                  </label>
+                  <label className={`m-addon-row sub${reqPolaroid ? '' : ' off'}`}>
+                    <input type="checkbox" checked={reqPolaroidSign} disabled={!reqPolaroid}
+                      onChange={e => setReqPolaroidSign(e.target.checked)} />
+                    <span>＋簽繪（簽名手繪）</span>
+                  </label>
                 </div>
               )}
 

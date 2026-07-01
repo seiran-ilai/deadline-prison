@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   try {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!token) return res.status(401).json({ error: 'not_authenticated' })
-    const { session_id, note, game_name, avatar_url, password, requested_guard_id, requested_slot } = req.body || {}
+    const { session_id, note, game_name, avatar_url, password, requested_guard_id, requested_slot, item_polaroid, item_polaroid_sign } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
 
     // 以使用者 JWT 建立 client → insert 走 RLS(user_id = auth.uid())
@@ -74,10 +74,15 @@ export default async function handler(req, res) {
       if (!gn) gn = prof?.game_name?.trim().slice(0, 60) || null
       if (!av) av = prof?.avatar_url?.trim().slice(0, 500) || null
     }
+    // 購買品項:僅指名場採計(簽繪依附拍立得,伺服器端兜底 sign → polaroid)。非指名場交由 DB 預設。
+    const named = sess.kind === 'named'
+    const polaroid = named && (!!item_polaroid || !!item_polaroid_sign)
+    const polaroidSign = named && !!item_polaroid_sign
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: user.id, dc_id, dc_name, note: note || null,
       game_name: gn || null, avatar_url: av || null,
       requested_guard_id: reqGuardId, requested_slot: reqSlotIdx,
+      item_polaroid: polaroid, item_polaroid_sign: polaroidSign,
     })
     if (insErr) {
       if (insErr.code === '23505') {
