@@ -293,11 +293,12 @@
 .admin .inmate .in-extra .ie-v{flex:1; min-width:0; color:var(--text); word-break:break-word}
 
 /* ---- 本場獄卒格狀清單(頭貼方塊 + 暱稱)---- */
-.admin .guard-grid{display:flex; flex-wrap:wrap; gap:14px}
-.admin .guard-cell{position:relative; width:140px; display:flex; flex-direction:column; align-items:center; gap:8px;
-  padding:14px 8px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2)}
-.admin .guard-cell .g-av{width:120px; height:120px; border-radius:8px; display:flex; align-items:center; justify-content:center;
-  font-family:var(--mono); font-weight:700; font-size:48px; background:rgba(63,179,107,.15); color:var(--ok); overflow:hidden}
+.admin .guard-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:12px}
+.admin .guard-cell{position:relative; display:flex; flex-direction:column; align-items:center; gap:8px;
+  padding:14px 8px 12px; border:1px solid rgba(63,179,107,.28); border-radius:8px; background:rgba(63,179,107,.05); transition:.15s}
+.admin .guard-cell:hover{border-color:rgba(63,179,107,.5)}
+.admin .guard-cell .g-av{width:76px; height:76px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-weight:700; font-size:30px; background:rgba(63,179,107,.15); color:var(--ok); overflow:hidden}
 .admin .guard-cell .g-av img{width:100%; height:100%; object-fit:cover}
 .admin .guard-cell .g-nm{font-size:13px; font-weight:600; text-align:center; line-height:1.3;
   max-width:100%; word-break:break-word}
@@ -360,9 +361,9 @@
   .admin button{min-height:40px}
   .admin .btn-pri{min-height:46px}
   /* 本場獄卒方塊手機等比縮小、換行不溢出 */
-  .admin .guard-grid{gap:10px}
-  .admin .guard-cell{width:104px; padding:10px 6px 9px}
-  .admin .guard-cell .g-av{width:88px; height:88px; font-size:35px}
+  .admin .guard-grid{gap:10px; grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
+  .admin .guard-cell{padding:10px 6px 9px}
+  .admin .guard-cell .g-av{width:64px; height:64px; font-size:26px}
   .admin .guard-cell .g-x{min-height:auto}
   /* 卡片類頭像(身分卡 / ProfileCard 橫卡)手機縮為 88、initial 字級 0.4× */
   .admin .idcard .id-av{width:88px; height:88px; font-size:35px}
@@ -467,8 +468,24 @@
 .admin .work-income .wi-row{display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:4px 0; font-size:13px; color:var(--dim)}
 .admin .work-income .wi-row b{font-family:var(--mono); color:var(--text)}
 .admin .work-income .wi-row.sub{border-top:1px dashed var(--line); margin-top:3px; padding-top:7px; color:var(--text); font-weight:700}
-.admin .work-income .wi-row.total{border-top:1px solid var(--hazard-d); margin-top:3px; padding-top:8px; color:var(--hazard); font-weight:700}
-.admin .work-income .wi-row.total b{color:var(--hazard)}
+.admin .work-income .wi-row.total{border-top:1px solid var(--hazard-d); margin-top:5px; padding:9px 10px 8px; color:var(--hazard);
+  font-weight:700; font-size:14px; background:rgba(245,197,24,.06); border-radius:0 0 6px 6px}
+.admin .work-income .wi-row.total b{color:var(--hazard); font-size:16px}
+
+/* 本場工作:工作項目卡(色標類型 + 對象 + 金額 + 完成核對) */
+.admin .wk-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:10px; align-items:start}
+.admin .wk-item{border:1px solid var(--line); border-radius:8px; background:var(--panel-2); padding:12px 14px; display:flex; flex-direction:column; gap:8px}
+.admin .wk-item-hd{display:flex; align-items:center; gap:8px}
+.admin .wk-type{flex:0 0 auto; font-size:11px; font-weight:700; letter-spacing:.5px; padding:2px 8px; border-radius:4px; white-space:nowrap}
+.admin .wk-type.pol{background:rgba(63,140,255,.16); color:#7fb0ff}
+.admin .wk-type.vis{background:rgba(180,120,255,.16); color:#c2a3ff}
+.admin .wk-type.sup{background:rgba(63,179,107,.16); color:var(--ok)}
+.admin .wk-type.por{background:rgba(245,197,24,.16); color:var(--hazard)}
+.admin .wk-type.nom{background:rgba(63,179,107,.16); color:var(--ok)}
+.admin .wk-who{min-width:0; font-size:14px; font-weight:600; color:var(--text); word-break:break-word}
+.admin .wk-amt{flex:0 0 auto; font-size:13px; color:var(--dim)}
+.admin .wk-detail{font-size:12px; color:var(--faint)}
+.admin .wk-chks{display:flex; gap:6px; flex-wrap:wrap}
 .admin .serve-card{border:1px solid var(--line); border-radius:8px; background:var(--panel-2); padding:12px 14px; display:flex; flex-direction:column; gap:8px}
 .admin .serve-head{display:flex; align-items:center; gap:8px}
 .admin .serve-head .serve-nm{font-size:15px; font-weight:700; color:var(--text)}

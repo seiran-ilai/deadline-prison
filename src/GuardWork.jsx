@@ -512,27 +512,33 @@ export default function GuardWork({ userId }) {
                 </div>
                 <div className="body">
                   {mine.length === 0 ? <p className="empty">目前沒有指派給你的工作項目</p> : (
-                    <div className="serve-list">
+                    <div className="wk-grid">
                       {mine.map(it => {
                         const fields = fieldsFor(it)
+                        const TYPE = { polaroid: ['拍立得', 'pol'], visit: ['互動探監', 'vis'], signup: ['指定監督', 'sup'], portrait: ['肖像畫', 'por'], nominate: ['指名', 'nom'] }
+                        const [tlabel, tcls] = TYPE[it.item_type] ?? [descOf(it), 'pol']
                         const who = it.item_type === 'visit'
                           ? `${it.visitor_name ?? '?'} → ${it.person_name ?? it.customer_name ?? '?'}`
                           : (it.customer_name || it.person_name || '（未指定）')
+                        const detail = it.item_type === 'polaroid' ? `${it.qty ?? 0} 張${it.with_signature ? ' · 含簽繪' : ''}` : ''
                         return (
-                          <div key={it.id} className="serve-card">
-                            <div className="serve-head">
-                              <span className="serve-nm">{who}</span>
+                          <div key={it.id} className="wk-item">
+                            <div className="wk-item-hd">
+                              <span className={`wk-type ${tcls}`}>{tlabel}</span>
+                              <span className="wk-who">{who}</span>
                               <span className="spacer" />
-                              <span className="serve-no mono">{descOf(it)}{it.amount ? `（${it.amount} 萬）` : ''}</span>
+                              {it.amount ? <span className="wk-amt mono">{it.amount} 萬</span> : null}
                             </div>
-                            <div className="serve-buy">
-                              {fields.length === 0 ? <span className="faint sb-na">無需確認</span>
-                                : fields.map(([f, lbl]) => (
+                            {detail && <div className="wk-detail">{detail}</div>}
+                            {fields.length > 0 && (
+                              <div className="wk-chks">
+                                {fields.map(([f, lbl]) => (
                                   <label key={f} className={`sb-chk${it[f] ? ' on' : ''}`}>
                                     <input type="checkbox" checked={!!it[f]} onChange={() => togglePosStatus(it, f)} />{lbl}完成
                                   </label>
                                 ))}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         )
                       })}
