@@ -577,7 +577,7 @@ export default function PrisonSite() {
         {/* 預約須知(集體趕稿與指名場皆適用) */}
         <section id="notice">
           <div className="eyebrow reveal">預約須知 <span className="blk">// BLOCK 04</span></div>
-          <h2 className="title reveal">【死線監獄・預約須知】</h2>
+          <h2 className="title reveal">服刑前須知</h2>
           <p className="subline reveal">報名場次前，請先詳閱以下須知。</p>
           <div className="notice reveal">
             {BOOKING_NOTICE.map(([no, title, body, link]) => (
