@@ -100,13 +100,11 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
         <span className={`role-tag ${roleClass}`}>{ROLE_LABEL[p.role] ?? '獄卒'}</span>
         {isWarden && (
           <div className="gc-badges">
+            {/* 兩個開關恆常並列,各自獨立即時切換 */}
             <button type="button" className={`gc-badge${porOf(p) ? ' on' : ''}`}
               onClick={() => togglePortraitOnly(p)}>肖像</button>
-            {/* 肖像畫負責時不提供加購拍立得(沿用原欄位連動邏輯) */}
-            {!porOf(p) && (
-              <button type="button" className={`gc-badge${polOf(p) ? ' on' : ''}`}
-                onClick={() => toggleOffersPolaroid(p)}>拍立得</button>
-            )}
+            <button type="button" className={`gc-badge${polOf(p) ? ' on' : ''}`}
+              onClick={() => toggleOffersPolaroid(p)}>拍立得</button>
           </div>
         )}
       </div>
