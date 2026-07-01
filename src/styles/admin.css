@@ -609,6 +609,8 @@
 .admin .gp-onduty{display:flex; align-items:center; gap:8px; cursor:pointer; margin:0; flex:0 0 auto}
 .admin .gp-onduty input{margin:0}
 .admin .gp-name{font-size:14px}
+.admin .gp-polaroid{display:flex; align-items:center; gap:6px; cursor:pointer; margin:0; flex:0 0 auto; font-size:12px; color:var(--dim)}
+.admin .gp-polaroid input{margin:0}
 .admin .gp-slots{display:flex; flex-wrap:wrap; gap:6px; margin-left:auto; max-width:70%; justify-content:flex-end}
 .admin .gp-slot{font-family:var(--mono,monospace); font-size:12px; padding:4px 9px; background:var(--concrete-2,#1b1e23); border:1px solid var(--line); color:var(--text); cursor:pointer; transition:border-color .15s, background .15s}
 .admin .gp-slot:hover:not(:disabled){border-color:var(--steel-2)}

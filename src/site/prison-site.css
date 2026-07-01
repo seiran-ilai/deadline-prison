@@ -155,6 +155,13 @@
 .dp-site .rhythm .legend{display:flex; gap:22px; margin-top:14px; flex-wrap:wrap; font-family:var(--mono); font-size:12px; color:var(--dim)}
 .dp-site .rhythm .legend span{display:flex; align-items:center; gap:8px}
 .dp-site .rhythm .legend i{width:12px; height:12px; display:inline-block}
+/* 指名/自由 服刑須知:子場次(沿用 rules/rhythm) */
+.dp-site .serving-set{margin-top:46px}
+.dp-site .serving-sub{margin-bottom:16px}
+.dp-site .bars .slot{background:var(--hazard); flex:1}
+.dp-site .bars .slot-add{flex:1; background:transparent; border:1px dashed var(--hazard); box-sizing:border-box}
+.dp-site .bars .flow{flex:1; background:var(--hazard); display:flex; align-items:center; justify-content:center}
+.dp-site .bars .flow em{font-style:normal; font-family:var(--mono); font-size:11px; letter-spacing:3px; color:#0a0a0a}
 
 /* 監獄人員 */
 .dp-site .roster{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px}
@@ -216,10 +223,11 @@
 
 /* 場次介紹:三種場次類型卡片(類型 / 介紹 / 品項),並排比較 */
 .dp-site .stype-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line)}
-.dp-site .stype-card{background:var(--panel); display:flex; flex-direction:column; padding-bottom:24px; transition:background .25s}
+/* 三張卡共用同一組列高(subgrid):場次介紹文字長度不一時,場次品項標籤仍齊平 */
+.dp-site .stype-card{position:relative; background:var(--panel); display:grid; grid-template-rows:subgrid; grid-row:span 5; row-gap:0; padding:8px 0 24px; transition:background .25s}
 .dp-site .stype-card:hover{background:var(--concrete-3)}
-/* 警示斜紋卡頭 */
-.dp-site .stype-card::before{content:""; display:block; height:8px; background:repeating-linear-gradient(45deg,var(--hazard) 0 14px,#0a0a0a 14px 28px)}
+/* 警示斜紋卡頭(絕對定位,不佔 grid 列) */
+.dp-site .stype-card::before{content:""; position:absolute; top:0; left:0; right:0; height:8px; background:repeating-linear-gradient(45deg,var(--hazard) 0 14px,#0a0a0a 14px 28px)}
 .dp-site .stype-head{display:flex; align-items:center; gap:14px; padding:24px 24px 4px}
 .dp-site .stype-head .stype-code{font-family:var(--stamp); font-size:32px; color:var(--steel); line-height:1}
 .dp-site .stype-name h4{font-family:var(--cjk); font-weight:900; font-size:23px; letter-spacing:1px; color:var(--text); line-height:1.1}
@@ -227,11 +235,21 @@
 .dp-site .stype-seclbl{font-family:var(--cond); font-size:14px; letter-spacing:3px; color:var(--hazard); display:flex; align-items:baseline; gap:10px; padding:18px 24px 8px}
 .dp-site .stype-seclbl .stype-en{font-family:var(--mono); font-size:10px; letter-spacing:2px; color:var(--faint)}
 .dp-site .stype-intro{padding:0 24px; font-family:var(--cjk); font-size:14px; line-height:1.8; color:var(--dim)}
+/* 場次品項面板頂:警示斜紋裝飾 */
+.dp-site .stype-seclbl.items{position:relative; padding-top:22px}
+.dp-site .stype-seclbl.items::before{content:""; position:absolute; top:0; left:24px; right:24px; height:6px; background:repeating-linear-gradient(45deg,var(--hazard) 0 12px,#0a0a0a 12px 24px)}
+/* 品項:主行(品名左／價格右)+ 備註獨立一行 */
 .dp-site .stype-items{list-style:none; margin:0; padding:0 24px}
-.dp-site .stype-items li{display:flex; justify-content:space-between; gap:16px; align-items:baseline; padding:10px 0; border-bottom:1px dashed var(--line)}
+.dp-site .stype-items li{padding:10px 0; border-bottom:1px dashed var(--line)}
 .dp-site .stype-items li:last-child{border-bottom:none}
-.dp-site .stype-items .it-name{font-family:var(--cjk); font-size:14px; color:var(--text); flex:0 0 auto; white-space:nowrap}
-.dp-site .stype-items .it-price{flex:1; min-width:0; font-family:var(--mono); font-size:12px; letter-spacing:.3px; color:var(--dim); text-align:right; line-height:1.6}
+.dp-site .stype-items .it-main{display:flex; justify-content:space-between; align-items:baseline; gap:16px}
+.dp-site .stype-items .it-name{font-family:var(--cjk); font-size:14px; color:var(--text)}
+.dp-site .stype-items .it-price{font-family:var(--mono); white-space:nowrap; text-align:right; flex:0 0 auto}
+.dp-site .stype-items .it-price b{font-size:15px; font-weight:700; color:var(--text); letter-spacing:.5px}
+.dp-site .stype-items .it-price em{font-style:normal; font-size:11px; color:var(--faint); margin-left:3px}
+.dp-site .stype-items .it-price.hot b{color:var(--hazard)}
+.dp-site .stype-items .it-price.free b{color:var(--dim); font-weight:400}
+.dp-site .stype-items .it-note{margin-top:4px; font-family:var(--cjk); font-size:12px; color:var(--faint); line-height:1.6; text-align:left}
 
 /* 指名場次 預約須知:序號 + 標題 + 內文,直式條列 */
 .dp-site .notice{display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line)}
@@ -399,3 +417,26 @@
 .dp-site .m-addon-row.sub{padding-left:24px; font-size:13px; color:var(--dim)}
 .dp-site .m-addon-row.sub.off{opacity:.45; cursor:not-allowed}
 .dp-site .m-addon-row.sub.off input{cursor:not-allowed}
+
+/* 指名/監督 + 每卒加購 stepper */
+.dp-site .m-guard-pick{flex:1; min-width:0; display:flex; flex-direction:column; gap:8px}
+.dp-site .m-addon-steps{display:flex; flex-wrap:wrap; gap:14px}
+.dp-site .m-step{display:flex; align-items:center; gap:5px}
+.dp-site .m-step-lbl{font-family:var(--cjk); font-size:12px; color:var(--dim)}
+.dp-site .m-step-btn{width:24px; height:24px; display:flex; align-items:center; justify-content:center; background:var(--panel); border:1px solid var(--line); color:var(--text); cursor:pointer; font-size:15px; line-height:1; padding:0}
+.dp-site .m-step-btn:hover:not(:disabled){border-color:var(--steel-2)}
+.dp-site .m-step-btn:disabled{opacity:.4; cursor:not-allowed}
+.dp-site .m-step-num{width:44px; text-align:center; font-family:var(--mono); font-size:13px; background:var(--concrete-1); border:1px solid var(--line); color:var(--text); padding:3px 2px; -moz-appearance:textfield}
+.dp-site .m-step-num::-webkit-outer-spin-button,.dp-site .m-step-num::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+
+/* 集體場:把朋友抓進去 */
+.dp-site .m-capture{margin-top:14px; border-top:1px solid var(--line); padding-top:12px}
+.dp-site .m-capture-fields{margin-top:8px; display:flex; flex-direction:column; gap:10px}
+
+/* 即時預估總額 */
+.dp-site .m-total{margin-top:16px; border:1px solid var(--line); border-left:3px solid var(--hazard); background:rgba(245,197,24,.04); padding:12px 14px}
+.dp-site .m-total-row{display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-family:var(--mono); font-size:13px; color:var(--dim); padding:3px 0}
+.dp-site .m-total-row b{color:var(--text); font-weight:400}
+.dp-site .m-total-row.sum{margin-top:6px; padding-top:8px; border-top:1px dashed var(--line); font-size:15px}
+.dp-site .m-total-row.sum span{color:var(--text)}
+.dp-site .m-total-row.sum b{color:var(--hazard); font-weight:700}

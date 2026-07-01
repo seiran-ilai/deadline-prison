@@ -10,9 +10,10 @@ import { slotLabel } from '../slots'
 //     slotCount — 本場時格數(每段 30 分)
 //     startTime — 本場開始時間('HH:MM'/'HH:MM:SS' 或 null;null → 時格標「第 N 節」)
 //     setMsg    — 錯誤/提示回拋
-export default function SessionGuardPlan({ sessionId, staff, slotCount, startTime, setMsg }) {
-  const [rows, setRows] = useState({})   // guard_id -> { id, slots:number[] }
+export default function SessionGuardPlan({ sessionId, staff, slotCount, startTime, setMsg, kind = 'named' }) {
+  const [rows, setRows] = useState({})   // guard_id -> { id, slots:number[], offersPolaroid }
   const [loading, setLoading] = useState(true)
+  const isNamed = kind === 'named'   // crunch:只勾上班(無時格)
 
   const n = slotCount > 0 ? slotCount : 4
   const slotIdxs = Array.from({ length: n }, (_, i) => i)
@@ -20,9 +21,9 @@ export default function SessionGuardPlan({ sessionId, staff, slotCount, startTim
   async function load() {
     setLoading(true)
     const { data, error } = await supabase.from('session_guards')
-      .select('id, guard_id, slots').eq('session_id', sessionId)
+      .select('id, guard_id, slots, offers_polaroid').eq('session_id', sessionId)
     if (error) { setMsg?.('讀取獄卒排班失敗：' + error.message); setLoading(false); return }
-    const m = {}; for (const r of data ?? []) m[r.guard_id] = { id: r.id, slots: r.slots ?? [] }
+    const m = {}; for (const r of data ?? []) m[r.guard_id] = { id: r.id, slots: r.slots ?? [], offersPolaroid: r.offers_polaroid !== false }
     setRows(m); setLoading(false)
   }
   useEffect(() => { load() }, [sessionId])
@@ -31,15 +32,23 @@ export default function SessionGuardPlan({ sessionId, staff, slotCount, startTim
   async function toggleOnDuty(guardId, on) {
     if (on) {
       const { data, error } = await supabase.from('session_guards')
-        .insert({ session_id: sessionId, guard_id: guardId }).select('id, slots').single()
+        .insert({ session_id: sessionId, guard_id: guardId }).select('id, slots, offers_polaroid').single()
       if (error) { setMsg?.('加入上班失敗：' + error.message); return }
-      setRows(prev => ({ ...prev, [guardId]: { id: data.id, slots: data.slots ?? [] } }))
+      setRows(prev => ({ ...prev, [guardId]: { id: data.id, slots: data.slots ?? [], offersPolaroid: data.offers_polaroid !== false } }))
     } else {
       const { error } = await supabase.from('session_guards')
         .delete().eq('session_id', sessionId).eq('guard_id', guardId)
       if (error) { setMsg?.('移除失敗：' + error.message); return }
       setRows(prev => { const x = { ...prev }; delete x[guardId]; return x })
     }
+  }
+
+  // 是否提供加購拍立得(僅上班者可切):官網預約據此顯示該卒的拍立得/簽繪加購
+  async function toggleOffersPolaroid(guardId, val) {
+    const row = rows[guardId]; if (!row) return
+    setRows(prev => ({ ...prev, [guardId]: { ...prev[guardId], offersPolaroid: val } }))   // 樂觀
+    const { error } = await supabase.from('session_guards').update({ offers_polaroid: val }).eq('id', row.id)
+    if (error) { setRows(prev => ({ ...prev, [guardId]: { ...prev[guardId], offersPolaroid: row.offersPolaroid } })); setMsg?.('更新拍立得供應失敗：' + error.message) }
   }
 
   // 時格可指名開關(僅上班者可切):把 index 加入/移出 slots 陣列
@@ -63,8 +72,12 @@ export default function SessionGuardPlan({ sessionId, staff, slotCount, startTim
 
   return (
     <div className="guard-plan">
-      <div className="group-lbl">獄卒排班 · 上班 {onDutyCount}／可指名 {nameableCount}<span className="ln" /></div>
-      <p className="faint" style={{ margin: '0 0 8px' }}>勾「上班」選當日在場獄卒;再點下方時格開放被指名(每格半小時、一名客人)。</p>
+      <div className="group-lbl">獄卒排班 · 上班 {onDutyCount}{isNamed ? `／可指名 ${nameableCount}` : ''}<span className="ln" /></div>
+      <p className="faint" style={{ margin: '0 0 8px' }}>
+        {isNamed
+          ? '勾「上班」選當日在場獄卒;再點下方時格開放被指名(每格半小時、一名客人)。勾「可加購拍立得」開放該卒被加購。'
+          : '勾「上班」選當日在場獄卒(集體場可被指定監督)。勾「可加購拍立得」開放該卒被加購拍立得。'}
+      </p>
       {staff.map(g => {
         const row = rows[g.id]
         const onDuty = !!row
@@ -75,17 +88,25 @@ export default function SessionGuardPlan({ sessionId, staff, slotCount, startTim
               <input type="checkbox" checked={onDuty} onChange={e => toggleOnDuty(g.id, e.target.checked)} />
               <span className="gp-name">{g.role === 'warden' ? '典獄長·' : ''}{name}</span>
             </label>
-            <div className="gp-slots" style={{ opacity: onDuty ? 1 : 0.35 }}>
-              {slotIdxs.map(i => {
-                const on = !!row?.slots.includes(i)
-                return (
-                  <button key={i} type="button" className={`gp-slot ${on ? 'on' : ''}`}
-                    disabled={!onDuty} onClick={() => toggleSlot(g.id, i)}>
-                    {slotLabel(startTime, i)}
-                  </button>
-                )
-              })}
-            </div>
+            {onDuty && (
+              <label className="gp-polaroid">
+                <input type="checkbox" checked={row.offersPolaroid} onChange={e => toggleOffersPolaroid(g.id, e.target.checked)} />
+                <span>可加購拍立得</span>
+              </label>
+            )}
+            {isNamed && (
+              <div className="gp-slots" style={{ opacity: onDuty ? 1 : 0.35 }}>
+                {slotIdxs.map(i => {
+                  const on = !!row?.slots.includes(i)
+                  return (
+                    <button key={i} type="button" className={`gp-slot ${on ? 'on' : ''}`}
+                      disabled={!onDuty} onClick={() => toggleSlot(g.id, i)}>
+                      {slotLabel(startTime, i)}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )
       })}

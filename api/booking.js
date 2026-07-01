@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   try {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!token) return res.status(401).json({ error: 'not_authenticated' })
-    const { session_id, note, game_name, avatar_url, password, requested_guard_id, requested_slot, item_polaroid, item_polaroid_sign } = req.body || {}
+    const { session_id, note, game_name, avatar_url, password, requested_slots, addons, capture } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
 
     // 以使用者 JWT 建立 client → insert 走 RLS(user_id = auth.uid())
@@ -47,19 +47,34 @@ export default async function handler(req, res) {
       if (!pwOk) return res.status(403).json({ error: 'wrong_password' })
     }
 
-    // 指名互動場:核對指名(獄卒, 時格)必須在本場可指名清單、且尚未被搶(伺服器端驗,不只靠前端)。
-    // 非指名場、或沒帶齊獄卒+時格 → 視為不指定。reqName/reqSlotLabel 供 Discord 通知顯示。
-    let reqGuardId = null, reqSlotIdx = null, reqName = null, reqSlotLabel = null
-    if (requested_guard_id != null && requested_slot != null && sess.kind === 'named') {
+    // 指名/監督:逐筆核對 (guard, slot) 在本場可指名清單且尚未被搶(named 依 g+s、crunch 依 g;s=null)。
+    // 陣列無 DB 唯一索引兜底,一律伺服器端驗;picks 寫入 requested_slots jsonb。
+    const nameable = sess.kind === 'named' || sess.kind === 'crunch'
+    const picks = []
+    if (nameable && Array.isArray(requested_slots) && requested_slots.length) {
       const { data: ns } = await supabase.rpc('session_named_slots', { p_session: session_id })
-      const hit = (ns || []).find(r => r.guard_id === requested_guard_id && r.slot_index === requested_slot)
-      if (!hit) return res.status(403).json({ error: 'guard_not_nameable' })
-      if (hit.taken) return res.status(409).json({ error: 'slot_taken' })
-      reqGuardId = requested_guard_id
-      reqSlotIdx = requested_slot
-      reqName = hit.game_name || hit.display_name || null
-      reqSlotLabel = hit.slot_label || `第 ${requested_slot + 1} 節`
+      const seen = new Set()
+      for (const p of requested_slots) {
+        const g = p?.g; const s = (p?.s ?? null)
+        if (!g) continue
+        const key = `${g}|${s ?? ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const hit = (ns || []).find(r => r.guard_id === g && (r.slot_index ?? null) === s)
+        if (!hit) return res.status(403).json({ error: 'guard_not_nameable' })
+        if (hit.taken) return res.status(409).json({ error: 'slot_taken' })
+        picks.push({ g, s })
+      }
     }
+    // 每卒加購 / 抓捕訂單:sanitize(僅指名/集體場採計)
+    const cleanAddons = nameable && Array.isArray(addons)
+      ? addons.filter(a => a && a.g)
+          .map(a => ({ g: a.g, polaroid: Math.max(0, Math.min(99, parseInt(a.polaroid) || 0)), sign: Math.max(0, Math.min(99, parseInt(a.sign) || 0)) }))
+          .filter(a => a.polaroid > 0 || a.sign > 0)
+      : []
+    const cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
+      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), server: String(capture.server || '').slice(0, 60) }
+      : null
 
     // insert(DB 唯一鍵兜底重複)
     // game_name / avatar_url:前端帶來的展示值(暱稱/頭像),僅供該筆預約顯示,不作身分依據;
@@ -74,22 +89,13 @@ export default async function handler(req, res) {
       if (!gn) gn = prof?.game_name?.trim().slice(0, 60) || null
       if (!av) av = prof?.avatar_url?.trim().slice(0, 500) || null
     }
-    // 購買品項:僅指名場採計(簽繪依附拍立得,伺服器端兜底 sign → polaroid)。非指名場交由 DB 預設。
-    const named = sess.kind === 'named'
-    const polaroid = named && (!!item_polaroid || !!item_polaroid_sign)
-    const polaroidSign = named && !!item_polaroid_sign
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: user.id, dc_id, dc_name, note: note || null,
       game_name: gn || null, avatar_url: av || null,
-      requested_guard_id: reqGuardId, requested_slot: reqSlotIdx,
-      item_polaroid: polaroid, item_polaroid_sign: polaroidSign,
+      requested_slots: picks, addons: cleanAddons, capture: cleanCapture,
     })
     if (insErr) {
-      if (insErr.code === '23505') {
-        // 區分:撞到指名時格唯一索引 = 時段被搶;否則為本人本場重複預約
-        if ((insErr.message || '').includes('bookings_named_slot_uniq')) return res.status(409).json({ error: 'slot_taken' })
-        return res.status(409).json({ error: 'already_booked' })
-      }
+      if (insErr.code === '23505') return res.status(409).json({ error: 'already_booked' })   // 本人本場重複預約
       return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
     }
 
@@ -99,14 +105,15 @@ export default async function handler(req, res) {
       const cap = sess.capacity != null ? `/${sess.capacity}` : ''
       const date = sess.session_date ? `（${sess.session_date}）` : ''
       const kind = `〔${kindLabel(sess.kind)}〕`
-      const req = sess.kind === 'named'
-        ? (reqName ? `｜指名：${reqName}（${reqSlotLabel}）` : '｜指名：不指定（由典獄長安排）')
+      const req = nameable
+        ? (picks.length ? `｜指名/監督：${picks.length} 筆` : '｜不指定（由典獄長安排）')
         : ''
+      const capNote = cleanCapture ? `｜抓捕：委託 ${cleanCapture.client || '?'} → ${cleanCapture.target || '?'}（${cleanCapture.server || '?'}）` : ''
       try {
         await fetch(WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}${req}` }),
+          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}${req}${capNote}` }),
         })
       } catch { /* 通知失敗不影響預約 */ }
     }

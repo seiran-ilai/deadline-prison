@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     const supabase = getServiceClient()
     if (!supabase) return res.status(500).json({ error: 'server_not_configured' })
 
-    const { session_id, game_name, password, requested_guard_id, requested_slot, item_polaroid, item_polaroid_sign } = req.body || {}
+    const { session_id, game_name, password, requested_slots, addons, capture } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
     const gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : ''
     if (gn.length < 1) return res.status(400).json({ error: 'missing_game_name' })
@@ -34,18 +34,32 @@ export default async function handler(req, res) {
       if (!pwOk) return res.status(403).json({ error: 'wrong_password' })
     }
 
-    // 指名互動場:核對指名(獄卒, 時格)在本場可指名清單、且尚未被搶(非指名場/沒帶齊一律忽略)
-    let reqGuardId = null, reqSlotIdx = null, reqName = null, reqSlotLabel = null
-    if (requested_guard_id != null && requested_slot != null && sess.kind === 'named') {
+    // 指名/監督:逐筆核對 (guard, slot) 在本場可指名清單且尚未被搶(named 依 g+s、crunch 依 g;s=null)
+    const nameable = sess.kind === 'named' || sess.kind === 'crunch'
+    const picks = []
+    if (nameable && Array.isArray(requested_slots) && requested_slots.length) {
       const { data: ns } = await supabase.rpc('session_named_slots', { p_session: session_id })
-      const hit = (ns || []).find(r => r.guard_id === requested_guard_id && r.slot_index === requested_slot)
-      if (!hit) return res.status(403).json({ error: 'guard_not_nameable' })
-      if (hit.taken) return res.status(409).json({ error: 'slot_taken' })
-      reqGuardId = requested_guard_id
-      reqSlotIdx = requested_slot
-      reqName = hit.game_name || hit.display_name || null
-      reqSlotLabel = hit.slot_label || `第 ${requested_slot + 1} 節`
+      const seen = new Set()
+      for (const p of requested_slots) {
+        const g = p?.g; const s = (p?.s ?? null)
+        if (!g) continue
+        const key = `${g}|${s ?? ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        const hit = (ns || []).find(r => r.guard_id === g && (r.slot_index ?? null) === s)
+        if (!hit) return res.status(403).json({ error: 'guard_not_nameable' })
+        if (hit.taken) return res.status(409).json({ error: 'slot_taken' })
+        picks.push({ g, s })
+      }
     }
+    const cleanAddons = nameable && Array.isArray(addons)
+      ? addons.filter(a => a && a.g)
+          .map(a => ({ g: a.g, polaroid: Math.max(0, Math.min(99, parseInt(a.polaroid) || 0)), sign: Math.max(0, Math.min(99, parseInt(a.sign) || 0)) }))
+          .filter(a => a.polaroid > 0 || a.sign > 0)
+      : []
+    const cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
+      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), server: String(capture.server || '').slice(0, 60) }
+      : null
 
     // 防重複(訪客沒有身分,以同場+同暱稱兜底;有帳號的列不在此列)
     const { data: dup } = await supabase.from('bookings')
@@ -53,21 +67,12 @@ export default async function handler(req, res) {
       .ilike('game_name', gn).neq('status', 'cancelled').limit(1)
     if (dup && dup.length) return res.status(409).json({ error: 'already_booked' })
 
-    // 購買品項:僅指名場採計(簽繪依附拍立得,伺服器端兜底 sign → polaroid)。
-    const named = sess.kind === 'named'
-    const polaroid = named && (!!item_polaroid || !!item_polaroid_sign)
-    const polaroidSign = named && !!item_polaroid_sign
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: null, dc_id: null, dc_name: null,
       game_name: gn, avatar_url: null, note: null,
-      requested_guard_id: reqGuardId, requested_slot: reqSlotIdx,
-      item_polaroid: polaroid, item_polaroid_sign: polaroidSign,
+      requested_slots: picks, addons: cleanAddons, capture: cleanCapture,
     })
-    if (insErr) {
-      if (insErr.code === '23505' && (insErr.message || '').includes('bookings_named_slot_uniq'))
-        return res.status(409).json({ error: 'slot_taken' })
-      return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
-    }
+    if (insErr) return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
 
     // Discord 通知(失敗不擋預約)
     if (WEBHOOK) {
@@ -75,14 +80,15 @@ export default async function handler(req, res) {
       const cap = sess.capacity != null ? `/${sess.capacity}` : ''
       const date = sess.session_date ? `（${sess.session_date}）` : ''
       const kind = `〔${kindLabel(sess.kind)}〕`
-      const req = sess.kind === 'named'
-        ? (reqName ? `｜指名：${reqName}（${reqSlotLabel}）` : '｜指名：不指定（由典獄長安排）')
+      const req = nameable
+        ? (picks.length ? `｜指名/監督：${picks.length} 筆` : '｜不指定（由典獄長安排）')
         : ''
+      const capNote = cleanCapture ? `｜抓捕：委託 ${cleanCapture.client || '?'} → ${cleanCapture.target || '?'}（${cleanCapture.server || '?'}）` : ''
       try {
         await fetch(WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `🔒 新收監（訪客）｜${gn} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}${req}` }),
+          body: JSON.stringify({ content: `🔒 新收監（訪客）｜${gn} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}${req}${capNote}` }),
         })
       } catch { /* 通知失敗不影響預約 */ }
     }

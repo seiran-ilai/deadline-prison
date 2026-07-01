@@ -470,8 +470,8 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
         </div>
       </div>
 
-      {/* 指名場現場核對:進行中(入場後)顯示到場/品項面板,取代番茄鐘流程 */}
-      {isWarden && currentSession && currentSessionObj?.kind === 'named'
+      {/* 指名/集體場現場核對:進行中(入場後)顯示到場 + 指名/監督/加購/抓捕。named 取代番茄鐘、crunch 與番茄鐘並存 */}
+      {isWarden && currentSession && ['named', 'crunch'].includes(currentSessionObj?.kind)
         && ['intake', 'serving'].includes(normalizeStatus(currentSessionObj)) && (
         <NamedSessionDesk sessionId={currentSession} startTime={currentSessionObj.start_time} setMsg={setMsg} />
       )}

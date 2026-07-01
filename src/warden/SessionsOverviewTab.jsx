@@ -56,26 +56,50 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
   }
   useEffect(() => { load() }, [])
 
-  // 展開/收合某場次(已結束不可展開);展開時載入本場名單(分開查再 JS 合併,不用巢狀 select)
+  // 展開/收合某場次(已結束不可展開)。名冊改「預約 + 已入場 + 上班獄卒」union,並附本場預約清單。
+  // 分開查再 JS 合併(不用巢狀 select)。
+  async function loadExpand(sid) {
+    const [siRes, bkRes, sgRes] = await Promise.all([
+      supabase.from('session_inmates').select('id, member_id, role_in_session, state').eq('session_id', sid),
+      supabase.from('bookings').select('id, user_id, game_name, dc_name, avatar_url, note, status, requested_slots, addons, capture, created_at').eq('session_id', sid).order('created_at'),
+      supabase.from('session_guards').select('guard_id').eq('session_id', sid),
+    ])
+    const si = siRes.data ?? [], bk = bkRes.data ?? [], sg = sgRes.data ?? []
+    const pids = [...new Set([...si.map(r => r.member_id), ...sg.map(r => r.guard_id)])]
+    const profById = {}
+    if (pids.length) {
+      const { data: profs } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', pids)
+      for (const p of profs ?? []) profById[p.id] = p
+    }
+    const merged = si.map(r => ({ id: r.id, member_id: r.member_id, role_in_session: r.role_in_session, state: r.state, profile: profById[r.member_id] }))
+    const inmatesLive = merged.filter(m => m.role_in_session !== 'guard')
+    const liveMemberIds = new Set(inmatesLive.map(m => m.member_id))
+    // 本場犯人 = 已入場 ∪ 未取消預約(尚未入場的以 booking 呈現)
+    const bookingInmates = bk.filter(b => b.status !== 'cancelled' && !(b.user_id && liveMemberIds.has(b.user_id)))
+    const liveGuards = merged.filter(m => m.role_in_session === 'guard')
+    const liveGuardIds = new Set(liveGuards.map(m => m.member_id))
+    const onDutyGuards = sg.filter(r => !liveGuardIds.has(r.guard_id)).map(r => ({ guard_id: r.guard_id, profile: profById[r.guard_id] }))
+    setRosterById(prev => ({ ...prev, [sid]: { inmatesLive, bookingInmates, liveGuards, onDutyGuards, bookings: bk } }))
+  }
   async function toggleExpand(s) {
     if (normalizeStatus(s) === 'ended') return
     if (expandedId === s.id) { setExpandedId(null); return }
     setExpandedId(s.id)
     if (rosterById[s.id]) return
-    const { data: si } = await supabase.from('session_inmates')
-      .select('id, member_id, role_in_session, state').eq('session_id', s.id)
-    if (!si || !si.length) { setRosterById(prev => ({ ...prev, [s.id]: { inmates: [], guards: [] } })); return }
-    const { data: profs } = await supabase.from('profiles')
-      .select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', si.map(r => r.member_id))
-    const profById = {}; for (const p of profs ?? []) profById[p.id] = p
-    const merged = si.map(r => ({ id: r.id, member_id: r.member_id, role_in_session: r.role_in_session, state: r.state, profile: profById[r.member_id] }))
-    setRosterById(prev => ({
-      ...prev,
-      [s.id]: {
-        inmates: merged.filter(m => m.role_in_session !== 'guard'),
-        guards: merged.filter(m => m.role_in_session === 'guard'),
-      },
-    }))
+    await loadExpand(s.id)
+  }
+
+  // 預約狀態(確認/取消/待確認):樂觀更新該場 bookings,失敗回滾。
+  async function setBookingStatus(sid, b, status) {
+    if (status === 'cancelled' && !window.confirm('確定將這筆預約改為「已取消」？')) return
+    const snapshot = rosterById[sid]
+    setRosterById(prev => {
+      const r = prev[sid]; if (!r) return prev
+      return { ...prev, [sid]: { ...r, bookings: r.bookings.map(x => x.id === b.id ? { ...x, status } : x) } }
+    })
+    const { error } = await supabase.from('bookings').update({ status }).eq('id', b.id)
+    if (error) { setRosterById(prev => ({ ...prev, [sid]: snapshot })); setMsg('更新預約狀態失敗，已還原：' + error.message); return }
+    setMsg('已更新預約狀態'); loadExpand(sid)   // 重整名冊 union(預約↔已入場)
   }
 
   // 把上限輸入轉成 int 或 null(空白 / 非正整數 → null = 不限)
@@ -284,45 +308,79 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
               {/* 展開:唯讀檢視本場名單(犯人列右側嵌 GuardAssign 指派/移除專屬獄卒)。已結束場次不可展開。 */}
               {isOpen && !ended && (
                 <div className="row-detail">
-                  {/* 指名互動場:當日上班 / 可指名獄卒排班(預約頁據此顯示可指名清單) */}
-                  {s.kind === 'named' && (
-                    <SessionGuardPlan sessionId={s.id} staff={staffPool}
+                  {/* 指名/集體場:當日上班獄卒排班(named 另可設可指名時格;crunch 只勾上班供指定監督)。預約頁據此顯示可指名/監督清單 */}
+                  {(s.kind === 'named' || s.kind === 'crunch') && (
+                    <SessionGuardPlan sessionId={s.id} staff={staffPool} kind={s.kind}
                       slotCount={s.slot_count ?? 4} startTime={s.start_time} setMsg={setMsg} />
                   )}
                   {!roster ? <p className="empty">讀取本場名單中…</p> : (<>
-                    <div className="group-lbl">本場犯人 ({roster.inmates.length})<span className="ln" /></div>
-                    {roster.inmates.length === 0 ? <p className="empty">本場沒有犯人</p> : roster.inmates.map(r => (
-                      <div key={r.id} className="inmate">
-                        <div className="in-av">
-                          {r.profile?.avatar_url
-                            ? <img src={r.profile.avatar_url} alt="" />
-                            : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
+                    <div className="group-lbl">本場犯人 ({roster.inmatesLive.length + roster.bookingInmates.length})<span className="ln" /></div>
+                    {(roster.inmatesLive.length + roster.bookingInmates.length) === 0 ? <p className="empty">本場沒有犯人</p> : (<>
+                      {roster.inmatesLive.map(r => (
+                        <div key={r.id} className="inmate">
+                          <div className="in-av">{r.profile?.avatar_url ? <img src={r.profile.avatar_url} alt="" /> : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}</div>
+                          <div>
+                            <div className="in-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'} <span className="tag tag-pill" style={{ background: 'rgba(63,179,107,.15)', color: 'var(--ok)' }}>已入場</span></div>
+                            <div className="in-no">No.{r.profile?.inmate_no != null ? String(r.profile.inmate_no).padStart(4, '0') : '----'}</div>
+                          </div>
+                          <span className="spacer" />
+                          <GuardAssign sessionInmateId={r.id} guardRoster={roster.liveGuards} setMsg={setMsg} />
                         </div>
-                        <div>
-                          <div className="in-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'}</div>
-                          <div className="in-no">No.{r.profile?.inmate_no != null ? String(r.profile.inmate_no).padStart(4, '0') : '----'}</div>
+                      ))}
+                      {roster.bookingInmates.map(b => (
+                        <div key={b.id} className="inmate">
+                          <div className="in-av">{b.avatar_url ? <img src={b.avatar_url} alt="" /> : (b.game_name ?? b.dc_name ?? '?')[0]}</div>
+                          <div>
+                            <div className="in-nm">{b.game_name ?? b.dc_name ?? '（未填暱稱）'} <span className="tag tag-pill" style={{ background: 'rgba(224,176,74,.16)', color: '#e0b04a' }}>{b.status === 'confirmed' ? '已確認' : '預約中'}</span>{!b.user_id && <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.1)', color: 'var(--dim)' }}>訪客</span>}</div>
+                            <div className="in-no faint">尚未入場</div>
+                          </div>
                         </div>
-                        <span className="spacer" />
-                        <GuardAssign sessionInmateId={r.id} guardRoster={roster.guards} setMsg={setMsg} />
-                      </div>
-                    ))}
+                      ))}
+                    </>)}
 
-                    <div className="group-lbl">本場獄卒 ({roster.guards.length})<span className="ln" /></div>
-                    {roster.guards.length === 0 ? <p className="empty">本場沒有獄卒</p> : (
+                    <div className="group-lbl">本場獄卒 ({roster.liveGuards.length + roster.onDutyGuards.length})<span className="ln" /></div>
+                    {(roster.liveGuards.length + roster.onDutyGuards.length) === 0 ? <p className="empty">本場沒有獄卒</p> : (
                       <div className="guard-grid">
-                        {roster.guards.map(r => (
+                        {roster.liveGuards.map(r => (
                           <div key={r.id} className="guard-cell">
-                            <div className="g-av">
-                              {r.profile?.avatar_url
-                                ? <img src={r.profile.avatar_url} alt="" />
-                                : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
-                            </div>
+                            <div className="g-av">{r.profile?.avatar_url ? <img src={r.profile.avatar_url} alt="" /> : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}</div>
                             <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'}</div>
-                            <span className="role-tag guard">{r.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+                            <span className="role-tag guard">已入場</span>
+                          </div>
+                        ))}
+                        {roster.onDutyGuards.map(r => (
+                          <div key={r.guard_id} className="guard-cell">
+                            <div className="g-av">{r.profile?.avatar_url ? <img src={r.profile.avatar_url} alt="" /> : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}</div>
+                            <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'}</div>
+                            <span className="role-tag guard">上班</span>
                           </div>
                         ))}
                       </div>
                     )}
+
+                    {/* 預約清單(併入預約總覽):本場所有預約,可確認/取消 */}
+                    <div className="group-lbl">預約清單 ({roster.bookings.filter(b => b.status !== 'cancelled').length})<span className="ln" /></div>
+                    {roster.bookings.length === 0 ? <p className="empty">本場沒有預約</p> : roster.bookings.map(b => {
+                      const picks = Array.isArray(b.requested_slots) ? b.requested_slots : []
+                      const addons = (Array.isArray(b.addons) ? b.addons : []).filter(a => a && (a.polaroid > 0 || a.sign > 0))
+                      const st = b.status === 'confirmed' ? { l: '已確認', bg: 'rgba(63,179,107,.15)', c: 'var(--ok)' }
+                        : b.status === 'cancelled' ? { l: '已取消', bg: 'rgba(255,255,255,.08)', c: 'var(--dim)' }
+                          : { l: '待確認', bg: 'rgba(224,176,74,.16)', c: '#e0b04a' }
+                      return (
+                        <div key={b.id} className={`sub-row${b.status === 'cancelled' ? ' faint' : ''}`}>
+                          <strong>{b.game_name ?? b.dc_name ?? '（未填暱稱）'}</strong>
+                          {!b.user_id && <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.1)', color: 'var(--dim)' }}>訪客</span>}
+                          {picks.length > 0 && <span className="muted">指名/監督 {picks.length}</span>}
+                          {addons.length > 0 && <span className="muted">加購 {addons.reduce((n, a) => n + (a.polaroid || 0) + (a.sign || 0), 0)} 張</span>}
+                          {b.capture && <span className="tag tag-pill" style={{ background: 'rgba(216,65,47,.14)', color: '#e88' }}>抓捕</span>}
+                          <span className="tag tag-pill" style={{ background: st.bg, color: st.c }}>{st.l}</span>
+                          <span className="spacer" />
+                          {b.status !== 'confirmed' && <button className="btn-sm" onClick={() => setBookingStatus(s.id, b, 'confirmed')}>確認</button>}
+                          {b.status !== 'pending' && b.status !== 'cancelled' && <button className="btn-sm" onClick={() => setBookingStatus(s.id, b, 'pending')}>改待確認</button>}
+                          {b.status !== 'cancelled' && <button className="btn-sm btn-danger" onClick={() => setBookingStatus(s.id, b, 'cancelled')}>取消</button>}
+                        </div>
+                      )
+                    })}
                   </>)}
                 </div>
               )}

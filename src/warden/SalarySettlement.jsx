@@ -58,14 +58,17 @@ export default function SalarySettlement({ currentSession }) {
       .select('addon_type, target_guard_id, with_signature, amount, inmate_id').eq('session_id', id)
     if (adErr) { setAddons([]); setAddonWarn(true) } else { setAddons(ad ?? []); setAddonWarn(false) }
 
-    // 3) 指名時段數:bookings(requested_guard_id + 未取消;每筆=一個時格)
+    // 3) 指名時段數:bookings.requested_slots jsonb(未取消;每個 s!=null 的元素=一個 30 分指名時格)。
+    //    crunch 監督為 s=null,不計入指名時段。
     const { data: bk } = await supabase.from('bookings')
-      .select('requested_guard_id, requested_slot, status').eq('session_id', id)
+      .select('requested_slots, status').eq('session_id', id)
     const slots = {}
     for (const b of bk ?? []) {
       if (b.status === 'cancelled') continue
-      if (b.requested_guard_id == null || b.requested_slot == null) continue
-      slots[b.requested_guard_id] = (slots[b.requested_guard_id] || 0) + 1
+      for (const p of (Array.isArray(b.requested_slots) ? b.requested_slots : [])) {
+        if (!p || p.g == null || p.s == null) continue
+        slots[p.g] = (slots[p.g] || 0) + 1
+      }
     }
     setSlotsByGuard(slots)
 
