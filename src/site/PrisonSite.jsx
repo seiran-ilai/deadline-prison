@@ -656,7 +656,10 @@ export default function PrisonSite() {
               <div className="m-row"><span>場次類型</span><b>{sessionKindLabel(sel.kind)}</b></div>
               <div className="m-row"><span>服刑日期</span><b>{sel.dateISO || '未定'}</b></div>
               <div className="m-row"><span>收容情況</span><b>{sel.capacity > 0 ? `${sel.booked} / ${sel.capacity}` : `${sel.booked} ／ 不限`}</b></div>
-              <p className="m-remark">備註：獄卒將會在休息時間處理公務，此時你可以與全場有空閒的獄卒互動。</p>
+              {/* 備註:有獄卒的場(集體/指名)說明休息時間可互動;自由入場無獄卒則說明無人服務 */}
+              {sel.kind === 'free'
+                ? <p className="m-remark">備註：此場次無獄卒、無工作人員服務。</p>
+                : <p className="m-remark">備註：獄卒將會在休息時間處理公務，此時你可以與全場有空閒的獄卒互動。</p>}
               {/* DC 同步進場僅自由入場場開放(指名/趕稿場不顯示) */}
               {sel.kind === 'free' && (
                 <p className="m-remark">本場為自由入場，DC 開放同步進場、典獄長直播大螢幕倒數，歡迎親朋好友探監，你不是一個人。</p>
@@ -758,9 +761,9 @@ export default function PrisonSite() {
                       {capture.on && (
                         <div className="m-capture-fields">
                           <div className="m-field"><span className="m-field-lbl">委託人暱稱</span>
-                            <input className="m-input" value={capture.client} onChange={e => setCapture({ ...capture, client: e.target.value })} /></div>
+                            <input className="m-input" placeholder="暱稱＠伺服器" value={capture.client} onChange={e => setCapture({ ...capture, client: e.target.value })} /></div>
                           <div className="m-field"><span className="m-field-lbl">犯人暱稱</span>
-                            <input className="m-input" value={capture.target} onChange={e => setCapture({ ...capture, target: e.target.value })} /></div>
+                            <input className="m-input" placeholder="暱稱＠伺服器" value={capture.target} onChange={e => setCapture({ ...capture, target: e.target.value })} /></div>
                           <div className="m-field">
                             <span className="m-field-lbl">抓捕獄卒人數</span>
                             <div className="m-astep" style={{ paddingTop: 4 }}>
@@ -802,7 +805,7 @@ export default function PrisonSite() {
                   <form onSubmit={submitGuestBooking}>
                     <div className="m-field">
                       <span className="m-field-lbl">遊戲暱稱</span>
-                      <input className="m-input" type="text" maxLength={60} placeholder="顯示在名冊上的暱稱"
+                      <input className="m-input" type="text" maxLength={60} placeholder="暱稱＠伺服器"
                         value={gName} onChange={e => setGName(e.target.value)} />
                     </div>
                     {sel.hasPassword && (
@@ -880,7 +883,7 @@ export default function PrisonSite() {
                   <p className="m-note">入監前請設定你的<b style={{ color: 'var(--text)' }}>服刑暱稱與頭像</b>（將作為本梯次名冊的顯示資料）。</p>
                   <div className="m-field">
                     <span className="m-field-lbl">服刑暱稱（必填）</span>
-                    <input className="m-input" placeholder="顯示在名冊上的暱稱" value={bkName} onChange={e => setBkName(e.target.value)} />
+                    <input className="m-input" placeholder="暱稱＠伺服器" value={bkName} onChange={e => setBkName(e.target.value)} />
                   </div>
                   <div className="m-field">
                     <span className="m-field-lbl">頭像</span>
