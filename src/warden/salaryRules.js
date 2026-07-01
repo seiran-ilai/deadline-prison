@@ -56,6 +56,22 @@ function countRows(items, unit) {
   }))
 }
 
+// 單一獄卒今日薪資明細 → 純文字(Discord 播報用)。輸入 calcSettlement 產出的一位 guard + 場次資訊。
+// 純文字,分隔沿用「｜」分欄位;每段一行,末行最終薪資。
+export function formatGuardPayslip(guard, session = {}) {
+  const dateStr = session.session_date ? `（${session.session_date}）` : ''
+  const no = (guard.inmate_no != null && guard.inmate_no < 1e9) ? ` · No.${String(guard.inmate_no).padStart(4, '0')}` : ''
+  const lines = [
+    `今日薪資明細｜${session.title || '本場'}${dateStr}`,
+    `${guard.name}${no}`,
+  ]
+  for (const seg of guard.segments ?? []) {
+    lines.push(`· ${seg.title}${seg.note ? `（${seg.note}）` : ''} ${money(seg.amount)}`)
+  }
+  lines.push(`最終薪資 ${money(guard.final)}`)
+  return lines.join('\n')
+}
+
 export function calcSettlement({ kind, guards, items }) {
   const byGuard = {}
   for (const it of items) { const g = it.target_guard_id; if (!g) continue; (byGuard[g] ??= []).push(it) }
@@ -97,7 +113,7 @@ export function calcSettlement({ kind, guards, items }) {
       if (supervises.length) { const a = RATES.supervise * supervises.length; segments.push({ title: '指定監督', amount: a, rows: countRows(supervises, RATES.supervise) }); direct += a }
       if (visits.length) { const a = RATES.visit * visits.length; segments.push({ title: '互動探監', amount: a, rows: visits.map(x => ({ name: `${x.visitor_name || '?'} → ${x.person_name || '?'}`, amount: RATES.visit })) }); direct += a }
     }
-    return { id: g.id, name: g.name, direct, pool: 0, final: direct, segments }
+    return { id: g.id, name: g.name, inmate_no: g.inmate_no, direct, pool: 0, final: direct, segments }
   })
 
   const directTotal = perGuard.reduce((s, g) => s + g.direct, 0)
