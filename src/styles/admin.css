@@ -590,8 +590,8 @@
 /* 我的稿件:限制最大寬度並置中,不貼齊整個寬螢幕(手機下自動滿寬單欄) */
 .admin .ms-page{max-width:880px; margin:0 auto}
 
-/* 名單總覽:限寬置中(比照 .ms-page);標題列右側嵌搜尋 + 排序 */
-.admin .ov-page{max-width:880px; margin:0 auto}
+/* 名單總覽:滿版對齊主控台其餘分頁(ProfileCard / 子頁籤 / 場次總覽皆滿版),不再限寬置中造成偏移 */
+.admin .ov-page{max-width:none; margin:0}
 .admin .ov-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px}
 .admin .ov-head h3{margin:0}
 .admin .ov-head .inp{max-width:220px}
