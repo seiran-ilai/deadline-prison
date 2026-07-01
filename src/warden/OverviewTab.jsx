@@ -113,27 +113,24 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
     )
   }
 
-  // 已配號卡片(犯人區):頭貼 + 暱稱 + 編號 + 角色標籤 + 動作(編輯 / 核發帳密 / 改帳號名)
+  // 犯人管理卡:與獄方卡同版型(正方形一排 6 張),改藍色主題;無肖像/拍立得徽章,動作收進右上「⋯」。
   const MemberCard = (p) => {
     const name = p.game_name ?? p.display_name ?? '（未命名）'
     return (
-      <div key={p.id} className="ov-card">
-        <div className="ov-av">
+      <div key={p.id} className="gc-card inmate">
+        {isWarden && (
+          <CardMenu items={[
+            { label: '編輯', onClick: () => onEditMember(p) },
+            { label: '核發帳密', onClick: () => setIssueTarget(p) },
+            ...(p.account_type === 'warden_created' ? [{ label: '改帳號名', onClick: () => setRenameTarget(p) }] : []),
+          ]} />
+        )}
+        <div className="gc-av">
           {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{name[0] ?? '?'}</span>}
         </div>
-        <div className="ov-nm">{name}</div>
-        <div className="ov-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
-        <span className={`role-tag ${p.role === 'member' ? 'member' : p.role}`}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
-        {isWarden && (
-          <div className="ov-acts">
-            <button className="btn-sm" onClick={() => onEditMember(p)}>編輯</button>
-            {/* 核發帳密:未核發者首發;已核發者重發(新帳號名+新密碼直接蓋過舊的) */}
-            <button className="btn-sm" onClick={() => setIssueTarget(p)}>核發帳密</button>
-            {p.account_type === 'warden_created' && (
-              <button className="btn-sm" onClick={() => setRenameTarget(p)}>改帳號名</button>
-            )}
-          </div>
-        )}
+        <div className="gc-nm">{name}</div>
+        <div className="gc-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
+        <span className="role-tag member">{ROLE_LABEL[p.role] ?? '犯人'}</span>
       </div>
     )
   }
@@ -168,7 +165,7 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
             <section className="ov-group">
               <div className="subgroup">犯人 ({members.length})<span className="ln" /></div>
               {members.length === 0 ? <p className="empty">{ql ? '沒有符合的犯人' : '尚無已配號犯人'}</p>
-                : <div className="ov-grid">{members.map(MemberCard)}</div>}
+                : <div className="gc-grid">{members.map(MemberCard)}</div>}
             </section>
           </>)}
 
