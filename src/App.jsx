@@ -400,12 +400,14 @@ function App() {
         <div className="who">
           <span className="num">No.{String(profile.inmate_no).padStart(4, '0')}</span>
           {profile.game_name ?? profile.display_name}
-          <button className="btn-ghost" onClick={() => setTourQueue(tourFor(profile.role))}>教學</button>
+          {isStaff && <button className="btn-ghost" onClick={() => setTourQueue([{ steps: GUARD_TOUR, label: '獄卒導覽' }])}>獄卒導覽</button>}
+          <button className="btn-ghost" onClick={() => setTourQueue([{ steps: INMATE_TOUR, label: '犯人導覽' }])}>犯人導覽</button>
           <button className="btn-ghost" onClick={signOut}>登出</button>
         </div>
       </div>
       {tourQueue.length > 0 && (
         <Tour steps={tourQueue[0].steps} label={tourQueue[0].label}
+          onNavigate={(t) => { if (t) setTab(t) }}
           onClose={() => setTourQueue(q => q.slice(1))} />
       )}
       <div className="tabs">

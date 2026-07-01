@@ -403,6 +403,24 @@
 .admin .tour-card .tour-x:hover{background:var(--raise); border-color:var(--line-2); color:var(--text)}
 .admin .tour-card .tour-title{font-size:18px; margin:0 0 8px}
 .admin .tour-card .tour-body{font-size:14px; color:var(--dim); line-height:1.7; margin:0 0 14px}
+/* 導覽模擬畫面(講解看不到的頁面) */
+.admin .tour-mock{border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); padding:12px 14px; margin:0 0 14px}
+.admin .tour-mock .tm-timer{text-align:center}
+.admin .tour-mock .tm-phase{display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:4px}
+.admin .tour-mock .tm-badge{font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; background:rgba(245,197,24,.16); color:var(--hazard)}
+.admin .tour-mock .tm-round{font-size:12px; color:var(--dim)}
+.admin .tour-mock .tm-clock{font-family:var(--mono); font-size:40px; font-weight:700; color:var(--text); line-height:1.1}
+.admin .tour-mock .tm-dots{display:flex; gap:6px; justify-content:center; margin-top:6px}
+.admin .tour-mock .tm-dots i{width:8px; height:8px; border-radius:50%; background:var(--line-2)}
+.admin .tour-mock .tm-dots i.cur{background:var(--hazard)}
+.admin .tour-mock .tm-wrow{display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); font-size:13px}
+.admin .tour-mock .tm-type{font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; background:rgba(63,140,255,.16); color:#7fb0ff}
+.admin .tour-mock .tm-type.sup{background:rgba(63,179,107,.16); color:var(--ok)}
+.admin .tour-mock .tm-who{color:var(--text)}
+.admin .tour-mock .tm-amt{margin-left:auto; font-family:var(--mono); color:var(--dim)}
+.admin .tour-mock .tm-income{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid var(--hazard-d); color:var(--hazard); font-weight:700; font-size:13px}
+.admin .tour-mock .tm-income b{font-family:var(--mono)}
+.admin .tour-mock .tm-cap{font-size:12px; color:var(--faint); margin-top:8px; line-height:1.6}
 .admin .tour-card .tour-dots{display:flex; gap:6px; margin-bottom:14px}
 .admin .tour-card .tour-dots i{width:7px; height:7px; border-radius:50%; background:var(--line-2)}
 .admin .tour-card .tour-dots i.on{background:var(--hazard)}
