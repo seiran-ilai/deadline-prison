@@ -347,7 +347,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
                                 {picks.length === 0 && addons.length === 0 && !cap && <span>尚未入場 · 無指名/加購</span>}
                                 {picks.map((p, i) => <span key={i} className="tag tag-pill" style={{ background: 'rgba(180,120,255,.16)', color: '#c2a3ff' }}>{gname(p.g)}{p.s != null ? `（${slotLabel(s.start_time, p.s)}）` : '（監督）'}</span>)}
                                 {addons.map((a, i) => <span key={'a' + i} className="tag tag-pill" style={{ background: 'rgba(63,140,255,.14)', color: '#7fb0ff' }}>{gname(a.g)}：拍立得 {a.polaroid || 0}{a.sign ? '＋簽繪' : ''}</span>)}
-                                {cap && <span className="tag tag-pill" style={{ background: 'rgba(216,65,47,.14)', color: '#e88' }}>抓捕：委託 {cap.client || '?'} → {cap.target || '?'}（{cap.server || '?'}）{cap.guards ? ` · ${cap.guards} 位` : ''}</span>}
+                                {cap && <span className="tag tag-pill" style={{ background: 'rgba(216,65,47,.14)', color: '#e88' }}>抓捕：委託 {cap.client || '?'} → {cap.target || '?'}{cap.guards ? ` · ${cap.guards} 位` : ''}</span>}
                               </div>
                             </div>
                             <label className="gp-polaroid" style={{ flex: '0 0 auto' }}>

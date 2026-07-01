@@ -268,7 +268,7 @@ export default function PrisonSite() {
     setMPw(''); setMAuthBusy(false); setMAuthErr(null)
     setGName(''); setGPw(''); setGBusy(false); setGErr(null)
   }
-  const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', server: '', guards: 2 }) }
+  const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', guards: 2 }) }
   const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); resetModalAuth() }
   const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); setNamedGuards([]); resetModalAuth() }
 
@@ -278,8 +278,8 @@ export default function PrisonSite() {
     const addons = Object.entries(addonsByGuard)
       .map(([g, a]) => ({ g, polaroid: a?.polaroid || 0, sign: !!a?.sign, portrait: a?.portrait || 0 }))
       .filter(a => a.polaroid > 0 || a.portrait > 0)
-    const cap = (sel?.kind === 'crunch' && capture.on && (capture.client.trim() || capture.target.trim() || capture.server.trim()))
-      ? { client: capture.client.trim(), target: capture.target.trim(), server: capture.server.trim(), guards: Math.max(2, capture.guards || 2) } : null
+    const cap = (sel?.kind === 'crunch' && capture.on && (capture.client.trim() || capture.target.trim()))
+      ? { client: capture.client.trim(), target: capture.target.trim(), guards: Math.max(2, capture.guards || 2) } : null
     return { requested_slots, addons, capture: cap }
   }
   // 指名/監督多選 toggle;每卒加購數量設定(0..99)
@@ -761,8 +761,6 @@ export default function PrisonSite() {
                             <input className="m-input" value={capture.client} onChange={e => setCapture({ ...capture, client: e.target.value })} /></div>
                           <div className="m-field"><span className="m-field-lbl">犯人暱稱</span>
                             <input className="m-input" value={capture.target} onChange={e => setCapture({ ...capture, target: e.target.value })} /></div>
-                          <div className="m-field"><span className="m-field-lbl">伺服器</span>
-                            <input className="m-input" value={capture.server} onChange={e => setCapture({ ...capture, server: e.target.value })} /></div>
                           <div className="m-field">
                             <span className="m-field-lbl">抓捕獄卒人數</span>
                             <div className="m-astep" style={{ paddingTop: 4 }}>
