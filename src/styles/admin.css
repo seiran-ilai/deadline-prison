@@ -389,6 +389,27 @@
 .admin .memo-radio input[type=radio]{accent-color:var(--hazard); width:16px; height:16px; cursor:pointer}
 
 /* 管理分頁:MEMO 列 */
+/* 教學導覽:置中步驟卡 + 半透明遮罩 */
+.admin .tour-bg{position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.62); padding:20px}
+.admin .tour-card{width:440px; max-width:100%; background:var(--panel); border:1px solid var(--line-2);
+  border-radius:12px; padding:20px 22px; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.admin .tour-card .tour-head{display:flex; align-items:center; gap:10px; margin-bottom:12px}
+.admin .tour-card .tour-label{font-size:12px; font-weight:700; letter-spacing:1px; padding:3px 10px; border-radius:999px;
+  background:rgba(245,197,24,.16); color:var(--hazard)}
+.admin .tour-card .tour-count{font-family:var(--mono); font-size:12px; color:var(--faint)}
+.admin .tour-card .tour-x{margin-left:auto; width:26px; height:26px; min-height:auto; padding:0; border-radius:6px;
+  background:transparent; border:1px solid transparent; color:var(--dim); font-size:14px}
+.admin .tour-card .tour-x:hover{background:var(--raise); border-color:var(--line-2); color:var(--text)}
+.admin .tour-card .tour-title{font-size:18px; margin:0 0 8px}
+.admin .tour-card .tour-body{font-size:14px; color:var(--dim); line-height:1.7; margin:0 0 14px}
+.admin .tour-card .tour-dots{display:flex; gap:6px; margin-bottom:14px}
+.admin .tour-card .tour-dots i{width:7px; height:7px; border-radius:50%; background:var(--line-2)}
+.admin .tour-card .tour-dots i.on{background:var(--hazard)}
+.admin .tour-card .tour-acts{display:flex; align-items:center; gap:8px}
+.admin .tour-card .tour-skip{background:transparent; border:none; color:var(--faint); padding:6px 4px; min-height:auto}
+.admin .tour-card .tour-skip:hover{color:var(--text)}
+
 /* MEMO 管理:卡片網格(寬螢幕多欄並排,避免整條滿版留白) */
 .admin .memo-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; margin-bottom:8px}
 .admin .memo-card{display:flex; flex-direction:column; gap:10px; border:1px solid var(--line); border-radius:8px;

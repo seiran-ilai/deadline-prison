@@ -6,6 +6,7 @@ import { createBooking, createGuestBooking, cancelBooking } from '../bookingApi'
 import { toSessionView, splitDate } from '../prison'
 import { sessionKindLabel } from '../sessionKind'
 import AvatarInput from '../AvatarInput'
+import { SITE_INMATE_GUIDE } from '../tourSteps'
 import './prison-site.css'
 
 // 場次營運類型(每場只有一種屬性;服刑須知輪播用)。每型:三步卡片 + 節奏條。文字照抄不改寫。
@@ -448,6 +449,7 @@ export default function PrisonSite() {
             <a data-sec="staff" onClick={() => scrollTo('staff')}>監獄人員</a>
             <a data-sec="pricing" onClick={() => scrollTo('pricing')}>營業項目</a>
             <a data-sec="notice" onClick={() => scrollTo('notice')}>預約須知</a>
+            <a data-sec="guide" onClick={() => scrollTo('guide')}>系統教學</a>
             <a data-sec="sessions" onClick={() => scrollTo('sessions')}>趕稿場次</a>
           </div>
           <div className="nav-entries">
@@ -477,7 +479,7 @@ export default function PrisonSite() {
           <div className="nav-drawer">
             {[
               ['about', '服刑須知'], ['staff', '監獄人員'],
-              ['pricing', '營業項目'], ['notice', '預約須知'], ['sessions', '趕稿場次'],
+              ['pricing', '營業項目'], ['notice', '預約須知'], ['guide', '系統教學'], ['sessions', '趕稿場次'],
             ].map(([id, label]) => (
               <a key={id} onClick={() => { scrollTo(id); setMenuOpen(false) }}>{label}</a>
             ))}
@@ -590,6 +592,23 @@ export default function PrisonSite() {
                   <p>{body}</p>
                   {link && <a className="notice-dc" href={link} target="_blank" rel="noopener noreferrer">加入官方 Discord ↗</a>}
                 </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="perforation" />
+
+        {/* 後台系統教學(犯人視角):報名到服刑流程 */}
+        <section id="guide">
+          <div className="eyebrow reveal">後台系統教學 <span className="blk">// SYSTEM GUIDE</span></div>
+          <h2 className="title reveal">怎麼服刑</h2>
+          <p className="subline reveal">從報名到服刑,四步驟帶你認識死線監獄後台系統。</p>
+          <div className="notice reveal">
+            {SITE_INMATE_GUIDE.map(s => (
+              <div className="notice-item" key={s.n}>
+                <div className="notice-no">{s.n}</div>
+                <div className="notice-body"><h3>{s.title}</h3><p>{s.body}</p></div>
               </div>
             ))}
           </div>

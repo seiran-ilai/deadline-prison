@@ -13,6 +13,8 @@ import GuardRecordsPage from './GuardRecordsPage'
 import MyBookings from './MyBookings'
 import MessageBanner from './MessageBanner'
 import DeadlinePrisonLoader from './DeadlinePrisonLoader'
+import Tour from './Tour'
+import { GUARD_TOUR, INMATE_TOUR } from './tourSteps'
 import { normalizeStatus } from './warden/constants'
 import './styles/admin.css'
 
@@ -76,6 +78,12 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('session')
   const [tabResolved, setTabResolved] = useState(false) // 落地分頁是否已決定:決定前遮 loading,避免用初始 tab 先渲染一次(閃過 session/booking)
+  const [tourQueue, setTourQueue] = useState([])        // 教學導覽佇列(依序播放:獄卒→犯人 / 僅犯人)
+
+  // 依角色組導覽佇列:獄卒先獄卒導覽再犯人導覽;犯人只犯人導覽。
+  const tourFor = (role) => (role === 'guard' || role === 'warden')
+    ? [{ steps: GUARD_TOUR, label: '獄卒導覽' }, { steps: INMATE_TOUR, label: '犯人導覽' }]
+    : [{ steps: INMATE_TOUR, label: '犯人導覽' }]
   const [msg, setMsg] = useState('')
   const [myLive, setMyLive] = useState(null) // { sessionId, roleInSession, status } | null:我所在「未結束」場次(0 或 1)
   const [testError, setTestError] = useState(null)
@@ -199,6 +207,15 @@ function App() {
     const t = setInterval(pull, 10000)
     return () => { alive = false; clearInterval(t) }
   }, [profile?.role, user?.id])
+
+  // 第一次登入自動教學導覽(以 localStorage 記過,每人每裝置一次;右上「教學」可重看)。
+  useEffect(() => {
+    if (!user || !profile) return
+    const key = `dp_tour_seen_${user.id}`
+    if (localStorage.getItem(key)) return
+    setTourQueue(tourFor(profile.role))
+    localStorage.setItem(key, '1')
+  }, [user?.id, profile?.role])
 
   // 登入後落地分頁(依 myLive 重算):典獄長→主控台;在場且為獄卒→獄卒作業、犯人→犯人服刑;否則→已預約場次。
   // 依賴 myLive:首次 null 會先落 booking,輪詢抓到在場後自動帶到對的分頁 —— 即「不用重登就解鎖」。
@@ -388,9 +405,14 @@ function App() {
         <div className="who">
           <span className="num">No.{String(profile.inmate_no).padStart(4, '0')}</span>
           {profile.game_name ?? profile.display_name}
+          <button className="btn-ghost" onClick={() => setTourQueue(tourFor(profile.role))}>教學</button>
           <button className="btn-ghost" onClick={signOut}>登出</button>
         </div>
       </div>
+      {tourQueue.length > 0 && (
+        <Tour steps={tourQueue[0].steps} label={tourQueue[0].label}
+          onClose={() => setTourQueue(q => q.slice(1))} />
+      )}
       <div className="tabs">
         {tabs.map(t => (
           // disabled 分頁不用 native disabled(否則點不到):用 tab-disabled 灰樣式 + 點擊跳 setMsg 提示
