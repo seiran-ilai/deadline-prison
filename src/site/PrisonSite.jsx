@@ -542,7 +542,7 @@ export default function PrisonSite() {
         {/* 營業項目:三種場次類型(類型 / 介紹 / 品項);收費價目併入此區 */}
         <section id="pricing">
           <div className="eyebrow reveal">營業項目 <span className="blk">// BLOCK 03</span></div>
-          <h2 className="title reveal">場次類型</h2>
+          <h2 className="title reveal">各項收費</h2>
           <p className="subline reveal">依你的趕稿需求，選一種入監方式。三種場次的類型、介紹與品項如下；所有互動皆為角色扮演，請保持良好的 RP 禮儀。</p>
           <div className="stype-grid reveal">
             {SESSION_TYPES.map(t => (
