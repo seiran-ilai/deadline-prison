@@ -72,6 +72,24 @@ export function formatGuardPayslip(guard, session = {}) {
   return lines.join('\n')
 }
 
+// 伊萊諾斯薪資 + 監獄收支 合併訊息(送到「伊萊諾斯和監獄的收支」頻道)。
+// elai 可為 null(伊萊諾斯當日未上班 → 只出監獄收支);result 為 calcSettlement 回傳。金額單位「萬」。
+export function formatElaiAndPrisonPayout(elai, result, session = {}) {
+  const lines = []
+  if (elai) lines.push(formatGuardPayslip(elai, session), '')
+  else {
+    const dateStr = session.session_date ? `（${session.session_date}）` : ''
+    lines.push(`今日薪資明細｜${session.title || '本場'}${dateStr}`, '伊萊諾斯 · No.0001', '· 當日無上班薪資', '')
+  }
+  lines.push('監獄收支')
+  lines.push(`· 當日營業額 ${money(result.revenue)}`)
+  lines.push(`· 獄卒直接薪資 -${money(result.directTotal)}`)
+  lines.push(`· 淨收入 ${money(result.net)}`)
+  if (result.pool) lines.push(`· 均分獎金池 -${money(result.pool)}`)
+  lines.push(`· 監獄留存 ${money(result.retain)}`)
+  return lines.join('\n')
+}
+
 export function calcSettlement({ kind, guards, items }) {
   const byGuard = {}
   for (const it of items) { const g = it.target_guard_id; if (!g) continue; (byGuard[g] ??= []).push(it) }

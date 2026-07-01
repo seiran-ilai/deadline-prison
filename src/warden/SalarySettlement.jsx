@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { SESSION_KIND_LABEL, DEFAULT_SESSION_KIND } from '../sessionKind'
-import { calcSettlement, money, formatGuardPayslip } from './salaryRules'
+import { calcSettlement, money, formatElaiAndPrisonPayout } from './salaryRules'
 import { sendSalaryBroadcast, zhSalaryError } from '../salaryApi'
 
 // 伊萊諾斯(典獄長本人)以收監編號 0001 辨識;其薪資與監獄留存皆留在身上,不對外發放。
@@ -84,13 +84,12 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
   const shouldRemain = g0 + elaiGil + retainGil  // 對照:原GIL + 伊萊諾斯薪資 + 監獄留存
   const diff = afterBalance - shouldRemain     // 驗算差額(理應為 0)
 
-  // 發送今日薪資明細到 Discord 頻道(測試階段:只送伊萊諾斯 No.0001)
+  // 發送到「伊萊諾斯和監獄的收支」頻道:伊萊諾斯薪資 + 監獄收支一起送(測試階段)
   async function sendElaiPayslip() {
-    if (!elai) { setSendMsg('本場找不到伊萊諾斯（No.0001）的薪資，請確認他當日有上班。'); return }
     setSending(true); setSendMsg(null)
-    const r = await sendSalaryBroadcast(formatGuardPayslip(elai, sessionObj))
+    const r = await sendSalaryBroadcast(formatElaiAndPrisonPayout(elai, result, sessionObj))
     setSending(false)
-    setSendMsg(r.ok ? '已發送伊萊諾斯今日薪資明細到頻道。' : `發送失敗：${zhSalaryError(r.error)}`)
+    setSendMsg(r.ok ? '已發送伊萊諾斯薪資與監獄收支到頻道。' : `發送失敗：${zhSalaryError(r.error)}`)
   }
 
   return (
@@ -215,9 +214,9 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
 
             {/* 發送今日薪資明細:兩欄下方置中一列(測試:只送伊萊諾斯 No.0001) */}
             <div className="settle-send">
-              <button className="btn-sm btn-pri" onClick={sendElaiPayslip} disabled={sending || !elai}
-                title={elai ? '發送伊萊諾斯今日薪資明細到 Discord 頻道' : '本場找不到伊萊諾斯（No.0001）'}>
-                {sending ? '發送中…' : '發送今日薪資明細'}
+              <button className="btn-sm btn-pri" onClick={sendElaiPayslip} disabled={sending}
+                title="把伊萊諾斯薪資與監獄收支一起發送到 Discord 頻道">
+                {sending ? '發送中…' : '發送薪資與監獄收支'}
               </button>
               {sendMsg && <p className="settle-note" style={{ margin: 0 }}>{sendMsg}</p>}
             </div>
