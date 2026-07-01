@@ -1,5 +1,6 @@
 import { getServiceClient } from './_lib/wardenAuth.js'
 import { sendReservationBroadcast } from './_lib/reservationBroadcast.js'
+import { createAnonInmate } from './_lib/autoInmate.js'
 
 // /api/booking-guest — POST(免登入):不註冊預約。
 // 訪客只留遊戲暱稱進預約名單(user_id = null),不建任何帳號、無法登入系統。
@@ -13,9 +14,10 @@ export default async function handler(req, res) {
     const supabase = getServiceClient()
     if (!supabase) return res.status(500).json({ error: 'server_not_configured' })
 
-    const { session_id, game_name, password, requested_slots, addons, capture } = req.body || {}
+    const { session_id, game_name, server, password, requested_slots, addons, capture } = req.body || {}
     if (!session_id) return res.status(400).json({ error: 'missing_session_id' })
     const gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : ''
+    const sv = typeof server === 'string' ? server.trim().slice(0, 60) : ''
     if (gn.length < 1) return res.status(400).json({ error: 'missing_game_name' })
 
     // 場次存在 + 未額滿(public_sessions 為 SECURITY DEFINER 計數,booked 含訪客列)
@@ -59,15 +61,21 @@ export default async function handler(req, res) {
       ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
       : null
 
-    // 防重複(訪客沒有身分,以同場+同暱稱兜底;有帳號的列不在此列)
-    const { data: dup } = await supabase.from('bookings')
-      .select('id').eq('session_id', session_id).is('user_id', null)
-      .ilike('game_name', gn).neq('status', 'cancelled').limit(1)
-    if (dup && dup.length) return res.status(409).json({ error: 'already_booked' })
+    // 防重複(同場 + 同暱稱 + 同伺服器,未取消)
+    let dupQ = supabase.from('bookings').select('id, server')
+      .eq('session_id', session_id).ilike('game_name', gn).neq('status', 'cancelled')
+    const { data: dupRows } = await dupQ
+    if ((dupRows || []).some(d => (d.server || '').trim().toLowerCase() === sv.toLowerCase())) {
+      return res.status(409).json({ error: 'already_booked' })
+    }
+
+    // 匿名訪客自動建檔發號:同「暱稱+伺服器」沿用既有犯人,否則建號。失敗不擋預約(退回無帳號走查列)。
+    const anon = await createAnonInmate(supabase, gn, sv, 'guest')
+    const guestUserId = anon.userId || null
 
     const { error: insErr } = await supabase.from('bookings').insert({
-      session_id, user_id: null, dc_id: null, dc_name: null,
-      game_name: gn, avatar_url: null, note: null,
+      session_id, user_id: guestUserId, dc_id: null, dc_name: null,
+      game_name: gn, server: sv || null, avatar_url: null, note: null,
       requested_slots: picks, addons: cleanAddons, capture: cleanCapture,
     })
     if (insErr) return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
@@ -76,7 +84,7 @@ export default async function handler(req, res) {
     await sendReservationBroadcast(supabase, {
       webhook: WEBHOOK, sess, picks, addons: cleanAddons,
       captureTarget: cleanCapture?.target || null,
-      isMember: false, name: gn, inmateNo: null,
+      isMember: false, name: sv ? `${gn}@${sv}` : gn, inmateNo: null,
       count: (sess.booked ?? 0) + 1, action: '新報名',
     })
 

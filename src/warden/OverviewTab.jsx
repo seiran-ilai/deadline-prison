@@ -96,6 +96,7 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
           {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{name[0] ?? '?'}</span>}
         </div>
         <div className="gc-nm">{name}</div>
+        {p.server && <div className="gc-server">{p.server}</div>}
         <div className="gc-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
         <span className={`role-tag ${roleClass}`}>{ROLE_LABEL[p.role] ?? '獄卒'}</span>
         {isWarden && (
@@ -127,6 +128,7 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
           {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{name[0] ?? '?'}</span>}
         </div>
         <div className="gc-nm">{name}</div>
+        {p.server && <div className="gc-server">{p.server}</div>}
         <div className="gc-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
         <span className="role-tag member">{ROLE_LABEL[p.role] ?? '犯人'}</span>
       </div>

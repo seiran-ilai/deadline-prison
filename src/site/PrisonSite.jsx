@@ -177,7 +177,8 @@ export default function PrisonSite() {
   const [mPw, setMPw] = useState('')
   const [mAuthBusy, setMAuthBusy] = useState(false)
   const [mAuthErr, setMAuthErr] = useState(null)
-  const [gName, setGName] = useState('')              // 不登入直接預約:遊戲暱稱(唯一記錄的資料)
+  const [gName, setGName] = useState('')              // 不登入直接預約:遊戲暱稱
+  const [gServer, setGServer] = useState('')          // 不登入直接預約:伺服器(與暱稱分兩欄)
   const [gPw, setGPw] = useState('')                  // 不註冊預約:密鑰場通行密鑰
   const [gBusy, setGBusy] = useState(false)
   const [gErr, setGErr] = useState(null)
@@ -347,9 +348,10 @@ export default function PrisonSite() {
     setGErr(null)
     const name = gName.trim()
     if (!name) { setGErr('請輸入遊戲暱稱'); return }
+    if (!gServer.trim()) { setGErr('請輸入伺服器'); return }
     if (sel.hasPassword && !gPw.trim()) { setGErr('本梯次為密鑰場，請輸入通行密鑰'); return }
     setGBusy(true)
-    const r = await createGuestBooking(sel.id, { game_name: name, password: sel.hasPassword ? gPw.trim() : null, ...buildPicks() })
+    const r = await createGuestBooking(sel.id, { game_name: name, server: gServer.trim(), password: sel.hasPassword ? gPw.trim() : null, ...buildPicks() })
     setGBusy(false)
     if (r.ok) {
       setMsg('收監成功。鈴響時見。（不註冊預約如需取消，請至 Discord 聯繫典獄長）')
@@ -800,13 +802,20 @@ export default function PrisonSite() {
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
                 <>
-                  {/* 先顯示:不登入直接預約(只填遊戲暱稱) */}
-                  <p className="m-note">不登入直接預約：名冊只記錄你的<b style={{ color: 'var(--text)' }}>遊戲暱稱</b>，不會建立帳號、無法登入系統；如需取消請至 Discord 聯繫典獄長。</p>
+                  {/* 先顯示:不登入直接預約(暱稱 + 伺服器兩欄) */}
+                  <p className="m-note">不登入直接預約：名冊記錄你的<b style={{ color: 'var(--text)' }}>暱稱與伺服器</b>；同暱稱+伺服器會累積到同一份犯人資料。如需取消請至 Discord 聯繫典獄長。</p>
                   <form onSubmit={submitGuestBooking}>
-                    <div className="m-field">
-                      <span className="m-field-lbl">遊戲暱稱</span>
-                      <input className="m-input" type="text" maxLength={60} placeholder="暱稱＠伺服器"
-                        value={gName} onChange={e => setGName(e.target.value)} />
+                    <div className="m-field-row" style={{ display: 'flex', gap: 10 }}>
+                      <div className="m-field" style={{ flex: 1 }}>
+                        <span className="m-field-lbl">暱稱</span>
+                        <input className="m-input" type="text" maxLength={60} placeholder="遊戲角色暱稱"
+                          value={gName} onChange={e => setGName(e.target.value)} />
+                      </div>
+                      <div className="m-field" style={{ flex: 1 }}>
+                        <span className="m-field-lbl">伺服器</span>
+                        <input className="m-input" type="text" maxLength={60} placeholder="所在伺服器"
+                          value={gServer} onChange={e => setGServer(e.target.value)} />
+                      </div>
                     </div>
                     {sel.hasPassword && (
                       <div className="m-field">

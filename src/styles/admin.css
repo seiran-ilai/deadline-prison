@@ -626,6 +626,7 @@
 .admin .gc-card .gc-av img{width:100%; height:100%; object-fit:cover}
 .admin .gc-card .gc-nm{font-weight:700; font-size:13px; line-height:1.3; word-break:break-word; max-width:100%}
 .admin .gc-card .gc-no{font-family:var(--mono); font-size:11px; color:var(--dim)}
+.admin .gc-card .gc-server{font-size:11px; color:var(--faint); line-height:1.2; max-width:100%; word-break:break-word}
 .admin .gc-card.chief .role-tag.warden{background:rgba(232,182,0,.18); color:#E8B600}
 /* 犯人卡:同版型、藍色主題(無徽章列) */
 .admin .gc-card.inmate{border-color:rgba(63,140,255,.32); background:rgba(63,140,255,.06); justify-content:center}
