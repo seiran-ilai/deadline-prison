@@ -86,7 +86,12 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
     const liveGuards = merged.filter(m => m.role_in_session === 'guard')
     const liveGuardIds = new Set(liveGuards.map(m => m.member_id))
     const onDutyGuards = sg.filter(r => !liveGuardIds.has(r.guard_id)).map(r => ({ guard_id: r.guard_id, profile: profById[r.guard_id] }))
-    setRosterById(prev => ({ ...prev, [sid]: { inmatesLive, bookingInmates, liveGuards, onDutyGuards, bookings: bk, profById, startTime: null } }))
+    // 指派用獄卒名冊(供 GuardAssign):已入場獄卒 ∪ 當日排班(session_guards),統一為 { id, member_id, profile }
+    const assignMap = new Map()
+    for (const g of liveGuards) if (g.member_id) assignMap.set(g.member_id, { id: g.member_id, member_id: g.member_id, profile: g.profile })
+    for (const r of sg) if (r.guard_id && !assignMap.has(r.guard_id)) assignMap.set(r.guard_id, { id: r.guard_id, member_id: r.guard_id, profile: profById[r.guard_id] })
+    const assignRoster = [...assignMap.values()]
+    setRosterById(prev => ({ ...prev, [sid]: { inmatesLive, bookingInmates, liveGuards, onDutyGuards, assignRoster, bookings: bk, profById, startTime: null } }))
   }
 
   // 預約犯人「DC 預約頻道建立」確認(樂觀更新 + 失敗回滾)。
@@ -353,7 +358,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
                             <div className="in-no">No.{r.profile?.inmate_no != null ? String(r.profile.inmate_no).padStart(4, '0') : '----'}</div>
                           </div>
                           <span className="spacer" />
-                          <GuardAssign sessionInmateId={r.id} guardRoster={roster.liveGuards} setMsg={setMsg} />
+                          <GuardAssign sessionInmateId={r.id} guardRoster={roster.assignRoster} setMsg={setMsg} />
                         </div>
                       ))}
                       {roster.bookingInmates.map(b => {
