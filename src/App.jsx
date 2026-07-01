@@ -282,13 +282,8 @@ function App() {
           <button className="dpl-btn" type="submit" disabled={authBusy}>{authBusy ? '登入中…' : '登入入獄'}</button>
         </form>
 
-        <p className="dpl-choose">本系統不開放自行註冊，請向典獄長索取帳號密碼。</p>
+        <p className="dpl-choose"><a href="/#sessions" style={{ color: '#f5c518', textDecoration: 'underline', cursor: 'pointer' }}>［預約場次即可註冊］</a></p>
 
-        <div className="dpl-privacy">
-          <span className="dpl-pv-t">隱私說明</span>
-          <p>・本站僅保存你的帳號與加密後的密碼,不會用於任何其他用途。</p>
-          <p>・早期以 Discord 登入建立的帳號,僅保存其 Discord 使用者名稱與 ID,用於識別身分。</p>
-        </div>
         <a className="dpl-back" href="/">← 回到監獄入口</a>
       </div>
       {import.meta.env.DEV && (
