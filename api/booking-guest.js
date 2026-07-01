@@ -47,18 +47,18 @@ export default async function handler(req, res) {
         if (seen.has(key)) continue
         seen.add(key)
         const hit = (ns || []).find(r => r.guard_id === g && (r.slot_index ?? null) === s)
-        if (!hit) return res.status(403).json({ error: 'guard_not_nameable' })
+        if (!hit || hit.portrait_only) return res.status(403).json({ error: 'guard_not_nameable' })   // 肖像畫獄卒不接指名/監督
         if (hit.taken) return res.status(409).json({ error: 'slot_taken' })
         picks.push({ g, s })
       }
     }
     const cleanAddons = nameable && Array.isArray(addons)
       ? addons.filter(a => a && a.g)
-          .map(a => ({ g: a.g, polaroid: Math.max(0, Math.min(99, parseInt(a.polaroid) || 0)), sign: Math.max(0, Math.min(99, parseInt(a.sign) || 0)) }))
-          .filter(a => a.polaroid > 0 || a.sign > 0)
+          .map(a => ({ g: a.g, polaroid: Math.max(0, Math.min(99, parseInt(a.polaroid) || 0)), sign: !!a.sign, portrait: Math.max(0, Math.min(99, parseInt(a.portrait) || 0)) }))
+          .filter(a => a.polaroid > 0 || a.portrait > 0)
       : []
     const cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
-      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), server: String(capture.server || '').slice(0, 60) }
+      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), server: String(capture.server || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
       : null
 
     // 防重複(訪客沒有身分,以同場+同暱稱兜底;有帳號的列不在此列)

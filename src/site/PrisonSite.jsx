@@ -8,59 +8,105 @@ import { sessionKindLabel } from '../sessionKind'
 import AvatarInput from '../AvatarInput'
 import './prison-site.css'
 
-const RULES = [
-  ['01', '自首入監', '註冊帳號、報名梯次，然後在指定時間抵達監獄大門，乖乖服刑。'],
-  ['02', '適度休息', '專注 25 分鐘、放風 5 分鐘為一輪；每四輪一次長休 15 分鐘。健康的身體才是創作的本錢。'],
-  ['03', '刑滿釋放', '梯次結束即收尾放人。趕完稿了嗎？拍拍屁股出獄去。還沒趕完稿？記得下次再來自首。'],
-]
-
-// 指名互動 / 自由入場 服刑須知(沿用集體趕稿的三步卡片 + 節奏條版式)。文字照抄不改寫。
-const SERVING_MORE = [
+// 場次營運類型(每場只有一種屬性;服刑須知輪播用)。每型:三步卡片 + 節奏條。文字照抄不改寫。
+const SERVING_TYPES = [
   {
-    kind: '指名互動', marker: '// NOMINATION', rhythm: 'slots',
+    kind: '集體趕稿', marker: '// CRUNCH', rhythm: 'pomodoro', rhythmLbl: '服刑節奏 · POMODORO CYCLE',
+    steps: [
+      ['01', '自首入監', '註冊帳號、報名梯次，然後在指定時間抵達監獄大門，乖乖服刑。'],
+      ['02', '適度休息', '專注 25 分鐘、放風 5 分鐘為一輪；每四輪一次長休 15 分鐘。健康的身體才是創作的本錢。'],
+      ['03', '刑滿釋放', '梯次結束即收尾放人。趕完稿了嗎？拍拍屁股出獄去。還沒趕完稿？記得下次再來自首。'],
+    ],
+  },
+  {
+    kind: '指名互動', marker: '// NOMINATION', rhythm: 'slots', rhythmLbl: '時段節奏 · SESSION SLOTS', rhythmNote: '每 30 分為一時段・最少一段・可延長加時',
     steps: [
       ['01', '指名收監', '預約時指定想要的獄卒，選定時段完成登記。30 分鐘為一個時段。'],
       ['02', '專屬看管', '指定的獄卒全程陪同。聊天、演繹、討論進度，內容由你決定。'],
       ['03', '時段結束', '時間到即結束。意猶未盡？可當場加時，視獄卒檔期而定。'],
     ],
-    slotLbl: '時段節奏 · SESSION SLOTS', slotNote: '每 30 分為一時段・最少一段・可延長加時',
   },
   {
-    kind: '自由入場', marker: '// FREE ENTRY', rhythm: 'free',
+    kind: '自由入場', marker: '// FREE ENTRY', rhythm: 'free', rhythmLbl: '服刑節奏 · FREE FLOW', rhythmNote: '無固定循環・無獄卒管理・自由來去',
     steps: [
       ['01', '自由入監', '加入官方 DC，直接進入趕稿頻道。免報名、免費用。'],
       ['02', '無人看管', '沒有番茄鐘、沒有獄卒點名。節奏自己抓，進度自己顧。'],
       ['03', '來去自如', '想走就走，想留就留。這是一間無人看守的開放牢房。'],
     ],
-    slotLbl: '服刑節奏 · FREE FLOW', slotNote: '無固定循環・無獄卒管理・自由來去',
   },
 ]
+
+// 場次營運類型輪播:tab 切換 + 自動定時滑動 + 左右滑動(觸控/箭頭)。強調「每場屬性不同,非一場多種」。
+function ServingTypesCarousel({ types }) {
+  const [idx, setIdx] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const touchX = useRef(null)
+  useEffect(() => {
+    if (paused) return
+    const t = setInterval(() => setIdx(i => (i + 1) % types.length), 6500)
+    return () => clearInterval(t)
+  }, [paused, types.length])
+  const go = i => setIdx((i + types.length) % types.length)
+  // pointer 事件同時支援滑鼠拖曳與觸控滑動
+  const onDown = e => { touchX.current = e.clientX }
+  const onUp = e => {
+    if (touchX.current == null) return
+    const dx = e.clientX - touchX.current
+    if (Math.abs(dx) > 40) go(idx + (dx < 0 ? 1 : -1))
+    touchX.current = null
+  }
+  const rhythmBar = t => t.rhythm === 'pomodoro'
+    ? (<><div className="bars"><i className="focus" /><i className="rest" /><i className="focus" /><i className="rest" /><i className="focus" /><i className="rest" /><i className="focus" /><i className="long" /></div>
+        <div className="legend"><span><i style={{ background: 'var(--hazard)' }} />專注 25 分</span><span><i style={{ background: 'var(--steel)' }} />放風 5 分</span><span><i style={{ background: 'var(--alarm)' }} />長休 15 分（每 4 輪）</span></div></>)
+    : t.rhythm === 'slots'
+      ? (<><div className="bars"><i className="slot" /><i className="slot" /><i className="slot" /><i className="slot" /><i className="slot-add" /></div><div className="legend"><span>{t.rhythmNote}</span></div></>)
+      : (<><div className="bars"><i className="flow"><em>自由服刑・無限循環</em></i></div><div className="legend"><span>{t.rhythmNote}</span></div></>)
+  return (
+    <div className="serving-carousel reveal" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <div className="sc-tabs" role="tablist">
+        {types.map((t, i) => (
+          <button key={t.kind} role="tab" aria-selected={i === idx} className={`sc-tab${i === idx ? ' on' : ''}`} onClick={() => setIdx(i)}>{t.kind}</button>
+        ))}
+      </div>
+      <div className="sc-viewport" style={{ touchAction: 'pan-y' }} onPointerDown={onDown} onPointerUp={onUp}>
+        <div className="sc-track" style={{ transform: `translateX(-${idx * 100}%)` }}>
+          {types.map(t => (
+            <div className="sc-slide" key={t.kind} aria-hidden={types[idx].kind !== t.kind}>
+              <div className="eyebrow serving-sub">{t.kind} <span className="blk">{t.marker}</span></div>
+              <div className="rules">
+                {t.steps.map(([n, h, p]) => (
+                  <div className="rule" key={n}><span className="pin" /><div className="rn">{n}</div><h3>{h}</h3><p>{p}</p></div>
+                ))}
+              </div>
+              <div className="rhythm"><div className="lbl">{t.rhythmLbl}</div>{rhythmBar(t)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="sc-controls">
+        <button className="sc-arrow" aria-label="上一個" onClick={() => go(idx - 1)}>‹</button>
+        <div className="sc-dots">
+          {types.map((t, i) => <button key={t.kind} className={`sc-dot${i === idx ? ' on' : ''}`} aria-label={t.kind} onClick={() => setIdx(i)} />)}
+        </div>
+        <button className="sc-arrow" aria-label="下一個" onClick={() => go(idx + 1)}>›</button>
+      </div>
+    </div>
+  )
+}
 
 // 營業項目價目(RP 店收費;費用單位 W)
 // 預約須知(文字照抄不改寫)。每條拆成 [序號, 標題, 內文]。集體趕稿與指名場皆適用。
 const BOOKING_NOTICE = [
-  ['一', '請加入官方 Discord', '每場營運都會在 DC 開設專屬頻道，當次的取消或異動一律在頻道內公告。加入後請把暱稱改成你的遊戲角色名，方便典獄長與獄卒點名辨識。'],
+  ['一', '請加入官方 Discord', '每場營運都會在 DC 開設專屬頻道，當次的取消或異動一律在頻道內公告。加入後請把暱稱改成你的遊戲角色名，方便典獄長與獄卒點名辨識。', 'https://discord.gg/tpRn7En9mk'],
   ['二', '囚犯臨時無法出席', '請盡早在官方 DC 告知，方便典獄長重新安排當次的名額。'],
   ['三', '獄卒臨時無法執勤', '一般獄卒臨時無法執勤時，典獄長會協調其他有空的獄卒接手，並在 DC 公告。若無法執勤的是你的指名對象，典獄長會直接與你討論，看是改指名其他獄卒，或是擇日安排並保留你的優先指名權。'],
-  ['四', '關於演繹的共同語言', '死線監獄的演繹，建立在「監獄」這項元素之上，並保留大量空白。這是本店刻意為之的設計，為的是讓每一位不同帶入程度的犯人都能立刻入戲、用自己喜愛的方式參與。演繹時請以監獄設定和遊戲內相關世界觀為主。若想帶入外部作品或圈外的梗也很歡迎，但請考量到在場獄卒、犯人能理解的程度不同，不要預設在場所有人都懂。我們希望這個空間裡的每一句話，在場的每個人都能一起參與。'],
+  ['四', '關於演繹的共同語言', '死線監獄的演繹，建立在「監獄」這項元素之上，並保留大量空白。這是本店刻意為之的設計，為的是讓每一位不同帶入程度的犯人都能立刻入戲，這個空間裡的每一句話，在場的每個人都能一起參與。演繹時請以監獄設定和遊戲內相關世界觀為主。若想帶入外部作品或圈外的梗也很歡迎，但請考量到在場獄卒、犯人能理解的程度不同，若無法接續演繹，還請見諒。'],
 ]
 
 // 官網預約即時報價(單位:萬;顧客端估算,與後台結算 salaryRules.RATES 分開)。
 //   crunch:入場 20 + 指定監督 10/位;named:指名 15/時段、無指名入場 1;拍立得 5/張、簽繪張 8/張;抓捕 30 起(委託人付)。
-const PRICE = { crunchEntry: 20, supervise: 10, namedSlot: 15, namedEntry: 1, polaroid: 5, sign: 8, capture: 30 }
+const PRICE = { crunchEntry: 20, supervise: 10, namedSlot: 15, namedEntry: 1, polaroid: 5, signAdd: 3, portrait: 80, captureBase: 30, captureAdd: 15 }
 
-// 加購數量 stepper(− 數字 ＋,可直接輸入)
-function Stepper({ label, value, onChange }) {
-  return (
-    <div className="m-step">
-      <span className="m-step-lbl">{label}</span>
-      <button type="button" className="m-step-btn" onClick={() => onChange(value - 1)} disabled={value <= 0}>−</button>
-      <input className="m-step-num" type="number" min="0" max="99" value={value}
-        onChange={e => onChange(e.target.value)} onFocus={e => e.target.select()} />
-      <button type="button" className="m-step-btn" onClick={() => onChange(value + 1)}>＋</button>
-    </div>
-  )
-}
 
 // 場次介紹:三種場次類型的「場次類型 / 場次介紹 / 場次品項」。文字照抄不改寫;品項以物件 { n,p,u,note,hot } 呈現。
 const SESSION_TYPES = [
@@ -70,11 +116,11 @@ const SESSION_TYPES = [
     items: [
       { n: '入場費', p: '20', u: '萬' },
       { n: '指定監督獄卒', p: '+10', u: '萬', note: '入場＋監督＝30 萬', hot: true },
-      { n: '互動探監', p: '10', u: '萬', note: '由探監者支付' },
+      { n: '互動探監', p: '5', u: '萬', was: '10 萬', hot: true, note: '試營運限定・由探監者支付' },
       { n: '無互動探監', p: '免費', note: '純參觀' },
       { n: '拍立得（空白）', p: '5', u: '萬／張', note: '不限定當場獄卒，請等休息時間拍攝' },
       { n: '拍立得加購簽繪', p: '+3', u: '萬／張', note: '於空白拍立得加購', hot: true },
-      { n: '監獄外抓捕', p: '30', u: '萬起' },
+      { n: '監獄外抓捕', p: '30', u: '萬起', note: '最少 2 名獄卒抓捕' },
       { n: '肖像畫', p: '80', u: '萬', note: '限定負責獄卒上班日，無須入場即可繪製' },
     ],
   },
@@ -123,7 +169,7 @@ export default function PrisonSite() {
   const [namedGuards, setNamedGuards] = useState([]) // 指名互動場:[{ guard_id, name, avatar, slots:[{index,label,taken}] }]
   const [reqSel, setReqSel] = useState(() => new Set())  // 指名選擇:Set of "guardId|slotIndex"(named 帶時格;crunch 監督用 "guardId|")
   const [addonsByGuard, setAddonsByGuard] = useState({}) // 每卒加購:{ [guardId]: { polaroid, sign } }
-  const [capture, setCapture] = useState({ on: false, client: '', target: '', server: '' }) // 集體場「把朋友抓進去」
+  const [capture, setCapture] = useState({ on: false, client: '', target: '', server: '', guards: 2 }) // 集體場「把朋友抓進去」(guards=抓捕獄卒人數)
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
@@ -199,7 +245,7 @@ export default function PrisonSite() {
     const { data } = await supabase.rpc('session_named_slots', { p_session: sessionId })
     const byG = new Map()
     for (const r of data ?? []) {
-      if (!byG.has(r.guard_id)) byG.set(r.guard_id, { guard_id: r.guard_id, name: r.game_name || r.display_name || '獄卒', avatar: r.avatar_url || '', offersPolaroid: r.offers_polaroid !== false, slots: [] })
+      if (!byG.has(r.guard_id)) byG.set(r.guard_id, { guard_id: r.guard_id, name: r.game_name || r.display_name || '獄卒', avatar: r.avatar_url || '', offersPolaroid: r.offers_polaroid !== false, portraitOnly: !!r.portrait_only, slots: [] })
       // crunch:slot_index 為 null(監督,無時格);named:帶時格 index/label
       byG.get(r.guard_id).slots.push({ index: r.slot_index, label: r.slot_label ?? (r.slot_index != null ? `第 ${r.slot_index + 1} 節` : null), taken: r.taken })
     }
@@ -222,7 +268,7 @@ export default function PrisonSite() {
     setMPw(''); setMAuthBusy(false); setMAuthErr(null)
     setGName(''); setGPw(''); setGBusy(false); setGErr(null)
   }
-  const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', server: '' }) }
+  const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', server: '', guards: 2 }) }
   const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); resetModalAuth() }
   const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); setNamedGuards([]); resetModalAuth() }
 
@@ -230,18 +276,27 @@ export default function PrisonSite() {
   const buildPicks = () => {
     const requested_slots = [...reqSel].map(k => { const [g, s] = k.split('|'); return { g, s: s === '' ? null : Number(s) } })
     const addons = Object.entries(addonsByGuard)
-      .map(([g, a]) => ({ g, polaroid: a?.polaroid || 0, sign: a?.sign || 0 }))
-      .filter(a => a.polaroid > 0 || a.sign > 0)
+      .map(([g, a]) => ({ g, polaroid: a?.polaroid || 0, sign: !!a?.sign, portrait: a?.portrait || 0 }))
+      .filter(a => a.polaroid > 0 || a.portrait > 0)
     const cap = (sel?.kind === 'crunch' && capture.on && (capture.client.trim() || capture.target.trim() || capture.server.trim()))
-      ? { client: capture.client.trim(), target: capture.target.trim(), server: capture.server.trim() } : null
+      ? { client: capture.client.trim(), target: capture.target.trim(), server: capture.server.trim(), guards: Math.max(2, capture.guards || 2) } : null
     return { requested_slots, addons, capture: cap }
   }
   // 指名/監督多選 toggle;每卒加購數量設定(0..99)
   const toggleSel = (key) => setReqSel(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
-  const setAddon = (gid, field, v) => setAddonsByGuard(prev => {
-    const cur = prev[gid] || { polaroid: 0, sign: 0 }
+  const setPolaroid = (gid, v) => setAddonsByGuard(prev => {
+    const cur = prev[gid] || { polaroid: 0, sign: false, portrait: 0 }
     const nv = Math.max(0, Math.min(99, Number.isFinite(+v) ? Math.floor(+v) : 0))
-    return { ...prev, [gid]: { ...cur, [field]: nv } }
+    return { ...prev, [gid]: { ...cur, polaroid: nv } }
+  })
+  const setSign = (gid, val) => setAddonsByGuard(prev => {
+    const cur = prev[gid] || { polaroid: 0, sign: false, portrait: 0 }
+    return { ...prev, [gid]: { ...cur, sign: !!val } }
+  })
+  const setPortrait = (gid, v) => setAddonsByGuard(prev => {
+    const cur = prev[gid] || { polaroid: 0, sign: false, portrait: 0 }
+    const nv = Math.max(0, Math.min(99, Number.isFinite(+v) ? Math.floor(+v) : 0))
+    return { ...prev, [gid]: { ...cur, portrait: nv } }
   })
   // 即時報價(萬):依場次類型 + 指名/監督數 + 每卒加購;抓捕由委託人付,另列不計入本人總額
   const priceSummary = () => {
@@ -258,10 +313,12 @@ export default function PrisonSite() {
       if (sup > 0) add('指定監督', `10 × ${sup}`, PRICE.supervise * sup)
     }
     const pol = picks.addons.reduce((s, a) => s + a.polaroid, 0)
-    const sgn = picks.addons.reduce((s, a) => s + a.sign, 0)
+    const sgn = picks.addons.reduce((s, a) => s + (a.sign ? a.polaroid : 0), 0)
+    const por = picks.addons.reduce((s, a) => s + (a.portrait || 0), 0)
     if (pol > 0) add('拍立得（空白）', `5 × ${pol}`, PRICE.polaroid * pol)
-    if (sgn > 0) add('拍立得簽繪', `8 × ${sgn}`, PRICE.sign * sgn)
-    return { lines, total, capture: !!picks.capture }
+    if (sgn > 0) add('拍立得加購簽繪', `3 × ${sgn}`, PRICE.signAdd * sgn)
+    if (por > 0) add('肖像畫', `80 × ${por}`, PRICE.portrait * por)
+    return { lines, total, capture: picks.capture }
   }
 
   // modal 內帳號登入:成功後不換頁,直接刷新 user / 資料,留在同一個 modal 繼續報名流程。
@@ -451,46 +508,10 @@ export default function PrisonSite() {
           <h2 className="title reveal">挖坑一時爽，<br />一直挖坑一直爽。</h2>
           <p className="subline reveal">人總要為自己的挖坑負責任。死線監獄是一間以「番茄鐘」執行的趕稿收容所。入獄後定時休息，互相督促，並由帥氣的獄卒鼓勵你趕稿，也有其他犯人和你努力，你能感受到積極向上的力量！不論糖果或者鞭子，只要能達到目標，獄卒們都不會吝嗇給予。</p>
           <p className="place reveal">服刑地點：<b>巴哈姆特 - 薰衣草苗園 - 1區 - 18號</b></p>
-          <div className="rules reveal">
-            {RULES.map(([n, h, p]) => (
-              <div className="rule" key={n}><span className="pin" /><div className="rn">{n}</div><h3>{h}</h3><p>{p}</p></div>
-            ))}
-          </div>
-          <div className="rhythm reveal">
-            <div className="lbl">服刑節奏 · POMODORO CYCLE</div>
-            <div className="bars">
-              <i className="focus" /><i className="rest" /><i className="focus" /><i className="rest" />
-              <i className="focus" /><i className="rest" /><i className="focus" /><i className="long" />
-            </div>
-            <div className="legend">
-              <span><i style={{ background: 'var(--hazard)' }} />專注 25 分</span>
-              <span><i style={{ background: 'var(--steel)' }} />放風 5 分</span>
-              <span><i style={{ background: 'var(--alarm)' }} />長休 15 分（每 4 輪）</span>
-            </div>
-          </div>
-
-          {/* 指名互動 / 自由入場 服刑須知(沿用集體趕稿三步卡片 + 節奏條版式) */}
-          {SERVING_MORE.map(g => (
-            <div className="serving-set reveal" key={g.kind}>
-              <div className="eyebrow serving-sub">{g.kind} <span className="blk">{g.marker}</span></div>
-              <div className="rules">
-                {g.steps.map(([n, h, p]) => (
-                  <div className="rule" key={n}><span className="pin" /><div className="rn">{n}</div><h3>{h}</h3><p>{p}</p></div>
-                ))}
-              </div>
-              <div className="rhythm">
-                <div className="lbl">{g.slotLbl}</div>
-                {g.rhythm === 'slots' ? (
-                  <div className="bars">
-                    <i className="slot" /><i className="slot" /><i className="slot" /><i className="slot" /><i className="slot-add" />
-                  </div>
-                ) : (
-                  <div className="bars"><i className="flow"><em>自由服刑・無限循環</em></i></div>
-                )}
-                <div className="legend"><span>{g.slotNote}</span></div>
-              </div>
-            </div>
-          ))}
+          {/* 場次營運類型輪播:每場只有一種屬性(非一場多種) */}
+          <h3 className="serving-title reveal">場次營運類型</h3>
+          <p className="subline reveal" style={{ marginBottom: 20 }}>每一場只會是<b>其中一種</b>玩法——不是同一場混合多種，而是<b>不同梯次屬性不同</b>。入監前先認識這三種場次（下方自動輪播，可左右切換）。</p>
+          <ServingTypesCarousel types={SERVING_TYPES} />
         </section>
 
         <div className="perforation" />
@@ -539,10 +560,10 @@ export default function PrisonSite() {
                       <div className="it-main">
                         <span className="it-name">{it.n}</span>
                         <span className={`it-price${it.hot ? ' hot' : ''}${it.p === '免費' ? ' free' : ''}`}>
-                          <b>{it.p}</b>{it.u && <em>{it.u}</em>}
+                          {it.was && <s className="it-was">{it.was}</s>}<b>{it.p}</b>{it.u && <em>{it.u}</em>}
                         </span>
                       </div>
-                      {it.note && <div className="it-note">備註：{it.note}</div>}
+                      {it.note && <div className="it-note">{it.note}</div>}
                     </li>
                   ))}
                 </ul>
@@ -559,12 +580,13 @@ export default function PrisonSite() {
           <h2 className="title reveal">【死線監獄・預約須知】</h2>
           <p className="subline reveal">報名場次前，請先詳閱以下須知。</p>
           <div className="notice reveal">
-            {BOOKING_NOTICE.map(([no, title, body]) => (
+            {BOOKING_NOTICE.map(([no, title, body, link]) => (
               <div className="notice-item" key={no}>
                 <div className="notice-no">{no}</div>
                 <div className="notice-body">
                   <h3>{title}</h3>
                   <p>{body}</p>
+                  {link && <a className="notice-dc" href={link} target="_blank" rel="noopener noreferrer">加入官方 Discord ↗</a>}
                 </div>
               </div>
             ))}
@@ -652,16 +674,28 @@ export default function PrisonSite() {
                       不指定（由典獄長安排）
                     </button>
                     {namedGuards.map(g => {
-                      const ad = addonsByGuard[g.guard_id] || { polaroid: 0, sign: 0 }
+                      const ad = addonsByGuard[g.guard_id] || { polaroid: 0, sign: false, portrait: 0 }
                       return (
                         <div className="m-guardrow" key={g.guard_id}>
                           <div className="m-guard-id">
                             {g.avatar
                               ? <img className="m-guard-av" src={g.avatar} alt="" />
                               : <span className="m-guard-av none">{g.name[0]}</span>}
-                            <span className="m-guard-nm">{g.name}</span>
+                            <span className="m-guard-nm">{g.name}{g.portraitOnly ? ' · 肖像畫' : ''}</span>
                           </div>
                           <div className="m-guard-pick">
+                            {g.portraitOnly ? (
+                              <div className="m-addon-steps">
+                                <div className="m-astep">
+                                  <span className="m-astep-lbl">肖像畫</span>
+                                  <button type="button" className="m-step-btn" disabled={ad.portrait <= 0} onClick={() => setPortrait(g.guard_id, ad.portrait - 1)}>−</button>
+                                  <input className="m-step-num" type="number" min="0" max="99" value={ad.portrait}
+                                    onChange={e => setPortrait(g.guard_id, e.target.value)} onFocus={e => e.target.select()} />
+                                  <button type="button" className="m-step-btn" onClick={() => setPortrait(g.guard_id, ad.portrait + 1)}>＋</button>
+                                </div>
+                                <span className="m-sign-txt">80 萬／張・限本卒繪製（不接指名／拍立得／監督）</span>
+                              </div>
+                            ) : (<>
                             <div className="m-slots">
                               {sel.kind === 'crunch' ? (() => {
                                 const s0 = g.slots[0] || { taken: false }
@@ -691,12 +725,23 @@ export default function PrisonSite() {
                             </div>
                             {g.offersPolaroid ? (
                               <div className="m-addon-steps">
-                                <Stepper label="拍立得" value={ad.polaroid} onChange={v => setAddon(g.guard_id, 'polaroid', v)} />
-                                <Stepper label="簽繪" value={ad.sign} onChange={v => setAddon(g.guard_id, 'sign', v)} />
+                                <div className="m-astep">
+                                  <span className="m-astep-lbl">拍立得</span>
+                                  <button type="button" className="m-step-btn" disabled={ad.polaroid <= 0} onClick={() => setPolaroid(g.guard_id, ad.polaroid - 1)}>−</button>
+                                  <input className="m-step-num" type="number" min="0" max="99" value={ad.polaroid}
+                                    onChange={e => setPolaroid(g.guard_id, e.target.value)} onFocus={e => e.target.select()} />
+                                  <button type="button" className="m-step-btn" onClick={() => setPolaroid(g.guard_id, ad.polaroid + 1)}>＋</button>
+                                </div>
+                                <label className="m-astep m-sign">
+                                  <span className="m-astep-lbl">簽繪</span>
+                                  <input type="checkbox" checked={!!ad.sign} disabled={ad.polaroid <= 0} onChange={e => setSign(g.guard_id, e.target.checked)} />
+                                  <span className="m-sign-txt">全部加購簽繪（每張 +3）</span>
+                                </label>
                               </div>
                             ) : (
                               <span className="m-slot-empty">本獄卒不提供拍立得加購</span>
                             )}
+                            </>)}
                           </div>
                         </div>
                       )
@@ -718,7 +763,17 @@ export default function PrisonSite() {
                             <input className="m-input" value={capture.target} onChange={e => setCapture({ ...capture, target: e.target.value })} /></div>
                           <div className="m-field"><span className="m-field-lbl">伺服器</span>
                             <input className="m-input" value={capture.server} onChange={e => setCapture({ ...capture, server: e.target.value })} /></div>
-                          <p className="m-note">委託人為主要聯絡人，需要加入 DC 並與典獄長預約先行繳交費用。</p>
+                          <div className="m-field">
+                            <span className="m-field-lbl">抓捕獄卒人數</span>
+                            <div className="m-astep" style={{ paddingTop: 4 }}>
+                              <button type="button" className="m-step-btn" disabled={capture.guards <= 2} onClick={() => setCapture({ ...capture, guards: Math.max(2, (capture.guards || 2) - 1) })}>−</button>
+                              <input className="m-step-num" type="number" min="2" max={Math.max(2, namedGuards.length)} value={capture.guards}
+                                onChange={e => setCapture({ ...capture, guards: Math.max(2, Math.min(Math.max(2, namedGuards.length), parseInt(e.target.value) || 2)) })} onFocus={e => e.target.select()} />
+                              <button type="button" className="m-step-btn" disabled={capture.guards >= Math.max(2, namedGuards.length)} onClick={() => setCapture({ ...capture, guards: Math.min(Math.max(2, namedGuards.length), (capture.guards || 2) + 1) })}>＋</button>
+                              <span className="m-sign-txt">最少 2、最多 {Math.max(2, namedGuards.length)}（當日上班）</span>
+                            </div>
+                          </div>
+                          <p className="m-note">1. 無法指定抓捕負責獄卒。2. 可選擇抓捕獄卒總人數（最少 2、最多當日上班人數）。委託人為主要聯絡人，需要加入 DC 並與典獄長預約先行繳交費用。</p>
                         </div>
                       )}
                     </div>
@@ -732,7 +787,7 @@ export default function PrisonSite() {
                         {sum.lines.map(([lbl, det, amt], i) => (
                           <div className="m-total-row" key={i}><span>{lbl}{det ? ` · ${det}` : ''}</span><b>{amt} 萬</b></div>
                         ))}
-                        {sum.capture && <div className="m-total-row"><span>監獄外抓捕（委託人另付）</span><b>30 萬起</b></div>}
+                        {sum.capture && <div className="m-total-row"><span>監獄外抓捕 · {sum.capture.guards} 位（委託人另付）</span><b>{PRICE.captureBase + PRICE.captureAdd * (sum.capture.guards - 2)} 萬起</b></div>}
                         <div className="m-total-row sum"><span>預估總額</span><b>{sum.total} 萬</b></div>
                       </div>
                     )

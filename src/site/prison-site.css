@@ -47,10 +47,7 @@
 .dp-site .hazard{height:14px; background:repeating-linear-gradient(45deg,var(--hazard) 0 22px,#0a0a0a 22px 44px)}
 .dp-site .hazard.thin{height:8px}
 /* 穿孔虛線分隔(區段間較輕的節奏);左右各一圓孔 */
-.dp-site .perforation{height:0; max-width:1120px; margin:0 auto; border-top:1px dashed var(--steel); position:relative}
-.dp-site .perforation::before,.dp-site .perforation::after{content:""; position:absolute; top:-5px; width:8px; height:8px; border:1px solid var(--steel); background:var(--concrete-0); border-radius:50%}
-.dp-site .perforation::before{left:0}
-.dp-site .perforation::after{right:0}
+.dp-site .perforation{height:0; max-width:1120px; margin:0 auto; border-top:1px solid var(--line)}
 
 /* 導覽列 */
 .dp-site nav{
@@ -158,6 +155,26 @@
 /* 指名/自由 服刑須知:子場次(沿用 rules/rhythm) */
 .dp-site .serving-set{margin-top:46px}
 .dp-site .serving-sub{margin-bottom:16px}
+/* 場次營運類型輪播 */
+.dp-site .serving-title{font-family:var(--cjk); font-weight:900; font-size:clamp(24px,3.5vw,34px); letter-spacing:2px; margin:40px 0 8px}
+.dp-site .serving-carousel{border:1px solid var(--line); background:var(--panel); padding:20px 20px 16px}
+.dp-site .sc-tabs{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px}
+.dp-site .sc-tab{font-family:var(--cjk); font-weight:700; font-size:15px; letter-spacing:1px; padding:9px 20px; background:var(--concrete-2); border:1px solid var(--line); color:var(--dim); cursor:pointer; transition:background .2s, border-color .2s, color .2s}
+.dp-site .sc-tab:hover{border-color:var(--steel-2); color:var(--text)}
+.dp-site .sc-tab.on{background:var(--hazard); border-color:var(--hazard); color:#0a0a0a}
+.dp-site .sc-viewport{overflow:hidden; cursor:grab; user-select:none}
+.dp-site .sc-viewport:active{cursor:grabbing}
+.dp-site .sc-track{display:flex; transition:transform .5s cubic-bezier(.4,0,.2,1)}
+.dp-site .sc-slide{flex:0 0 100%; min-width:0; padding:2px}
+.dp-site .sc-slide .serving-sub{margin-bottom:14px}
+.dp-site .sc-slide .rhythm{margin-top:26px}
+/* 控制列:箭頭 + 圓點,置於輪播下方,不壓到內容 */
+.dp-site .sc-controls{display:flex; align-items:center; justify-content:center; gap:18px; margin-top:16px}
+.dp-site .sc-arrow{width:34px; height:34px; flex:0 0 auto; display:flex; align-items:center; justify-content:center; background:var(--concrete-2); border:1px solid var(--line); color:var(--text); font-size:20px; line-height:1; cursor:pointer; transition:background .2s, color .2s, border-color .2s}
+.dp-site .sc-arrow:hover{background:var(--hazard); color:#0a0a0a; border-color:var(--hazard)}
+.dp-site .sc-dots{display:flex; gap:8px}
+.dp-site .sc-dot{width:9px; height:9px; border-radius:50%; background:var(--steel); border:none; cursor:pointer; padding:0; transition:background .2s, transform .2s}
+.dp-site .sc-dot.on{background:var(--hazard); transform:scale(1.25)}
 .dp-site .bars .slot{background:var(--hazard); flex:1}
 .dp-site .bars .slot-add{flex:1; background:transparent; border:1px dashed var(--hazard); box-sizing:border-box}
 .dp-site .bars .flow{flex:1; background:var(--hazard); display:flex; align-items:center; justify-content:center}
@@ -227,7 +244,7 @@
 .dp-site .stype-card{position:relative; background:var(--panel); display:grid; grid-template-rows:subgrid; grid-row:span 5; row-gap:0; padding:8px 0 24px; transition:background .25s}
 .dp-site .stype-card:hover{background:var(--concrete-3)}
 /* 警示斜紋卡頭(絕對定位,不佔 grid 列) */
-.dp-site .stype-card::before{content:""; position:absolute; top:0; left:0; right:0; height:8px; background:repeating-linear-gradient(45deg,var(--hazard) 0 14px,#0a0a0a 14px 28px)}
+.dp-site .stype-card::before{content:""; position:absolute; top:0; left:0; right:0; height:3px; background:var(--hazard)}
 .dp-site .stype-head{display:flex; align-items:center; gap:14px; padding:24px 24px 4px}
 .dp-site .stype-head .stype-code{font-family:var(--stamp); font-size:32px; color:var(--steel); line-height:1}
 .dp-site .stype-name h4{font-family:var(--cjk); font-weight:900; font-size:23px; letter-spacing:1px; color:var(--text); line-height:1.1}
@@ -237,7 +254,7 @@
 .dp-site .stype-intro{padding:0 24px; font-family:var(--cjk); font-size:14px; line-height:1.8; color:var(--dim)}
 /* 場次品項面板頂:警示斜紋裝飾 */
 .dp-site .stype-seclbl.items{position:relative; padding-top:22px}
-.dp-site .stype-seclbl.items::before{content:""; position:absolute; top:0; left:24px; right:24px; height:6px; background:repeating-linear-gradient(45deg,var(--hazard) 0 12px,#0a0a0a 12px 24px)}
+.dp-site .stype-seclbl.items::before{content:""; position:absolute; top:0; left:24px; right:24px; height:1px; background:var(--line)}
 /* 品項:主行(品名左／價格右)+ 備註獨立一行 */
 .dp-site .stype-items{list-style:none; margin:0; padding:0 24px}
 .dp-site .stype-items li{padding:10px 0; border-bottom:1px dashed var(--line)}
@@ -247,6 +264,7 @@
 .dp-site .stype-items .it-price{font-family:var(--mono); white-space:nowrap; text-align:right; flex:0 0 auto}
 .dp-site .stype-items .it-price b{font-size:15px; font-weight:700; color:var(--text); letter-spacing:.5px}
 .dp-site .stype-items .it-price em{font-style:normal; font-size:11px; color:var(--faint); margin-left:3px}
+.dp-site .stype-items .it-price .it-was{font-size:12px; color:var(--faint); text-decoration:line-through; margin-right:6px}
 .dp-site .stype-items .it-price.hot b{color:var(--hazard)}
 .dp-site .stype-items .it-price.free b{color:var(--dim); font-weight:400}
 .dp-site .stype-items .it-note{margin-top:4px; font-family:var(--cjk); font-size:12px; color:var(--faint); line-height:1.6; text-align:left}
@@ -258,6 +276,8 @@
 .dp-site .notice-no{font-family:var(--stamp); font-size:28px; color:var(--steel); line-height:1.1; border-right:2px solid var(--hazard); padding-right:18px; min-width:36px; text-align:center}
 .dp-site .notice-body h3{font-family:var(--cjk); font-weight:700; font-size:19px; letter-spacing:1px; color:var(--text); margin-bottom:10px}
 .dp-site .notice-body p{font-family:var(--cjk); font-size:14px; line-height:1.85; color:var(--dim)}
+.dp-site .notice-dc{display:inline-flex; align-items:center; margin-top:10px; padding:8px 18px; font-family:var(--cond); font-size:15px; letter-spacing:1px; background:var(--hazard); color:#0a0a0a; cursor:pointer; transition:background .2s}
+.dp-site .notice-dc:hover{background:#fff}
 @media(max-width:640px){
   .dp-site .notice-item{grid-template-columns:1fr; gap:12px; padding:20px 20px}
   .dp-site .notice-no{border-right:none; border-bottom:2px solid var(--hazard); padding:0 0 8px; min-width:0; text-align:left; width:fit-content}
@@ -418,11 +438,15 @@
 .dp-site .m-addon-row.sub.off{opacity:.45; cursor:not-allowed}
 .dp-site .m-addon-row.sub.off input{cursor:not-allowed}
 
-/* 指名/監督 + 每卒加購 stepper */
+/* 指名/監督 + 每卒加購(拍立得數量 stepper + 簽繪單一勾選,標籤對齊) */
 .dp-site .m-guard-pick{flex:1; min-width:0; display:flex; flex-direction:column; gap:8px}
-.dp-site .m-addon-steps{display:flex; flex-wrap:wrap; gap:14px}
-.dp-site .m-step{display:flex; align-items:center; gap:5px}
-.dp-site .m-step-lbl{font-family:var(--cjk); font-size:12px; color:var(--dim)}
+.dp-site .m-addon-steps{display:flex; flex-direction:column; align-items:flex-start; gap:8px}
+.dp-site .m-astep{display:flex; align-items:center; gap:6px; margin:0}
+.dp-site .m-astep-lbl{flex:0 0 48px; font-family:var(--cjk); font-size:12px; color:var(--dim)}
+.dp-site .m-sign{cursor:pointer}
+.dp-site .m-sign input{width:16px; height:16px; accent-color:var(--hazard); cursor:pointer; margin:0}
+.dp-site .m-sign input:disabled{cursor:not-allowed}
+.dp-site .m-sign-txt{font-family:var(--cjk); font-size:12px; color:var(--dim)}
 .dp-site .m-step-btn{width:24px; height:24px; display:flex; align-items:center; justify-content:center; background:var(--panel); border:1px solid var(--line); color:var(--text); cursor:pointer; font-size:15px; line-height:1; padding:0}
 .dp-site .m-step-btn:hover:not(:disabled){border-color:var(--steel-2)}
 .dp-site .m-step-btn:disabled{opacity:.4; cursor:not-allowed}

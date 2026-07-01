@@ -4,7 +4,6 @@ import MessageBanner from '../MessageBanner'
 import OverviewTab from './OverviewTab'
 import SessionTab from './SessionTab'
 import SessionsOverviewTab from './SessionsOverviewTab'
-import SalarySettlement from './SalarySettlement'
 import EditMemberModal from './EditMemberModal'
 import ProfileCard from '../ProfileCard'
 import { normalizeStatus } from './constants'
@@ -24,7 +23,7 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
   // booking/booking_paused 階段的操作在「場次總覽」分頁,不在此控台出現。
   async function load() {
     setLoading(true)
-    const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, discord_account, avatar_url, role, account_type')
+    const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, discord_account, avatar_url, role, account_type, offers_polaroid, portrait_only')
     const { data: sess } = await supabase.from('sessions').select('*').order('created_at', { ascending: false })
     const live = (sess ?? []).filter(s => ['intake', 'serving'].includes(normalizeStatus(s)))
     setInmates(all ?? [])
@@ -56,7 +55,6 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
         <button className={wtab === 'overview' ? 'on' : ''} onClick={() => setWtab('overview')}>名單總覽</button>
         {isWarden && <button className={wtab === 'sessions' ? 'on' : ''} onClick={() => setWtab('sessions')}>場次總覽</button>}
         <button className={wtab === 'session' ? 'on' : ''} onClick={() => setWtab('session')}>進行中場次</button>
-        {isWarden && <button className={wtab === 'settlement' ? 'on' : ''} onClick={() => setWtab('settlement')}>薪資結算</button>}
       </div>
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
@@ -73,9 +71,6 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
         <OverviewTab inmates={inmates}
           loading={loading} isWarden={isWarden} onEditMember={openEditMember}
           setMsg={setMsg} reloadShared={load} />
-      )}
-      {wtab === 'settlement' && isWarden && (
-        <SalarySettlement currentSession={currentSession} setMsg={setMsg} />
       )}
 
       {isWarden && editingMember && (

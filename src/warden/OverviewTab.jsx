@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '../supabaseClient'
 import { ROLE_LABEL } from './constants'
 import { CreateAccountSection, RenameAccountModal, IssueCredentialsModal } from './AccountAdmin'
 
@@ -12,6 +13,7 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
   const [sortDir, setSortDir] = useState('asc')           // 排序:asc=編號舊→新(預設) / desc=新→舊
   const [renameTarget, setRenameTarget] = useState(null)  // 代開/核發帳號:改帳號名對象
   const [issueTarget, setIssueTarget] = useState(null)    // 核發帳密對象(首發或重發蓋過)
+  const [ov, setOv] = useState({})                        // 樂觀覆寫:id -> { portrait_only, offers_polaroid }(避免整頁 reloadShared)
 
   // 已配號清單:前端即時過濾(暱稱 / 編號含補零 4 位)+ 依編號排序
   const ql = q.trim().toLowerCase()
@@ -30,6 +32,25 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
   const staff = shownInmates.filter(p => p.role === 'guard' || p.role === 'warden')
   const members = shownInmates.filter(p => p.role !== 'guard' && p.role !== 'warden')
 
+  // 全域設定:是否提供加購拍立得 / 肖像畫負責。純樂觀本地更新,不 reloadShared(避免整頁刷新);失敗才回滾。
+  const nm = p => p.game_name ?? p.display_name ?? ''
+  const polOf = p => ov[p.id]?.offers_polaroid ?? (p.offers_polaroid !== false)
+  const porOf = p => ov[p.id]?.portrait_only ?? !!p.portrait_only
+  async function toggleOffersPolaroid(p) {
+    const cur = polOf(p), val = !cur
+    setOv(o => ({ ...o, [p.id]: { ...o[p.id], offers_polaroid: val } }))
+    const { error } = await supabase.from('profiles').update({ offers_polaroid: val }).eq('id', p.id)
+    if (error) { setOv(o => ({ ...o, [p.id]: { ...o[p.id], offers_polaroid: cur } })); setMsg('更新失敗：' + error.message); return }
+    setMsg(val ? `已開放 ${nm(p)} 加購拍立得` : `已關閉 ${nm(p)} 加購拍立得`)
+  }
+  async function togglePortraitOnly(p) {
+    const cur = porOf(p), val = !cur
+    setOv(o => ({ ...o, [p.id]: { ...o[p.id], portrait_only: val } }))
+    const { error } = await supabase.from('profiles').update({ portrait_only: val }).eq('id', p.id)
+    if (error) { setOv(o => ({ ...o, [p.id]: { ...o[p.id], portrait_only: cur } })); setMsg('更新失敗：' + error.message); return }
+    setMsg(val ? `${nm(p)} 設為肖像畫負責` : `${nm(p)} 取消肖像畫負責`)
+  }
+
   // 已配號卡片(獄卒區 / 犯人區):頭貼 + 暱稱 + 編號 + 角色標籤 + 編輯
   const MemberCard = (p) => {
     const roleClass = p.role === 'warden' ? 'warden' : p.role === 'guard' ? 'guard' : 'member'
@@ -43,6 +64,18 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
         <div className="ov-nm">{name}</div>
         <div className="ov-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
         <span className={`role-tag ${roleClass}`}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
+        {isWarden && isStaffCard && (
+          <label className="ov-polaroid">
+            <input type="checkbox" checked={porOf(p)} onChange={() => togglePortraitOnly(p)} />
+            肖像畫負責
+          </label>
+        )}
+        {isWarden && isStaffCard && !porOf(p) && (
+          <label className="ov-polaroid">
+            <input type="checkbox" checked={polOf(p)} onChange={() => toggleOffersPolaroid(p)} />
+            可加購拍立得
+          </label>
+        )}
         {isWarden && (
           <div className="ov-acts">
             <button className="btn-sm" onClick={() => onEditMember(p)}>編輯</button>

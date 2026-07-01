@@ -1,216 +1,153 @@
-import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import { SESSION_KIND_LABEL, DEFAULT_SESSION_KIND } from '../sessionKind'
 import { calcSettlement, money } from './salaryRules'
 
-// 場次薪資結算(僅典獄長,唯讀):針對單一 session 一鍵計算每位獄卒薪資與監獄收支。
-// 此版本只計算與顯示,不寫入任何薪資表。金額一律以「萬」為單位(與站上金額顯示慣例一致)。
-// 規則集中在 ./salaryRules.js 的 calcSettlement,方便日後改價。
-//
-// 資料來源(皆「分開查詢再於 JS 合併」,不用巢狀 relation):
-//   出勤獄卒 ← session_inmates(role_in_session='guard')+ profiles
-//   加購紀錄 ← purchase_addons(addon_type/target_guard_id/with_signature/amount)  ※表可能尚未建立,防呆:讀不到以空陣列計並示警
-//   指名時段數 ← bookings(requested_guard_id + requested_slot,未取消;每筆=一個 30 分時格)
-//   抓捕參與 ← 介面勾選(可多選),不來自資料表
+// 場次薪資結算(僅典獄長,唯讀):讀 pos_order_items,依 salaryRules 逐筆算每位獄卒薪資與監獄收支。
+// 只計算顯示,不寫入。金額「萬」整數。已移除 purchase_addons 與監獄外抓捕。
+// 資料來源(分開查詢再 JS 合併):上班獄卒 ← session_guards + profiles;品項 ← pos_order_items。
 
-export default function SalarySettlement({ currentSession }) {
+// 金額欄:固定寬右對齊(不同位數對齊成一直排)
+const Amt = ({ v, neg = false, strong = false }) => (
+  <span className={`pay-amt${neg ? ' neg' : ''}${strong ? ' strong' : ''}`}>{money(v)}</span>
+)
+
+export default function SalarySettlement({ currentSession, embedded = false }) {
   const [allSessions, setAllSessions] = useState([])
   const [sid, setSid] = useState(currentSession || '')
-  const [guards, setGuards] = useState([])          // [{id, name}]
-  const [addons, setAddons] = useState([])          // purchase_addons 列
-  const [slotsByGuard, setSlotsByGuard] = useState({}) // guard_id -> 指名時段數
-  const [captureSet, setCaptureSet] = useState(new Set()) // 勾選參與抓捕的 guard_id
-  const [addonWarn, setAddonWarn] = useState(false) // purchase_addons 讀取失敗/未建立
+  const [guards, setGuards] = useState([])   // [{id, name}]
+  const [items, setItems] = useState([])     // pos_order_items
   const [loading, setLoading] = useState(false)
-  const [expanded, setExpanded] = useState(new Set())
 
-  // 場次清單(全部場次,可結算已結束場)。預設帶入當前場次。
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('sessions')
-        .select('id, title, session_date, kind, status').order('created_at', { ascending: false })
+      const { data } = await supabase.from('sessions').select('id, title, session_date, kind').order('created_at', { ascending: false })
       setAllSessions(data ?? [])
       setSid(prev => prev || currentSession || (data?.[0]?.id ?? ''))
     })()
   }, [currentSession])
 
+  // 內嵌於進行中場次時,永遠跟隨當前場次(不顯示自己的選單)
+  useEffect(() => { if (embedded && currentSession) setSid(currentSession) }, [embedded, currentSession])
+
   const sessionObj = allSessions.find(s => s.id === sid)
   const kind = sessionObj?.kind || DEFAULT_SESSION_KIND
 
   async function loadSession(id) {
-    if (!id) { setGuards([]); setAddons([]); setSlotsByGuard({}); return }
+    if (!id) { setGuards([]); setItems([]); return }
     setLoading(true)
-    // 1) 出勤獄卒:session_inmates(guard)→ profiles(分開查再合併)
-    const { data: si } = await supabase.from('session_inmates')
-      .select('member_id, role_in_session').eq('session_id', id).eq('role_in_session', 'guard')
-    const gids = (si ?? []).map(r => r.member_id)
+    const [{ data: sg }, { data: it }, { data: ords }] = await Promise.all([
+      supabase.from('session_guards').select('guard_id').eq('session_id', id),
+      supabase.from('pos_order_items').select('order_id, item_type, person_name, target_guard_id, qty, with_signature, amount, visitor_name, slot_times, supervise').eq('session_id', id),
+      supabase.from('pos_orders').select('id, customer_name').eq('session_id', id),
+    ])
+    // 每筆品項附上本單犯人(_customer):肖像/探監用 person_name,拍立得/指名用訂單的 customer_name
+    const custById = {}; for (const o of ords ?? []) custById[o.id] = o.customer_name
+    const itemsC = (it ?? []).map(x => ({ ...x, _customer: x.person_name || custById[x.order_id] || null }))
+    // 上班獄卒 ∪ 有 POS 品項的獄卒(避免排班變動後漏算)
+    const gids = [...new Set([...(sg ?? []).map(r => r.guard_id), ...itemsC.map(r => r.target_guard_id).filter(Boolean)])]
     let gList = []
     if (gids.length) {
-      const { data: profs } = await supabase.from('profiles')
-        .select('id, game_name, display_name').in('id', gids)
+      const { data: profs } = await supabase.from('profiles').select('id, game_name, display_name, inmate_no').in('id', gids)
       const byId = {}; for (const p of profs ?? []) byId[p.id] = p
-      gList = gids.map(gid => ({ id: gid, name: byId[gid]?.game_name || byId[gid]?.display_name || '獄卒' }))
+      gList = gids.map(g => ({ id: g, name: byId[g]?.game_name || byId[g]?.display_name || '獄卒', inmate_no: byId[g]?.inmate_no ?? 1e9 }))
+        .sort((a, b) => a.inmate_no - b.inmate_no)   // 獄卒依犯人編號排序
     }
     setGuards(gList)
-
-    // 2) 加購紀錄:purchase_addons(防呆:表未建立/讀取失敗 → 空陣列並示警)
-    const { data: ad, error: adErr } = await supabase.from('purchase_addons')
-      .select('addon_type, target_guard_id, with_signature, amount, inmate_id').eq('session_id', id)
-    if (adErr) { setAddons([]); setAddonWarn(true) } else { setAddons(ad ?? []); setAddonWarn(false) }
-
-    // 3) 指名時段數:bookings.requested_slots jsonb(未取消;每個 s!=null 的元素=一個 30 分指名時格)。
-    //    crunch 監督為 s=null,不計入指名時段。
-    const { data: bk } = await supabase.from('bookings')
-      .select('requested_slots, status').eq('session_id', id)
-    const slots = {}
-    for (const b of bk ?? []) {
-      if (b.status === 'cancelled') continue
-      for (const p of (Array.isArray(b.requested_slots) ? b.requested_slots : [])) {
-        if (!p || p.g == null || p.s == null) continue
-        slots[p.g] = (slots[p.g] || 0) + 1
-      }
-    }
-    setSlotsByGuard(slots)
-
-    setCaptureSet(new Set())   // 換場清空抓捕勾選
-    setExpanded(new Set())
+    setItems(itemsC)
     setLoading(false)
   }
   useEffect(() => { loadSession(sid) }, [sid])
 
-  const result = useMemo(
-    () => calcSettlement({ kind, guards, addons, slotsByGuard, captureSet }),
-    [kind, guards, addons, slotsByGuard, captureSet],
-  )
-
-  const isCrunch = kind === 'crunch'
+  const result = useMemo(() => calcSettlement({ kind, guards, items }), [kind, guards, items])
   const isFree = kind === 'free'
 
-  function toggleCapture(gid) {
-    setCaptureSet(prev => { const n = new Set(prev); n.has(gid) ? n.delete(gid) : n.add(gid); return n })
-  }
-  function toggleExpand(gid) {
-    setExpanded(prev => { const n = new Set(prev); n.has(gid) ? n.delete(gid) : n.add(gid); return n })
-  }
-
   return (
-    <div>
-      {/* 選場 + 重新計算 */}
-      <div className="card-panel" style={{ marginBottom: 16 }}>
-        <div className="head">
-          <h2>場次薪資結算</h2>
-          <span className="count">只計算顯示 · 不寫入</span>
-        </div>
-        <div className="body">
-          <div className="settle-tools">
-            <label>結算場次
-              <select className="sel" value={sid} onChange={e => setSid(e.target.value)} style={{ minWidth: 220 }}>
-                <option value="">— 選擇場次 —</option>
-                {allSessions.map(s => (
-                  <option key={s.id} value={s.id}>{s.title}{s.session_date ? `（${s.session_date}）` : ''}</option>
-                ))}
-              </select>
-            </label>
-            <span className="tag tag-pill" style={{ background: 'rgba(180,120,255,.14)', color: '#c2a3ff' }}>
-              {SESSION_KIND_LABEL[kind] ?? kind}</span>
-            <span className="spacer" style={{ flex: 1 }} />
-            <button className="btn-sm btn-pri" onClick={() => loadSession(sid)} disabled={!sid || loading}>
-              {loading ? '計算中…' : '↻ 重新計算'}
-            </button>
+    <div className="settle-wrap">
+      {!embedded && (
+        <div className="card-panel" style={{ marginBottom: 16 }}>
+          <div className="head"><h2>場次薪資結算</h2><span className="count">只計算顯示 · 讀 POS</span></div>
+          <div className="body">
+            <div className="settle-tools">
+              <label>結算場次
+                <select className="sel" value={sid} onChange={e => setSid(e.target.value)} style={{ minWidth: 220 }}>
+                  <option value="">— 選擇場次 —</option>
+                  {allSessions.map(s => <option key={s.id} value={s.id}>{s.title}{s.session_date ? `（${s.session_date}）` : ''}</option>)}
+                </select>
+              </label>
+              <span className="tag tag-pill" style={{ background: 'rgba(180,120,255,.14)', color: '#c2a3ff' }}>{SESSION_KIND_LABEL[kind] ?? kind}</span>
+              <span className="spacer" style={{ flex: 1 }} />
+              <button className="btn-sm btn-pri" onClick={() => loadSession(sid)} disabled={!sid || loading}>{loading ? '計算中…' : '↻ 重新計算'}</button>
+            </div>
           </div>
-          {addonWarn && (
-            <p className="settle-warn">⚠ 讀不到 <code>purchase_addons</code>（資料表尚未建立或無讀取權限）。拍立得／肖像畫／監督／探監／入場／指名費等加購數字一律以 0 計，待建表後即會反映。</p>
-          )}
         </div>
-      </div>
+      )}
 
-      {!sid ? <p className="empty">請先選擇要結算的場次</p>
+      {!sid ? (embedded ? null : <p className="empty">請先選擇場次</p>)
         : isFree ? <p className="empty">自由入場場無獄卒管理，不進行薪資結算。</p>
           : (<>
-            {/* 抓捕參與(集體場才需要;指名場公式不含抓捕) */}
-            {isCrunch && (
-              <div className="card-panel" style={{ marginBottom: 16 }}>
-                <div className="head"><h2>抓捕劇場參與</h2><span className="count">15 萬／人（監獄 10・本人 5）</span></div>
-                <div className="body">
-                  {guards.length === 0 ? <p className="empty">本場沒有出勤獄卒</p> : (
-                    <div className="settle-capture">
-                      {guards.map(g => (
-                        <label key={g.id} className={`cap-chip${captureSet.has(g.id) ? ' on' : ''}`}>
-                          <input type="checkbox" checked={captureSet.has(g.id)} onChange={() => toggleCapture(g.id)} />
-                          {g.name}
-                        </label>
+            {/* 整場總覽(4 數字速覽) */}
+            <div className="settle-overview">
+              <div className="ov-cell"><span className="ov-lbl">當日營業額</span><span className="ov-num">{money(result.revenue)}</span></div>
+              <div className="ov-cell"><span className="ov-lbl">獄卒基礎薪資</span><span className="ov-num">{money(result.directTotal)}</span></div>
+              <div className="ov-cell"><span className="ov-lbl">獎金（均分獎金池）</span><span className="ov-num">{money(result.pool)}</span></div>
+              <div className="ov-cell hl"><span className="ov-lbl">監獄留存</span><span className={`ov-num${result.retain < 0 ? ' neg' : ''}`}>{money(result.retain)}</span></div>
+            </div>
+
+            {/* A. 人員薪資卡(網格並排) */}
+            <div className="pay-sec-lbl">獄卒薪資明細<span className="ln" /><span className="pay-sec-count">{result.guards.length} 位</span></div>
+            {result.guards.length === 0 ? <p className="empty">本場沒有上班獄卒</p> : (
+              <div className="pay-cards">
+                {result.guards.map(g => (
+                  <div key={g.id} className="pay-card">
+                    <div className="pay-card-head">
+                      <span className="pc-name">{g.name}</span>
+                      <span className="pc-final">{money(g.final)}</span>
+                    </div>
+                    <div className="pay-card-body">
+                      {g.segments.map((seg, i) => (
+                        <div key={i} className="pay-seg">
+                          <div className="pay-seg-head">
+                            <span className="ps-title">{seg.title}{seg.note ? <span className="ps-note">（{seg.note}）</span> : null}</span>
+                            <Amt v={seg.amount} />
+                          </div>
+                          {seg.rows?.map((r, j) => (
+                            <div key={j} className="pay-row">
+                              <span className="pr-name">{r.name}</span>
+                              {r.tag && <span className="pr-tag">{r.tag}</span>}
+                              {r.calc && <span className="pr-calc mono">{r.calc}</span>}
+                              <Amt v={r.amount} />
+                            </div>
+                          ))}
+                        </div>
                       ))}
                     </div>
-                  )}
-                </div>
+                    <div className="pay-card-foot"><span>最終薪資</span><Amt v={g.final} strong /></div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* 整場總覽 */}
-            <div className="card-panel" style={{ marginBottom: 16 }}>
-              <div className="head"><h2>整場總覽</h2><span className="count">出勤獄卒 {guards.length} 人</span></div>
-              <div className="body">
-                <table className="settle-table overview">
-                  <tbody>
-                    <tr><th>當日營業額</th><td>{money(result.revenue)}</td></tr>
-                    <tr><th>獄卒薪資總額</th><td>{money(result.salaryTotal)}</td></tr>
-                    {isCrunch ? (<>
-                      <tr><th>監獄毛收入</th><td>{money(result.gross)}</td></tr>
-                      <tr><th>共享獎金池（毛收入 × 50%）</th><td>{money(result.pool)}</td></tr>
-                      <tr><th>每人均分（÷ {guards.length || 0} 人）</th><td>{money(result.perPool)}</td></tr>
-                      <tr><th>監獄留存（毛收入 × 50%）</th><td>{money(result.retain)}</td></tr>
-                    </>) : (
-                      <tr><th>監獄結餘（可能為負）</th><td className={result.balance < 0 ? 'neg' : ''}>{money(result.balance)}</td></tr>
-                    )}
-                  </tbody>
-                </table>
+            {/* B. 監獄收支卡 */}
+            <div className="pay-sec-lbl">監獄收支<span className="ln" /></div>
+            <div className="prison-card">
+              <div className="prison-block">
+                <div className="pb-title">營業額來源</div>
+                {result.revenueRows.length === 0 ? <div className="prison-row"><span>—</span><Amt v={0} /></div>
+                  : result.revenueRows.map((r, i) => (
+                    <div key={i} className="prison-row"><span>{r.label}</span><Amt v={r.amount} /></div>
+                  ))}
+                <div className="prison-row sum"><span>營業額合計</span><Amt v={result.revenue} strong /></div>
+              </div>
+              <div className="prison-block">
+                <div className="pb-title">結算</div>
+                <div className="prison-row"><span>獄卒直接薪資</span><Amt v={-result.directTotal} neg /></div>
+                <div className="prison-row sum"><span>淨收入（營業額 − 直接薪資）</span><Amt v={result.net} neg={result.net < 0} /></div>
+                <div className="prison-row"><span>均分獎金池（淨收 50%，發給獄卒）</span><Amt v={-result.pool} neg /></div>
+                <div className="prison-row hl"><span>監獄留存（淨收 50%，用於後續活動經費）</span><Amt v={result.retain} neg={result.retain < 0} strong /></div>
               </div>
             </div>
-
-            {/* 每位獄卒明細 */}
-            <div className="card-panel">
-              <div className="head"><h2>每位獄卒明細</h2><span className="count">{result.guards.length} 位</span></div>
-              <div className="body">
-                {result.guards.length === 0 ? <p className="empty">本場沒有出勤獄卒</p> : (
-                  <table className="settle-table detail">
-                    <thead>
-                      <tr><th>獄卒</th><th>直接薪資</th>{isCrunch && <th>均分獎金</th>}<th>最終薪資</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                      {result.guards.map(g => {
-                        const open = expanded.has(g.id)
-                        return (
-                          <Fragment key={g.id}>
-                            <tr className="g-row">
-                              <td className="g-name">{g.name}{g.portrait > 0 && <span className="g-tag">肖像畫</span>}</td>
-                              <td>{money(g.direct)}</td>
-                              {isCrunch && <td>{money(g.pool)}</td>}
-                              <td className="g-final">{money(g.final)}</td>
-                              <td><button className="btn-sm" onClick={() => toggleExpand(g.id)}>{open ? '收合' : '明細'}</button></td>
-                            </tr>
-                            {open && (
-                              <tr className="g-detail">
-                                <td colSpan={isCrunch ? 5 : 4}>
-                                  <ul className="settle-lines">
-                                    {g.lines.map((ln, i) => (
-                                      <li key={i}><span className="ln-lbl">{ln.label}</span><span className="ln-det">{ln.detail}</span><span className="ln-amt">{money(ln.amount)}</span></li>
-                                    ))}
-                                    <li className="ln-sub"><span className="ln-lbl">直接薪資小計</span><span className="ln-det" /><span className="ln-amt">{money(g.direct)}</span></li>
-                                    {isCrunch && <li className="ln-sub"><span className="ln-lbl">均分獎金</span><span className="ln-det">池 ÷ {guards.length || 0}</span><span className="ln-amt">{money(g.pool)}</span></li>}
-                                    <li className="ln-total"><span className="ln-lbl">最終薪資</span><span className="ln-det" /><span className="ln-amt">{money(g.final)}</span></li>
-                                  </ul>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                )}
-                <p className="settle-note">共通：小費不列入結算。金額單位為「萬」。此頁僅計算與顯示，不寫入任何薪資表。</p>
-              </div>
-            </div>
+            <p className="settle-note">資料來源 POS 結帳(pos_order_items)。金額單位「萬」。此頁僅計算顯示，不寫入。</p>
           </>)}
     </div>
   )

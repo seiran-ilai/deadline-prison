@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
 import { computeProgress } from '../progress'
-import { ROLE_LABEL, normalizeStatus, materializeResultMsg } from './constants'
+import { normalizeStatus, materializeResultMsg } from './constants'
 import SessionTimerControl from './SessionTimerControl'
 import GuardAssign from './GuardAssign'
-import NamedSessionDesk from './NamedSessionDesk'
+import SessionPOS from './SessionPOS'
+import SalarySettlement from './SalarySettlement'
 
 // 非 serving 狀態時,控制條番茄鐘區的提示(實際狀態機按鈕在「場次總覽」分頁)
 const TIMER_HINT = {
@@ -18,17 +19,12 @@ const TIMER_HINT = {
 export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared, onGoToManuscripts }) {
   const [roster, setRoster] = useState([])
   const [rosterLoading, setRosterLoading] = useState(false)
-  const [search, setSearch] = useState('')                 // 候選清單搜尋(名字/編號)
-  const [selected, setSelected] = useState(new Set())      // 勾選批次加入的 member_id
   const [goalsByInmate, setGoalsByInmate] = useState({}) // session_inmate_id -> [{id, manuscript_id, title}]
   const [msByMember, setMsByMember] = useState({})       // member_id -> [active manuscripts]
   const [goalSteps, setGoalSteps] = useState({})         // manuscript_id -> [steps]
   const [pickGoal, setPickGoal] = useState({})           // session_inmate_id -> 選中的 manuscript_id
   const [goalModalInmate, setGoalModalInmate] = useState(null) // 開啟「新增本場目標」modal 的犯人 roster row(null=關閉)
   const [goalExpanded, setGoalExpanded] = useState([])   // 展開中的目標(session_goals.id)
-  const [visits, setVisits] = useState([])               // 本場探監(新→舊)
-  const [vForm, setVForm] = useState({ inmate_id: '', guard_id: '', visitor_name: '', message: '' }) // 探監登錄表單(guard_id 選填)
-  const [editingVisit, setEditingVisit] = useState(null) // inline 編輯中的探監 {id, guard_id, visitor_name, message}
   const [startingServe, setStartingServe] = useState(false) // 「開始服刑」處理中:即時回饋 + 防連點
 
   async function loadRoster(sid) {
@@ -79,73 +75,6 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   }
   useEffect(() => { loadGoals() }, [roster])
 
-  // 本場探監(visits);供 add/edit/delete 後手動刷新
-  async function loadVisits(sid) {
-    if (!sid) return
-    const { data } = await supabase.from('visits')
-      .select('id, inmate_id, guard_id, visitor_name, message, is_done, photo_done, interact_done, created_at')
-      .eq('session_id', sid).order('created_at', { ascending: false })
-    setVisits(data ?? [])
-  }
-  // 切換場次時載入(IIFE:setState 皆在 await 後,避免 effect 同步 setState)
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      if (!currentSession) return
-      const { data } = await supabase.from('visits')
-        .select('id, inmate_id, guard_id, visitor_name, message, is_done, photo_done, interact_done, created_at')
-        .eq('session_id', currentSession).order('created_at', { ascending: false })
-      if (alive) setVisits(data ?? [])
-    })()
-    return () => { alive = false }
-  }, [currentSession])
-
-  // 標記完成/恢復:完成的廣播停止輪播(直播大螢幕、犯人/獄卒「本場廣播」都只取未完成)
-  async function toggleVisitDone(v) {
-    const { error } = await supabase.from('visits').update({ is_done: !v.is_done }).eq('id', v.id)
-    if (error) { setMsg('更新失敗：' + error.message); return }
-    setMsg(v.is_done ? '已恢復輪播' : '已標記完成，停止輪播')
-    loadVisits(currentSession)
-  }
-
-  // 執行確認:已經合照(photo_done)/ 已經執行指定互動(interact_done),可再點取消。
-  // 獄卒「看守紀錄」依這兩個欄位 + guard_id 統計合照/互動次數。
-  async function toggleVisitFlag(v, field, label) {
-    const { error } = await supabase.from('visits').update({ [field]: !v[field] }).eq('id', v.id)
-    if (error) { setMsg('更新失敗：' + error.message); return }
-    setMsg(v[field] ? `已取消「${label}」` : `已確認「${label}」`)
-    loadVisits(currentSession)
-  }
-
-  async function addVisit() {
-    if (!vForm.inmate_id || !vForm.visitor_name.trim() || !vForm.message.trim()) {
-      setMsg('請選擇犯人、填寫探監者與廣播內容'); return
-    }
-    const { error } = await supabase.from('visits').insert({
-      session_id: currentSession, inmate_id: vForm.inmate_id,
-      guard_id: vForm.guard_id || null,   // 指定互動指定獄卒(選填)
-      visitor_name: vForm.visitor_name.trim(), message: vForm.message.trim(),
-    })
-    if (error) { setMsg('登錄探監失敗：' + error.message); return }
-    setMsg('已登錄探監'); setVForm({ inmate_id: '', guard_id: '', visitor_name: '', message: '' }); loadVisits(currentSession)
-  }
-
-  async function saveVisitEdit() {
-    if (!editingVisit.visitor_name.trim() || !editingVisit.message.trim()) { setMsg('探監者與內容不可空白'); return }
-    const { error } = await supabase.from('visits')
-      .update({ visitor_name: editingVisit.visitor_name.trim(), message: editingVisit.message.trim(), guard_id: editingVisit.guard_id || null })
-      .eq('id', editingVisit.id)   // updated_at 由觸發器自動更新
-    if (error) { setMsg('更新探監失敗：' + error.message); return }
-    setMsg('已更新探監'); setEditingVisit(null); loadVisits(currentSession)
-  }
-
-  async function deleteVisit(id) {
-    if (!window.confirm('確定刪除這筆探監？')) return
-    const { error } = await supabase.from('visits').delete().eq('id', id)
-    if (error) { setMsg('刪除探監失敗：' + error.message); return }
-    setMsg('已刪除探監'); loadVisits(currentSession)
-  }
-
   async function addInmateGoal(sessionInmateId, manuscriptId) {
     const mid = manuscriptId ?? pickGoal[sessionInmateId]   // modal 直接帶稿件 id;沿用原下拉時讀 pickGoal
     if (!mid) return
@@ -191,56 +120,6 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       : [...prev, goalId])
   }
 
-  function toggleOne(id) {
-    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
-
-  const nameOf = (p) => p?.game_name ?? p?.display_name ?? '?'
-
-  // 候選來源:全域 staff(role = guard / warden),依搜尋(暱稱)前端 filter。
-  // 已在本場的獄卒不可勾選(在清單高亮標「已在場」)。
-  const guardMemberIds = roster.filter(r => r.role_in_session === 'guard').map(r => r.member_id)
-  const q = search.trim().toLowerCase()
-  const staffCandidates = inmates
-    .filter(p => p.role === 'guard' || p.role === 'warden')
-    .filter(p => !q || nameOf(p).toLowerCase().includes(q))
-  const selectable = staffCandidates.filter(p => !guardMemberIds.includes(p.id))
-  const allSelected = selectable.length > 0 && selectable.every(p => selected.has(p.id))
-  const selectedCount = selectable.filter(p => selected.has(p.id)).length
-  function toggleAll() {
-    setSelected(prev => {
-      const n = new Set(prev)
-      if (selectable.every(p => prev.has(p.id))) selectable.forEach(p => n.delete(p.id))
-      else selectable.forEach(p => n.add(p.id))
-      return n
-    })
-  }
-
-  // 加入本場獄卒:逐筆呼叫 check_in_inmate(role=guard)。
-  // 該人若在其他未結束場次(rpc 訊息含「無法加入本場」)→ 該筆略過並逐筆提示,繼續處理其餘;
-  // 全部跑完再刷新一次本場名單。
-  async function runAddGuards(people) {
-    const targets = people.filter(p => !guardMemberIds.includes(p.id))   // 已在本場者略過
-    if (!targets.length) return
-    let ok = 0
-    const errs = []
-    for (const p of targets) {
-      const { error } = await supabase.rpc('check_in_inmate', {
-        p_session: currentSession, p_member: p.id, p_role_in_session: 'guard',
-      })
-      if (error) {
-        errs.push(error.message?.includes('無法加入本場')
-          ? `「${nameOf(p)} 還在其他未結束場次進行中，無法加入本場」`
-          : `${nameOf(p)} 加入失敗：${error.message}`)
-        continue
-      }
-      ok++
-    }
-    setMsg([...(ok ? [`已加入 ${ok} 位本場獄卒`] : []), ...errs].join(';'))
-    setSelected(new Set())
-    loadRoster(currentSession)
-  }
-
   // 直接開始服刑(僅 warden,intake 狀態用):不必跳到「場次總覽」,在本分頁就能啟動番茄鐘。
   // 走與「場次總覽」相同的 set_session_status(serving)(後端會設 timer_started_at);
   // 成功後 reloadShared 刷新共用 sessions → currentSessionObj 變 serving → 自動切換成番茄鐘控台。
@@ -254,6 +133,15 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     reloadShared()
   }
 
+  // 結束服刑(進行中場次直接結束,不必跳「場次總覽」)。
+  async function endServing() {
+    if (!currentSession) return
+    if (!window.confirm('確定結束本場服刑？結束後不可重開')) return
+    const { error } = await supabase.rpc('set_session_status', { p_session: currentSession, p_new_status: 'ended' })
+    if (error) { setMsg('結束服刑失敗：' + error.message); return }
+    setMsg('已結束服刑'); reloadShared()
+  }
+
   // 重新帶入預約名單(僅 warden):intake 後又有人新預約時手動補帶。
   async function rematerialize() {
     if (!currentSession) return
@@ -263,10 +151,6 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     loadRoster(currentSession)
   }
   const currentSessionObj = sessions.find(s => s.id === currentSession)
-  // 探監用:本場犯人/獄卒(下拉選項)+ member_id → profile(列表顯示犯人名/獄卒名)
-  const inmateRoster = roster.filter(r => r.role_in_session !== 'guard')
-  const guardRosterAll = roster.filter(r => r.role_in_session === 'guard')
-  const profByMember = {}; for (const r of roster) profByMember[r.member_id] = r.profile
 
   return (
     <div>
@@ -296,13 +180,14 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
             key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
         {currentSessionObj && (() => {
           const st = normalizeStatus(currentSessionObj)
-          // 指名場不使用番茄鐘:改由下方「指名現場」面板確認到場/品項。
-          if (currentSessionObj.kind === 'named')
+          // 指名場/自由入場不使用番茄鐘;進行中可直接結束服刑。
+          if (currentSessionObj.kind === 'named' || currentSessionObj.kind === 'free')
             return (
               <div className="seg">
-                <span className="lbl">指名場</span>
+                <span className="lbl">{currentSessionObj.kind === 'named' ? '指名場' : '自由入場'}</span>
                 <div className="row timer-state">
-                  <span className="muted">指名場不使用番茄鐘，請於下方「指名現場」確認到場與品項</span>
+                  <span className="muted">{currentSessionObj.kind === 'named' ? '指名場不使用番茄鐘，於下方 POS 開單' : '自由入場無番茄鐘管理'}</span>
+                  {isWarden && <button className="btn-sm btn-danger" onClick={endServing}>結束服刑</button>}
                 </div>
               </div>
             )
@@ -327,57 +212,12 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
         })()}
       </div>
 
-      {/* 左右兩欄:左=加入本場候選清單,右=本場名單 */}
-      <div className="cols">
-        {/* 左:本場獄卒(手動新增;犯人一律靠「開始入場」自動帶入) */}
-        <div className="card-panel">
-          <div className="head"><h2>本場獄卒</h2><span className="count">手動新增獄卒</span></div>
-          <div className="body">
-            {!currentSession ? (
-              <p className="empty">請先在上方選擇目前場次</p>
-            ) : (<>
-              <div className="cand-tools">
-                <input className="inp" placeholder="搜尋暱稱" value={search} onChange={e => setSearch(e.target.value)} />
-                {selectable.length > 0 && (
-                  <button onClick={toggleAll}>{allSelected ? '取消全選' : '全選'}</button>
-                )}
-              </div>
-
-              {selectedCount > 0 && (
-                <div className="cand-batch">
-                  <span>已選 {selectedCount} 人 →</span>
-                  <button className="btn-sm" onClick={() => runAddGuards(selectable.filter(p => selected.has(p.id)))}>加入為本場獄卒</button>
-                </div>
-              )}
-
-              {staffCandidates.length === 0 ? (
-                <p className="empty">沒有可加入的獄卒（名單中沒有符合的人選，或搜尋無結果）</p>
-              ) : staffCandidates.map(p => {
-                const inSession = guardMemberIds.includes(p.id)
-                return (
-                  <div key={p.id} className={`cand${inSession ? ' in-session' : ''}`}>
-                    <input type="checkbox" checked={inSession || selected.has(p.id)} disabled={inSession} onChange={() => toggleOne(p.id)} />
-                    <span className="nm">{nameOf(p)}</span>
-                    <span className={`role-tag ${p.role}`}>{ROLE_LABEL[p.role]}</span>
-                    <span className="acts">
-                      {inSession
-                        ? <span className="faint">已在場</span>
-                        : <button onClick={() => runAddGuards([p])}>加入</button>}
-                    </span>
-                  </div>
-                )
-              })}
-              <div className="note">名單僅列出獄卒／典獄長身分的人員；犯人會在「開始入場」時自動帶入，也可用右側「重新帶入預約名單」補上。</div>
-            </>)}
-          </div>
+      {/* 本場名單(犯人;獄卒改由「獄卒排班」/POS 檢視,不在此手動新增) */}
+      <div className="card-panel">
+        <div className="head">
+          <h2>本場名單</h2>
+          {isWarden && currentSession && <button className="btn-sm" onClick={rematerialize}>重新帶入預約名單</button>}
         </div>
-
-        {/* 右:本場名單 */}
-        <div className="card-panel">
-          <div className="head">
-            <h2>本場名單</h2>
-            {isWarden && currentSession && <button className="btn-sm" onClick={rematerialize}>重新帶入預約名單</button>}
-          </div>
           <div className="body">
             {rosterLoading ? <p className="empty">載入中…</p>
               : roster.length === 0 ? <p className="empty">本場還沒有人</p> : (() => {
@@ -447,134 +287,20 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
               )
             })}
 
-              <div className="group-lbl">本場獄卒 ({guardRoster.length})<span className="ln" /></div>
-              {guardRoster.length === 0 ? <p className="empty">本場沒有獄卒</p> : (
-                <div className="guard-grid">
-                  {guardRoster.map(r => (
-                    <div key={r.id} className="guard-cell">
-                      <button className="g-x btn-danger" title="移出本場" onClick={() => removeFromSession(r.id)}>✕</button>
-                      <div className="g-av">
-                        {r.profile?.avatar_url
-                          ? <img src={r.profile.avatar_url} alt="" />
-                          : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}
-                      </div>
-                      <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name}</div>
-                      <span className="role-tag guard">{r.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
               </>)
             })()}
           </div>
         </div>
-      </div>
 
-      {/* 指名/集體場現場核對:進行中(入場後)顯示到場 + 指名/監督/加購/抓捕。named 取代番茄鐘、crunch 與番茄鐘並存 */}
+      {/* 進行中場次 POS(指名/集體場):上班獄卒排程 + 走查加購(寫結算)+ 臨時追加犯人。上班獄卒直接由排班帶入 */}
       {isWarden && currentSession && ['named', 'crunch'].includes(currentSessionObj?.kind)
         && ['intake', 'serving'].includes(normalizeStatus(currentSessionObj)) && (
-        <NamedSessionDesk sessionId={currentSession} startTime={currentSessionObj.start_time} setMsg={setMsg} />
+        <SessionPOS session={currentSessionObj} inmates={inmates} setMsg={setMsg} reloadShared={reloadShared} />
       )}
 
-      {/* 探監登錄(僅 warden;選本場犯人 + 探監者 + 廣播內容 → visits) */}
-      {isWarden && currentSession && (
-        <div className="card-panel visit-panel">
-          <div className="head"><h2>探監登錄</h2><span className="count">{visits.length} 筆</span></div>
-          <div className="body">
-            <div className="visit-form">
-              <select className="sel" value={vForm.inmate_id} onChange={e => setVForm({ ...vForm, inmate_id: e.target.value })}>
-                <option value="">— 選擇犯人 —</option>
-                {inmateRoster.map(r => (
-                  <option key={r.id} value={r.member_id}>
-                    No.{String(r.profile?.inmate_no ?? 0).padStart(4, '0')} {r.profile?.game_name ?? r.profile?.display_name ?? '?'}
-                  </option>
-                ))}
-              </select>
-              <select className="sel" value={vForm.guard_id} onChange={e => setVForm({ ...vForm, guard_id: e.target.value })}>
-                <option value="">— 指定獄卒（選填）—</option>
-                {guardRosterAll.map(r => (
-                  <option key={r.id} value={r.member_id}>
-                    {r.profile?.game_name ?? r.profile?.display_name ?? '?'}{r.profile?.role === 'warden' ? '（典獄長）' : ''}
-                  </option>
-                ))}
-              </select>
-              <input className="inp" placeholder="探監者名字" value={vForm.visitor_name}
-                onChange={e => setVForm({ ...vForm, visitor_name: e.target.value })} />
-              <div className="visit-msg-field">
-                <textarea className="inp" rows={2} maxLength={80} placeholder="廣播內容（最多 80 字）"
-                  value={vForm.message} onChange={e => setVForm({ ...vForm, message: e.target.value })} />
-                <span className="visit-count">{vForm.message.length} / 80</span>
-              </div>
-              <button className="btn-pri" onClick={addVisit}>送出探監</button>
-            </div>
-
-            {visits.length === 0 ? (
-              <p className="empty">本場還沒有探監紀錄</p>
-            ) : (
-              <div className="visit-list">
-                {visits.map(v => {
-                  const ip = profByMember[v.inmate_id]
-                  const gp = v.guard_id ? profByMember[v.guard_id] : null
-                  const inmateName = ip?.game_name ?? ip?.display_name ?? '（已離場）'
-                  const guardName = v.guard_id ? (gp?.game_name ?? gp?.display_name ?? '（已離場）') : null
-                  const isEditing = editingVisit?.id === v.id
-                  return (
-                    <div key={v.id} className={`visit-row${v.is_done ? ' done' : ''}`}>
-                      {isEditing ? (
-                        <div className="visit-edit">
-                          <input className="inp" placeholder="探監者" value={editingVisit.visitor_name}
-                            onChange={e => setEditingVisit({ ...editingVisit, visitor_name: e.target.value })} />
-                          <select className="sel" value={editingVisit.guard_id ?? ''}
-                            onChange={e => setEditingVisit({ ...editingVisit, guard_id: e.target.value })}>
-                            <option value="">— 指定獄卒（選填）—</option>
-                            {guardRosterAll.map(r => (
-                              <option key={r.id} value={r.member_id}>
-                                {r.profile?.game_name ?? r.profile?.display_name ?? '?'}{r.profile?.role === 'warden' ? '（典獄長）' : ''}
-                              </option>
-                            ))}
-                          </select>
-                          <textarea className="inp" rows={2} maxLength={80} placeholder="內容" value={editingVisit.message}
-                            onChange={e => setEditingVisit({ ...editingVisit, message: e.target.value })} />
-                          <div className="visit-acts">
-                            <button className="btn-sm" onClick={() => setEditingVisit(null)}>取消</button>
-                            <button className="btn-sm btn-pri" onClick={saveVisitEdit}>儲存</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="visit-text">
-                            <span className="visit-who">
-                              💌 {v.visitor_name} → No.{ip?.inmate_no != null ? String(ip.inmate_no).padStart(4, '0') : '----'} {inmateName}
-                              {v.is_done && <span className="visit-done-tag">✓ 已完成</span>}
-                              {v.photo_done && <span className="visit-done-tag">📷 已合照</span>}
-                              {v.interact_done && <span className="visit-done-tag">🎭 已互動</span>}
-                            </span>
-                            <span className="visit-body">「{v.message}」</span>
-                            {guardName && <span className="visit-guard">🛡 指定獄卒：{guardName}</span>}
-                          </div>
-                          <span className="spacer" />
-                          <div className="visit-acts">
-                            <button className={`btn-sm${v.photo_done ? ' btn-pri' : ''}`}
-                              onClick={() => toggleVisitFlag(v, 'photo_done', '已經合照')}>
-                              {v.photo_done ? '✓ 已經合照' : '已經合照'}
-                            </button>
-                            <button className={`btn-sm${v.interact_done ? ' btn-pri' : ''}`}
-                              onClick={() => toggleVisitFlag(v, 'interact_done', '已經執行指定互動')}>
-                              {v.interact_done ? '✓ 已執行指定互動' : '已經執行指定互動'}
-                            </button>
-                            <button className="btn-sm" onClick={() => toggleVisitDone(v)}>{v.is_done ? '恢復輪播' : '標記完成'}</button>
-                            <button className="btn-sm" onClick={() => setEditingVisit({ id: v.id, guard_id: v.guard_id ?? '', visitor_name: v.visitor_name, message: v.message })}>編輯</button>
-                            <button className="btn-sm btn-danger" onClick={() => deleteVisit(v.id)}>刪除</button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* 薪資結算(整場總覽 + 每位獄卒明細)內嵌於進行中場次,讀 POS */}
+      {isWarden && currentSession && ['named', 'crunch'].includes(currentSessionObj?.kind) && (
+        <SalarySettlement currentSession={currentSession} embedded />
       )}
 
       {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用 addInmateGoal,可連續挑多筆。

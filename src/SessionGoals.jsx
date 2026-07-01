@@ -21,6 +21,15 @@ const PRIORITY = {
   3: { label: '低', bg: '#888' },
 }
 
+// 指名互動場的預約/購入顯示輔助
+const gArr = (v) => (Array.isArray(v) ? v : [])
+const ITEM_LABEL = { signup: '現場報名', visit: '互動探監', polaroid: '拍立得', portrait: '肖像畫', nominate: '指名時段', sign: '簽繪', entry: '入場' }
+function posItemDesc(it) {
+  if (it.item_type === 'polaroid') return `拍立得 ${it.qty ?? 0} 張${it.with_signature ? '（含簽繪）' : ''}`
+  if (it.item_type === 'nominate') { const n = gArr(it.slot_times).length; return `指名時段${n ? ` ${n} 段` : ''}` }
+  return ITEM_LABEL[it.item_type] ?? it.item_type
+}
+
 export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)   // 我目前所在的 open 場次
@@ -37,6 +46,10 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [guards, setGuards] = useState([])        // 本場獄卒(role=guard/warden)
   const [myGuards, setMyGuards] = useState([])    // 我的專屬獄卒(inmate_guards)
   const [myProfile, setMyProfile] = useState(null)        // 我自己的 profile(本場囚犯列「你」那筆顯示用)
+  const [myItems, setMyItems] = useState([])              // 指名互動:我的 POS 購入明細(本場)
+  const [myBooking, setMyBooking] = useState(null)        // 指名互動:我的本場預約(時段/加購/抓捕)
+  const [bkGuardName, setBkGuardName] = useState({})      // 預約牽涉的獄卒 id → 名字
+  const [newGoalTitle, setNewGoalTitle] = useState('')    // 新增本場目標 modal:手動新建稿件標題
   const [msg, setMsg] = useState('')
 
   async function load(silent) {
@@ -48,11 +61,28 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     if (si && si.length) {
       // 全撈 + normalizeStatus 過濾(過渡期 DB 仍可能有舊值,不用 .eq('status','open'))
       const { data: rows } = await supabase.from('sessions')
-        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
+        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind')
         .in('id', si.map(r => r.session_id))
       const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
       sess = live[0] ?? null
       if (sess) mine = si.find(r => r.session_id === sess.id)
+    }
+    // 自助入場:未報到但有未取消預約的 live 場 → self_check_in 建立本場身分(免典獄長報到/身分核對)
+    if (!mine) {
+      const { data: bk } = await supabase.from('bookings')
+        .select('session_id').eq('user_id', userId).neq('status', 'cancelled')
+      const bookedIds = [...new Set((bk ?? []).map(b => b.session_id))]
+      if (bookedIds.length) {
+        const { data: rows } = await supabase.from('sessions')
+          .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind').in('id', bookedIds)
+        const target = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')[0] ?? null
+        if (target) {
+          await supabase.rpc('self_check_in', { p_session: target.id })
+          const { data: si2 } = await supabase.from('session_inmates')
+            .select('id, session_id, state').eq('member_id', userId).eq('session_id', target.id)
+          if (si2 && si2.length) { mine = si2[0]; sess = target }
+        }
+      }
     }
     setSession(sess); setMyInmate(mine)
     if (!mine) { setGoals([]); setActives([]); setStepsByMs({}); setLoading(false); return }
@@ -85,6 +115,29 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       setStepsByMs(grouped)
     } else {
       setStepsByMs({})
+    }
+
+    // 指名互動場額外資料:我的本場預約(時段/加購)+ 我的 POS 購入明細
+    if (sess.kind === 'named') {
+      const [{ data: bk }, { data: pos }] = await Promise.all([
+        supabase.from('bookings').select('requested_slots, addons, capture, status')
+          .eq('user_id', userId).eq('session_id', sess.id).neq('status', 'cancelled'),
+        supabase.rpc('my_pos_items'),
+      ])
+      const booking = (bk ?? [])[0] ?? null
+      const items = (pos ?? []).filter(p => p.session_id === sess.id)
+      const gIds = [...new Set([
+        ...gArr(booking?.requested_slots).map(x => x.g),
+        ...gArr(booking?.addons).map(x => x.g),
+      ].filter(Boolean))]
+      const gName = {}
+      if (gIds.length) {
+        const { data: gp } = await supabase.from('profiles').select('id, game_name, display_name').in('id', gIds)
+        for (const p of gp ?? []) gName[p.id] = p.game_name ?? p.display_name
+      }
+      setMyBooking(booking); setMyItems(items); setBkGuardName(gName)
+    } else {
+      setMyBooking(null); setMyItems([]); setBkGuardName({})
     }
     setLoading(false)
   }
@@ -176,6 +229,18 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       .insert({ session_inmate_id: myInmate.id, manuscript_id: mid })
     if (error) { setMsg('加入失敗：' + error.message); return }
     setPick(''); setMsg('已加入本場'); load(true)  // 背景刷新,modal 保持開著可連續挑
+  }
+
+  // 手動新建稿件並直接加入本場目標(不必先跳「我的稿件」;新稿同步進「我的稿件」)
+  async function createAndAddGoal() {
+    const title = newGoalTitle.trim()
+    if (!title) { setMsg('目標名稱必填'); return }
+    const { data, error } = await supabase.from('manuscripts')
+      .insert({ member_id: userId, title, priority: 2, visibility: 'public' })
+      .select('id').single()
+    if (error) { setMsg('新建失敗：' + error.message); return }
+    setNewGoalTitle('')
+    await addGoal(data.id)   // 直接加入本場;load(true) 會刷新 actives(即同步我的稿件清單)
   }
 
   async function removeGoal(goalId) {
@@ -438,6 +503,60 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
 
       </div>{/* === /中段兩欄 === */}
 
+      {/* === 指名互動:本場預約與購入(時段 / 加購 / POS 購入明細) === */}
+      {session.kind === 'named' && (() => {
+        const slots = gArr(myBooking?.requested_slots).filter(x => x.s != null)
+        const addons = gArr(myBooking?.addons).filter(x => (x.polaroid || 0) + (x.sign || 0) > 0)
+        const gname = (id) => bkGuardName[id] ?? '（獄卒）'
+        const itemsTotal = myItems.reduce((s, it) => s + (it.amount ?? 0), 0)
+        return (
+          <div className="card-panel sg-section">
+            <div className="head"><h2>本場預約與購入</h2><span className="count">指名互動</span></div>
+            <div className="body sg-named">
+              <div className="sg-nblock">
+                <div className="sg-nsub">預約時段</div>
+                {slots.length === 0 ? <p className="empty">本場沒有指名時段</p> : (
+                  <div className="sg-chips">
+                    {slots.map((x, i) => <span key={i} className="sg-chip">🛡 {gname(x.g)} · 第 {Number(x.s) + 1} 段</span>)}
+                  </div>
+                )}
+              </div>
+              {addons.length > 0 && (
+                <div className="sg-nblock">
+                  <div className="sg-nsub">預約加購</div>
+                  <div className="sg-chips">
+                    {addons.map((x, i) => (
+                      <span key={i} className="sg-chip">🛡 {gname(x.g)}
+                        {x.polaroid ? ` · 拍立得 ${x.polaroid}` : ''}
+                        {x.sign ? ` · 簽繪 ${x.sign}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="sg-nblock">
+                <div className="sg-nsub">購入內容（現場結帳）</div>
+                {myItems.length === 0 ? <p className="empty">目前沒有加購紀錄</p> : (
+                  <div className="sg-items">
+                    {myItems.map((it, i) => (
+                      <div key={i} className="sg-item">
+                        <span className="si-name">{posItemDesc(it)}</span>
+                        {it.guard_name && <span className="si-guard">🛡 {it.guard_name}</span>}
+                        <span className="si-amt mono">{it.amount ?? 0} 萬</span>
+                      </div>
+                    ))}
+                    <div className="sg-item sg-item-total">
+                      <span className="si-name">合計</span>
+                      <span className="si-amt mono">{itemsTotal} 萬</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* === 本場廣播(探望我的,唯讀) === */}
       <SessionVisits sessionId={session.id} userId={userId} role="inmate" />
 
@@ -474,11 +593,19 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
               <h3>新增本場目標</h3>
               <button className="goal-modal-x" onClick={() => setGoalModalOpen(false)}>✕</button>
             </div>
+            {/* 手動新建目標:直接建稿並加入本場,不必先跳「我的稿件」;新稿會同步進「我的稿件」 */}
+            <form className="goal-new" onSubmit={e => { e.preventDefault(); createAndAddGoal() }}>
+              <input className="goal-new-input" value={newGoalTitle} onChange={e => setNewGoalTitle(e.target.value)}
+                placeholder="手動填新目標（直接建立並加入本場）" maxLength={60} />
+              <button type="submit" className="btn-pri" disabled={!newGoalTitle.trim()}>＋ 建立並加入</button>
+            </form>
+
+            <div className="goal-new-or">或從「我的稿件」挑選</div>
             {available.length === 0 ? (
               <div className="goal-modal-empty">
-                <p className="warn">沒有可以加入的稿件，請到「我的稿件」新增</p>
+                <p className="warn">沒有其他可加入的稿件了</p>
                 {onGoToManuscripts && (
-                  <button className="btn-pri" onClick={() => { setGoalModalOpen(false); onGoToManuscripts() }}>前往我的稿件</button>
+                  <button className="btn-sm" onClick={() => { setGoalModalOpen(false); onGoToManuscripts() }}>前往我的稿件</button>
                 )}
               </div>
             ) : (

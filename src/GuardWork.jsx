@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
 import { computeProgress, goalStatusLabel } from './progress'
@@ -7,6 +7,7 @@ import SessionMemoPanel from './SessionMemoPanel'
 import SessionVisits from './SessionVisits'
 import ProfileCard from './ProfileCard'
 import { normalizeStatus } from './warden/constants'
+import { SESSION_KIND_LABEL } from './sessionKind'
 
 // 犯人列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
 const PRESENCE_STYLE = {
@@ -15,37 +16,86 @@ const PRESENCE_STYLE = {
   '尚未挑稿': { bg: 'rgba(255,255,255,.08)', color: '#9298a2' },   // 沒挑目標:次要灰
 }
 
-// 獄卒作業頁:狀態階段 → 監管犯人名單(+目標代勾) → 本場獄卒一覽 → 本場犯人一覽
+// 指名互動場:犯人的預約內容 / POS 購入顯示輔助
+const gArr = (v) => (Array.isArray(v) ? v : [])
+const ITEM_LABEL = { signup: '現場報名', visit: '互動探監', polaroid: '拍立得', portrait: '肖像畫', nominate: '指名時段', sign: '簽繪', entry: '入場' }
+function posItemDesc(it) {
+  if (it.item_type === 'polaroid') return `拍立得 ${it.qty ?? 0} 張${it.with_signature ? '（含簽繪）' : ''}`
+  if (it.item_type === 'nominate') { const n = gArr(it.slot_times).length; return `指名時段${n ? ` ${n} 段` : ''}` }
+  return ITEM_LABEL[it.item_type] ?? it.item_type
+}
+// 該品項可勾的核對項(與典獄長「今日營業總表」同一組 status 欄位)
+function statusFields(it) {
+  const f = []
+  if (it.item_type === 'polaroid') f.push(['status_polaroid', '拍立得'])
+  if (it.item_type === 'visit' || it.item_type === 'nominate' || (it.item_type === 'signup' && it.supervise)) f.push(['status_interact', '互動'])
+  if (it.item_type === 'visit') f.push(['status_photo', '合照'])
+  return f
+}
+
+// 獄卒作業頁:場次切換 → 狀態階段 → 監管犯人名單(+目標代勾) → 本場獄卒一覽 → 本場犯人一覽
 export default function GuardWork({ userId }) {
   const [loading, setLoading] = useState(true)
+  const [liveSessions, setLiveSessions] = useState([]) // 我可看守的未結束場次(可切換)
+  const [selSid, setSelSid] = useState(null)           // 目前選的場次 id
+  const selRef = useRef(null)                          // 讓 10 秒輪詢讀到最新選擇(由 refresh/pickSession 維護)
   const [session, setSession] = useState(null)
-  const [myInmate, setMyInmate] = useState(null)   // 我在本場的 session_inmates 記錄
+  const [myInmate, setMyInmate] = useState(null)   // 我在本場的 session_inmates 記錄(僅排班則為合成)
   const [allGuards, setAllGuards] = useState([])    // 本場 role_in_session='guard'
   const [allInmates, setAllInmates] = useState([])  // 本場 role_in_session='inmate'
   const [myInmates, setMyInmates] = useState([])    // 指派給我的犯人(含本場目標+進度)
   const [stepsByMs, setStepsByMs] = useState({})    // manuscript_id -> [steps]
   const [expanded, setExpanded] = useState([])      // 展開中的目標(session_goals.id)
+  const [posItems, setPosItems] = useState([])       // 指名互動:本場 POS 購入(含本單犯人名)
+  const [bookingByMember, setBookingByMember] = useState({}) // 指名互動:member_id → 預約內容
   const [msg, setMsg] = useState('')
 
-  async function load(silent) {
-    if (!silent) setLoading(true)   // silent=true:10 秒輪詢的背景刷新,不翻回整頁 loading(資料原地替換,使用者不會看到重整畫面)
-    // 1) 找我所在的 open 場次 + 我本場記錄
-    const { data: si } = await supabase.from('session_inmates')
-      .select('id, session_id, role_in_session, state').eq('member_id', userId)
-    let mine = null, sess = null
-    if (si && si.length) {
-      // 全撈 + normalizeStatus 過濾(過渡期 DB 仍可能有舊值,不用 .eq('status','open'))
-      const { data: rows } = await supabase.from('sessions')
-        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
-        .in('id', si.map(r => r.session_id))
-      const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
-      sess = live[0] ?? null
-      if (sess) mine = si.find(r => r.session_id === sess.id)
+  // 我可看守的未結束場次:以獄卒身分報到(session_inmates)∪ 當日排班(session_guards)
+  async function loadList() {
+    const [{ data: si }, { data: sg }] = await Promise.all([
+      supabase.from('session_inmates').select('session_id, role_in_session').eq('member_id', userId),
+      supabase.from('session_guards').select('session_id').eq('guard_id', userId),
+    ])
+    const sids = new Set([
+      ...(si ?? []).filter(r => r.role_in_session === 'guard').map(r => r.session_id),
+      ...(sg ?? []).map(r => r.session_id),
+    ])
+    if (!sids.size) { setLiveSessions([]); return [] }
+    const { data: rows } = await supabase.from('sessions')
+      .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind').in('id', [...sids])
+    const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended').sort((a, b) => (a.title > b.title ? 1 : -1))
+    setLiveSessions(live)
+    return live
+  }
+
+  // 一次刷新:更新可切換場次清單 + 目前選定場次的名單/目標/POS
+  async function refresh(silent) {
+    if (!silent) setLoading(true)
+    const live = await loadList()
+    let sid = selRef.current
+    if (!live.find(s => s.id === sid)) sid = live[0]?.id ?? null   // 選定場次已結束/未選 → 落回第一個
+    if (sid !== selRef.current) { selRef.current = sid; setSelSid(sid) }
+    await loadSession(live.find(s => s.id === sid) ?? null)
+    setLoading(false)
+  }
+
+  // 切換場次(即時載入,不等輪詢)
+  function pickSession(sid) {
+    selRef.current = sid; setSelSid(sid)
+    loadSession(liveSessions.find(s => s.id === sid) ?? null)
+  }
+
+  async function loadSession(sess) {
+    if (!sess) {
+      setSession(null); setMyInmate(null)
+      setAllGuards([]); setAllInmates([]); setMyInmates([]); setStepsByMs({}); setPosItems([]); setBookingByMember({})
+      return
     }
+    // 我在本場的記錄(僅排班而無 session_inmates 列時,合成 guard 身分供在場判定)
+    const { data: myRow } = await supabase.from('session_inmates')
+      .select('id, role_in_session, state').eq('member_id', userId).eq('session_id', sess.id).maybeSingle()
+    const mine = myRow ?? { id: null, role_in_session: 'guard', state: null }
     setSession(sess); setMyInmate(mine)
-    if (!mine) {
-      setAllGuards([]); setAllInmates([]); setMyInmates([]); setStepsByMs({}); setLoading(false); return
-    }
 
     // 2) 本場名單(分開查再合併),依 role_in_session 切分
     const { data: roster } = await supabase.from('session_inmates')
@@ -93,15 +143,29 @@ export default function GuardWork({ userId }) {
     setAllInmates(inmateRows.map(withGoals))
     setMyInmates(assignedRows.map(withGoals))
     setStepsByMs(grouped)
-    setLoading(false)
+
+    // 5) 指名互動場:本場 POS 購入 + 預約內容(獄卒讀不到別人的原表,走 security definer RPC 兜底)
+    if (sess.kind === 'named') {
+      const [{ data: pos }, { data: bks }] = await Promise.all([
+        supabase.rpc('session_pos_items', { p_session: sess.id }),
+        supabase.rpc('session_bookings_view', { p_session: sess.id }),
+      ])
+      setPosItems(pos ?? [])
+      const bm = {}
+      for (const b of bks ?? []) if (b.status !== 'cancelled') bm[b.user_id] = b
+      setBookingByMember(bm)
+    } else {
+      setPosItems([]); setBookingByMember({})
+    }
   }
 
-  // 每 10 秒輪詢(接收典獄長報到/指派/開始)
+  // 每 10 秒輪詢(接收典獄長報到/指派/開始;同時更新可切換場次清單)
   useEffect(() => {
     if (!userId) return
-    load()
-    const t = setInterval(() => load(true), 10000)   // 首次顯示 loading,之後靜默輪詢
-    return () => clearInterval(t)
+    let alive = true
+    refresh(false)
+    const t = setInterval(() => { if (alive) refresh(true) }, 10000)   // 首次顯示 loading,之後靜默輪詢
+    return () => { alive = false; clearInterval(t) }
   }, [userId])
 
   // 代勾:獄卒勾選犯人目標子項目(樂觀更新,失敗回滾)
@@ -114,6 +178,17 @@ export default function GuardWork({ userId }) {
     setDone(next)
     const { error } = await supabase.from('manuscript_steps').update({ done: next }).eq('id', step.id)
     if (error) { setDone(step.done); setMsg('子項目更新失敗，已還原：' + error.message) }
+  }
+
+  // 指名互動:獄卒勾選 POS 核對項(互動/合照/拍立得)→ 與典獄長「今日營業總表」同一筆同步(樂觀更新)
+  async function togglePosStatus(item, field) {
+    const next = !item[field]
+    setPosItems(prev => prev.map(x => x.id === item.id ? { ...x, [field]: next } : x))
+    const { error } = await supabase.rpc('set_pos_item_status', { p_item: item.id, p_field: field, p_value: next })
+    if (error) {
+      setPosItems(prev => prev.map(x => x.id === item.id ? { ...x, [field]: !next } : x))
+      setMsg('更新失敗：' + error.message)
+    }
   }
 
   function toggleExpand(goalId) {
@@ -129,6 +204,64 @@ export default function GuardWork({ userId }) {
     return goalStatusLabel(done, goals.length)
   }
 
+  // 指名互動:本場獄卒 id → 名字(解析預約時段的指名獄卒)
+  // 指名互動場「我的服務對象」:凡指名/購買到我的犯人(POS target=我)∪ 指派給我的犯人,
+  // 每位彙整:預約時段(我被指名的時格)/ 購買項目 / 目標稿件(可代勾,與犯人端雙邊同步)。
+  const serveTargets = []
+  if (session?.kind === 'named') {
+    const byName = {}
+    for (const it of posItems) {
+      if (it.guard_id !== userId) continue
+      const key = it.customer_name || it.person_name || '（未指定）'
+      ;(byName[key] ??= { name: key, items: [], slots: [] }).items.push(it)
+      if (it.item_type === 'nominate') byName[key].slots.push(...gArr(it.slot_times))
+    }
+    for (const c of myInmates) {   // 指派給我但尚無 POS 的犯人也列入
+      const nm = c.profile?.game_name || c.profile?.display_name
+      if (nm && !byName[nm]) byName[nm] = { name: nm, items: [], slots: [] }
+    }
+    for (const t of Object.values(byName)) {
+      const inmate = allInmates.find(c => {
+        const s = new Set([c.profile?.game_name, c.profile?.display_name].filter(Boolean))
+        return s.has(t.name)
+      })
+      let slots = [...new Set(t.slots)]
+      if (inmate && bookingByMember[inmate.member_id]) {   // 官網預約指名我的時段一併納入
+        const bs = gArr(bookingByMember[inmate.member_id].requested_slots).filter(x => x.g === userId && x.s != null).map(x => Number(x.s))
+        slots = [...new Set([...slots, ...bs])]
+      }
+      slots.sort((a, b) => a - b)
+      serveTargets.push({ ...t, slots, inmate })
+    }
+  }
+
+  // 目標稿件列(集體/指名共用:進度條 + 展開子項目代勾)
+  const goalList = (goals) => goals.map(g => {
+    const steps = stepsByMs[g.manuscript_id] ?? []
+    const prog = computeProgress({ steps, isDone: g.manuscript?.is_done })
+    const isOpen = expanded.includes(g.id)
+    return (
+      <div key={g.id} className="gw-goal">
+        <div className="gw-goal-hd">
+          <span className="gw-goal-nm">{g.manuscript?.title ?? '（保密作業）'}</span>
+          <div className="gw-goal-bar"><ProgressBar progress={prog} /></div>
+          <button className="btn-sm" onClick={() => toggleExpand(g.id)}>{isOpen ? '收合' : '展開'}</button>
+        </div>
+        {isOpen && (
+          <div className="substeps">
+            {steps.length === 0 ? <p className="empty">這本稿還沒有子項目</p>
+              : steps.map(s => (
+                <div key={s.id} className="step">
+                  <input type="checkbox" checked={s.done} onChange={() => toggleStep(s)} />
+                  <span className={s.done ? 'done-text' : ''}>{s.title}</span>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    )
+  })
+
   // 防呆:userId 尚未就緒(首次登入流程)時不掛載
   if (!userId) return null
 
@@ -139,6 +272,19 @@ export default function GuardWork({ userId }) {
       ) : (
       <>
       {msg && <div className="banner err">{msg}</div>}
+
+      {/* 場次切換:同時在多個未結束場次看守時可切換(不只集體趕稿,指名互動亦適用) */}
+      {liveSessions.length > 1 && (
+        <div className="gw-switch">
+          <span className="gw-switch-lbl">切換場次</span>
+          {liveSessions.map(s => (
+            <button key={s.id} type="button" className={`gw-switch-btn k-${s.kind || 'crunch'}${s.id === selSid ? ' on' : ''}`} onClick={() => pickSession(s.id)}>
+              <span className="gw-kind">{SESSION_KIND_LABEL[s.kind] ?? '集體趕稿'}</span>
+              <span className="gw-title">{s.title}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* === 上排:我(獄卒) + 計時器(主角,較寬,無專屬獄卒欄) === */}
       <div className="ses-top guard">
@@ -163,7 +309,61 @@ export default function GuardWork({ userId }) {
             {/* 本場 MEMO · 確認項(沿用既有元件 / 邏輯,只套版位) */}
             <SessionMemoPanel userId={userId} session={session} />
 
-            {/* 本場囚犯:我看守的置頂高亮 + 其餘分組 */}
+            {/* 指名互動:以「我的服務對象」為主體(預約時段 / 購買項目 / 目標稿件代勾) */}
+            {session.kind === 'named' && (
+            <div className="card-panel">
+              <div className="head"><h2>我的服務對象</h2><span className="count">指名 {serveTargets.length} 位</span></div>
+              <div className="body">
+                {serveTargets.length === 0 ? <p className="empty">目前沒有指名你的犯人</p> : (
+                  <div className="serve-list">
+                    {serveTargets.map((t, i) => {
+                      const status = t.inmate ? presence(t.inmate) : null
+                      const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['尚未挑稿']
+                      return (
+                        <div key={i} className="serve-card">
+                          <div className="serve-head">
+                            <span className="serve-nm">{t.name}</span>
+                            {t.inmate?.profile?.inmate_no != null && <span className="serve-no mono">No.{String(t.inmate.profile.inmate_no).padStart(4, '0')}</span>}
+                            <span className="spacer" />
+                            {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
+                          </div>
+                          <div className="serve-row"><span className="serve-k">預約時段</span>
+                            <span className="serve-v">{t.slots.length ? t.slots.map(s => `第 ${s + 1} 段`).join('、') : <span className="faint">—</span>}</span></div>
+                          <div className="serve-row goals"><span className="serve-k">購買項目</span>
+                            <div className="serve-buys">
+                              {t.items.length === 0 ? <span className="faint">—</span> : t.items.map((it, j) => {
+                                const fields = statusFields(it)
+                                return (
+                                  <div key={it.id ?? j} className="serve-buy">
+                                    <span className="sb-name">{posItemDesc(it)}{it.amount ? `（${it.amount} 萬）` : ''}</span>
+                                    {fields.length === 0 ? <span className="faint sb-na">無需確認</span>
+                                      : fields.map(([f, lbl]) => (
+                                        <label key={f} className={`sb-chk${it[f] ? ' on' : ''}`}>
+                                          <input type="checkbox" checked={!!it[f]} onChange={() => togglePosStatus(it, f)} />{lbl}完成
+                                        </label>
+                                      ))}
+                                  </div>
+                                )
+                              })}
+                            </div></div>
+                          <div className="serve-row goals"><span className="serve-k">目標稿件</span>
+                            <div className="serve-goals">
+                              {!t.inmate ? <span className="faint">非本場登記犯人，無目標稿件</span>
+                                : t.inmate.goals.length === 0 ? <span className="faint">本場還沒挑目標</span>
+                                  : goalList(t.inmate.goals)}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+            )}
+
+            {/* 本場囚犯(集體趕稿):我看守的置頂高亮 + 其餘分組 */}
+            {session.kind !== 'named' && (
             <div className="card-panel">
               <div className="head"><h2>本場囚犯</h2><span className="count">{allInmates.length} 人</span></div>
               <div className="body">
@@ -252,6 +452,7 @@ export default function GuardWork({ userId }) {
                 })()}
               </div>
             </div>
+            )}
           </div>
 
           {/* === 本場廣播(指定由我執行的,唯讀) === */}

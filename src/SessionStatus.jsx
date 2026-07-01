@@ -37,11 +37,24 @@ export default function SessionStatus({ userId }) {
     if (si && si.length) {
       // 全撈 + normalizeStatus 過濾(多撈 status 算 displayStatus 用)
       const { data: rows } = await supabase.from('sessions')
-        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds')
+        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind')
         .in('id', si.map(r => r.session_id))
       const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
       sess = live[0] ?? null
       if (sess) mineRow = si.find(r => r.session_id === sess.id)
+    }
+    // 自助入場:未報到但有未取消預約的 live 場 → 直接視為在場(免典獄長報到/身分核對)
+    if (!sess) {
+      const { data: bk } = await supabase.from('bookings')
+        .select('session_id').eq('user_id', userId).neq('status', 'cancelled')
+      if (bk && bk.length) {
+        const { data: rows } = await supabase.from('sessions')
+          .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind')
+          .in('id', bk.map(b => b.session_id))
+        const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
+        sess = live[0] ?? null
+        if (sess) mineRow = { id: null, role_in_session: 'inmate' }   // 合成:僅供顯示
+      }
     }
     if (!mineRow) { setData({ session: null }); setLoading(false); return }
 
@@ -92,7 +105,7 @@ export default function SessionStatus({ userId }) {
   // 防呆:userId 尚未就緒(首次登入流程)時不掛載狀態卡
   if (!userId) return null
   if (loading) return <div className="ses-timer waiting"><div className="st-sub">讀取本場狀態中…</div></div>
-  const { session, role, hasGuard, hasInmates } = data
+  const { session } = data
 
   // 鈴聲啟用鈕(尚未啟用才顯示;瀏覽器需先點一次才能自動播放)
   const bellBtn = !bellArmed ? (
@@ -103,20 +116,22 @@ export default function SessionStatus({ userId }) {
     }}>🔔 點我啟用切換鈴聲</button>
   ) : null
 
-  // 階段1:還沒報到進任何未結束場次 → 統一文字
-  if (!session) return <TimerWaiting text="等待身分核對" sub="尚未加入任何場次，請等待典獄長為你報到" />
+  // 階段1:沒有任何未結束場次可服刑
+  if (!session) return <TimerWaiting text="尚未加入場次" sub="開始入場後將自動進入本場" />
 
   // 狀態一律看 normalizeStatus,不再用 timer_started_at 有無當狀態判斷
   const ds = normalizeStatus(session)
 
-  // intake(等待室):番茄鐘尚未開始,依本場身分顯示對應等待文字。
-  // 等待室就先放啟用鈕,讓使用者在服刑開始前先解鎖鈴聲。
+  // 指名互動:不需要番茄鐘,只顯示本場狀態
+  if (session.kind === 'named') {
+    const t = ds === 'ended' ? '本場已結束' : ds === 'serving' ? '指名互動進行中' : '尚未開始'
+    return <TimerWaiting text={t} sub={`本場：${session.title}（指名互動 · 無番茄鐘）`} />
+  }
+
+  // intake(尚未開始倒數):場次已開始入場即視為在場,番茄鐘尚未起跑。先放鈴聲啟用鈕。
   if (ds === 'intake') {
-    const waitText = role === 'guard'
-      ? (hasInmates ? '等待服刑開始' : '監管犯人配對中')
-      : (hasGuard ? '等待服刑開始' : '等待配對專屬獄卒')
     return <>
-      <TimerWaiting text={waitText} sub={`本場：${session.title}`} />
+      <TimerWaiting text="尚未開始倒數" sub={`本場：${session.title}`} />
       {bellBtn}
     </>
   }

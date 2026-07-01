@@ -183,6 +183,16 @@ function App() {
           live = { sessionId: liveRow.id, roleInSession: mine?.role_in_session ?? 'inmate', status: normalizeStatus(liveRow) }
         }
       }
+      // 未以 session_inmates 在場時,再看 session_guards 排班:典獄長/獄卒只要排進當日班表就能操作「獄卒作業」
+      if (!live) {
+        const { data: sg } = await supabase.from('session_guards').select('session_id').eq('guard_id', user.id)
+        if (sg && sg.length) {
+          const { data: rows } = await supabase.from('sessions')
+            .select('id, status, timer_started_at').in('id', sg.map(r => r.session_id))
+          const liveRow = (rows ?? []).find(s => normalizeStatus(s) !== 'ended')
+          if (liveRow) live = { sessionId: liveRow.id, roleInSession: 'guard', status: normalizeStatus(liveRow) }
+        }
+      }
       if (alive) setMyLive(live)
     }
     pull()

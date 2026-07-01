@@ -4,6 +4,9 @@ import { normalizeStatus, SESSION_STATUS_LABEL, materializeResultMsg } from './c
 import { SESSION_KINDS, SESSION_KIND_LABEL, DEFAULT_SESSION_KIND } from '../sessionKind'
 import GuardAssign from './GuardAssign'
 import SessionGuardPlan from './SessionGuardPlan'
+import { slotLabel } from '../slots'
+
+const arr = v => Array.isArray(v) ? v : []
 
 // 場次總覽(僅典獄長):列出所有場次、開新場、編輯(標題/日期)、五態狀態機、刪除。
 // 不放番茄鐘控制與直播(那些屬「進行中場次」分頁的控場,避免重複)。
@@ -12,6 +15,7 @@ import SessionGuardPlan from './SessionGuardPlan'
 export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = [] }) {
   // 指名互動場排班用:全體獄方人員(role = guard / warden)
   const staffPool = inmates.filter(p => p.role === 'guard' || p.role === 'warden')
+    .slice().sort((a, b) => (a.inmate_no ?? 1e9) - (b.inmate_no ?? 1e9))   // 獄卒一律依犯人編號排序
   const [sessions, setSessions] = useState([])
   const [counts, setCounts] = useState({})        // session_id -> 報到人數
   const [loading, setLoading] = useState(true)
@@ -41,13 +45,13 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
     setLoading(true)
     const { data: sess } = await supabase.from('sessions')
       .select('id, title, session_date, status, timer_started_at, opened_by, capacity, created_at, is_public, kind, start_time, slot_count')
-    const { data: si } = await supabase.from('session_inmates').select('session_id')
+    const { data: si } = await supabase.from('session_inmates').select('session_id, role_in_session')
     const { data: pws } = await supabase.from('session_passwords').select('session_id, password')
     const pwMap = {}
     for (const r of pws ?? []) pwMap[r.session_id] = r.password
     setPwById(pwMap)
     const cnt = {}
-    for (const r of si ?? []) cnt[r.session_id] = (cnt[r.session_id] ?? 0) + 1
+    for (const r of si ?? []) if (r.role_in_session !== 'guard') cnt[r.session_id] = (cnt[r.session_id] ?? 0) + 1   // 報到只計犯人
     // 排序:未結束在上、已結束(ended)在下;同組內依日期由近到遠
     const rank = s => (normalizeStatus(s) === 'ended' ? 1 : 0)
     const dateKey = s => new Date(s.session_date ?? s.created_at).getTime()
@@ -61,11 +65,13 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
   async function loadExpand(sid) {
     const [siRes, bkRes, sgRes] = await Promise.all([
       supabase.from('session_inmates').select('id, member_id, role_in_session, state').eq('session_id', sid),
-      supabase.from('bookings').select('id, user_id, game_name, dc_name, avatar_url, note, status, requested_slots, addons, capture, created_at').eq('session_id', sid).order('created_at'),
+      supabase.from('bookings').select('id, user_id, game_name, dc_name, avatar_url, note, status, requested_slots, addons, capture, dc_channel_ready, created_at').eq('session_id', sid).order('created_at'),
       supabase.from('session_guards').select('guard_id').eq('session_id', sid),
     ])
     const si = siRes.data ?? [], bk = bkRes.data ?? [], sg = sgRes.data ?? []
-    const pids = [...new Set([...si.map(r => r.member_id), ...sg.map(r => r.guard_id)])]
+    // profiles 需含:已入場成員、上班獄卒、以及預約指名/加購的對象獄卒
+    const bkGuardIds = bk.flatMap(b => [...arr(b.requested_slots).map(p => p?.g), ...arr(b.addons).map(a => a?.g)]).filter(Boolean)
+    const pids = [...new Set([...si.map(r => r.member_id), ...sg.map(r => r.guard_id), ...bkGuardIds])]
     const profById = {}
     if (pids.length) {
       const { data: profs } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', pids)
@@ -73,13 +79,26 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
     }
     const merged = si.map(r => ({ id: r.id, member_id: r.member_id, role_in_session: r.role_in_session, state: r.state, profile: profById[r.member_id] }))
     const inmatesLive = merged.filter(m => m.role_in_session !== 'guard')
+      .sort((a, b) => (a.profile?.inmate_no ?? 1e9) - (b.profile?.inmate_no ?? 1e9))   // 卡片永遠依犯人編號排序
     const liveMemberIds = new Set(inmatesLive.map(m => m.member_id))
     // 本場犯人 = 已入場 ∪ 未取消預約(尚未入場的以 booking 呈現)
     const bookingInmates = bk.filter(b => b.status !== 'cancelled' && !(b.user_id && liveMemberIds.has(b.user_id)))
     const liveGuards = merged.filter(m => m.role_in_session === 'guard')
     const liveGuardIds = new Set(liveGuards.map(m => m.member_id))
     const onDutyGuards = sg.filter(r => !liveGuardIds.has(r.guard_id)).map(r => ({ guard_id: r.guard_id, profile: profById[r.guard_id] }))
-    setRosterById(prev => ({ ...prev, [sid]: { inmatesLive, bookingInmates, liveGuards, onDutyGuards, bookings: bk } }))
+    setRosterById(prev => ({ ...prev, [sid]: { inmatesLive, bookingInmates, liveGuards, onDutyGuards, bookings: bk, profById, startTime: null } }))
+  }
+
+  // 預約犯人「DC 預約頻道建立」確認(樂觀更新 + 失敗回滾)。
+  async function toggleDcChannel(sid, b) {
+    const val = !b.dc_channel_ready
+    setRosterById(prev => {
+      const r = prev[sid]; if (!r) return prev
+      return { ...prev, [sid]: { ...r, bookingInmates: r.bookingInmates.map(x => x.id === b.id ? { ...x, dc_channel_ready: val } : x) } }
+    })
+    const { error } = await supabase.from('bookings').update({ dc_channel_ready: val }).eq('id', b.id)
+    if (error) { loadExpand(sid); setMsg('更新失敗：' + error.message); return }
+    setMsg(val ? '已標記 DC 頻道建立' : '已取消 DC 頻道建立')
   }
   async function toggleExpand(s) {
     if (normalizeStatus(s) === 'ended') return
@@ -87,19 +106,6 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
     setExpandedId(s.id)
     if (rosterById[s.id]) return
     await loadExpand(s.id)
-  }
-
-  // 預約狀態(確認/取消/待確認):樂觀更新該場 bookings,失敗回滾。
-  async function setBookingStatus(sid, b, status) {
-    if (status === 'cancelled' && !window.confirm('確定將這筆預約改為「已取消」？')) return
-    const snapshot = rosterById[sid]
-    setRosterById(prev => {
-      const r = prev[sid]; if (!r) return prev
-      return { ...prev, [sid]: { ...r, bookings: r.bookings.map(x => x.id === b.id ? { ...x, status } : x) } }
-    })
-    const { error } = await supabase.from('bookings').update({ status }).eq('id', b.id)
-    if (error) { setRosterById(prev => ({ ...prev, [sid]: snapshot })); setMsg('更新預約狀態失敗，已還原：' + error.message); return }
-    setMsg('已更新預約狀態'); loadExpand(sid)   // 重整名冊 union(預約↔已入場)
   }
 
   // 把上限輸入轉成 int 或 null(空白 / 非正整數 → null = 不限)
@@ -327,60 +333,31 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
                           <GuardAssign sessionInmateId={r.id} guardRoster={roster.liveGuards} setMsg={setMsg} />
                         </div>
                       ))}
-                      {roster.bookingInmates.map(b => (
-                        <div key={b.id} className="inmate">
-                          <div className="in-av">{b.avatar_url ? <img src={b.avatar_url} alt="" /> : (b.game_name ?? b.dc_name ?? '?')[0]}</div>
-                          <div>
-                            <div className="in-nm">{b.game_name ?? b.dc_name ?? '（未填暱稱）'} <span className="tag tag-pill" style={{ background: 'rgba(224,176,74,.16)', color: '#e0b04a' }}>{b.status === 'confirmed' ? '已確認' : '預約中'}</span>{!b.user_id && <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.1)', color: 'var(--dim)' }}>訪客</span>}</div>
-                            <div className="in-no faint">尚未入場</div>
+                      {roster.bookingInmates.map(b => {
+                        const gname = id => roster.profById?.[id]?.game_name ?? roster.profById?.[id]?.display_name ?? '獄卒'
+                        const picks = arr(b.requested_slots)
+                        const addons = arr(b.addons).filter(a => a && (a.polaroid > 0 || a.sign))
+                        const cap = b.capture && typeof b.capture === 'object' ? b.capture : null
+                        return (
+                          <div key={b.id} className="inmate" style={{ alignItems: 'flex-start' }}>
+                            <div className="in-av">{b.avatar_url ? <img src={b.avatar_url} alt="" /> : (b.game_name ?? b.dc_name ?? '?')[0]}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div className="in-nm">{b.game_name ?? b.dc_name ?? '（未填暱稱）'} <span className="tag tag-pill" style={{ background: 'rgba(224,176,74,.16)', color: '#e0b04a' }}>{b.status === 'confirmed' ? '已確認' : '預約中'}</span>{!b.user_id && <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.1)', color: 'var(--dim)' }}>訪客</span>}</div>
+                              <div className="in-no faint" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                                {picks.length === 0 && addons.length === 0 && !cap && <span>尚未入場 · 無指名/加購</span>}
+                                {picks.map((p, i) => <span key={i} className="tag tag-pill" style={{ background: 'rgba(180,120,255,.16)', color: '#c2a3ff' }}>{gname(p.g)}{p.s != null ? `（${slotLabel(s.start_time, p.s)}）` : '（監督）'}</span>)}
+                                {addons.map((a, i) => <span key={'a' + i} className="tag tag-pill" style={{ background: 'rgba(63,140,255,.14)', color: '#7fb0ff' }}>{gname(a.g)}：拍立得 {a.polaroid || 0}{a.sign ? '＋簽繪' : ''}</span>)}
+                                {cap && <span className="tag tag-pill" style={{ background: 'rgba(216,65,47,.14)', color: '#e88' }}>抓捕：委託 {cap.client || '?'} → {cap.target || '?'}（{cap.server || '?'}）{cap.guards ? ` · ${cap.guards} 位` : ''}</span>}
+                              </div>
+                            </div>
+                            <label className="gp-polaroid" style={{ flex: '0 0 auto' }}>
+                              <input type="checkbox" checked={!!b.dc_channel_ready} onChange={() => toggleDcChannel(s.id, b)} />DC 頻道建立
+                            </label>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </>)}
-
-                    <div className="group-lbl">本場獄卒 ({roster.liveGuards.length + roster.onDutyGuards.length})<span className="ln" /></div>
-                    {(roster.liveGuards.length + roster.onDutyGuards.length) === 0 ? <p className="empty">本場沒有獄卒</p> : (
-                      <div className="guard-grid">
-                        {roster.liveGuards.map(r => (
-                          <div key={r.id} className="guard-cell">
-                            <div className="g-av">{r.profile?.avatar_url ? <img src={r.profile.avatar_url} alt="" /> : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}</div>
-                            <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'}</div>
-                            <span className="role-tag guard">已入場</span>
-                          </div>
-                        ))}
-                        {roster.onDutyGuards.map(r => (
-                          <div key={r.guard_id} className="guard-cell">
-                            <div className="g-av">{r.profile?.avatar_url ? <img src={r.profile.avatar_url} alt="" /> : (r.profile?.game_name ?? r.profile?.display_name ?? '?')[0]}</div>
-                            <div className="g-nm">{r.profile?.game_name ?? r.profile?.display_name ?? '（未知）'}</div>
-                            <span className="role-tag guard">上班</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* 預約清單(併入預約總覽):本場所有預約,可確認/取消 */}
-                    <div className="group-lbl">預約清單 ({roster.bookings.filter(b => b.status !== 'cancelled').length})<span className="ln" /></div>
-                    {roster.bookings.length === 0 ? <p className="empty">本場沒有預約</p> : roster.bookings.map(b => {
-                      const picks = Array.isArray(b.requested_slots) ? b.requested_slots : []
-                      const addons = (Array.isArray(b.addons) ? b.addons : []).filter(a => a && (a.polaroid > 0 || a.sign > 0))
-                      const st = b.status === 'confirmed' ? { l: '已確認', bg: 'rgba(63,179,107,.15)', c: 'var(--ok)' }
-                        : b.status === 'cancelled' ? { l: '已取消', bg: 'rgba(255,255,255,.08)', c: 'var(--dim)' }
-                          : { l: '待確認', bg: 'rgba(224,176,74,.16)', c: '#e0b04a' }
-                      return (
-                        <div key={b.id} className={`sub-row${b.status === 'cancelled' ? ' faint' : ''}`}>
-                          <strong>{b.game_name ?? b.dc_name ?? '（未填暱稱）'}</strong>
-                          {!b.user_id && <span className="tag tag-pill" style={{ background: 'rgba(255,255,255,.1)', color: 'var(--dim)' }}>訪客</span>}
-                          {picks.length > 0 && <span className="muted">指名/監督 {picks.length}</span>}
-                          {addons.length > 0 && <span className="muted">加購 {addons.reduce((n, a) => n + (a.polaroid || 0) + (a.sign || 0), 0)} 張</span>}
-                          {b.capture && <span className="tag tag-pill" style={{ background: 'rgba(216,65,47,.14)', color: '#e88' }}>抓捕</span>}
-                          <span className="tag tag-pill" style={{ background: st.bg, color: st.c }}>{st.l}</span>
-                          <span className="spacer" />
-                          {b.status !== 'confirmed' && <button className="btn-sm" onClick={() => setBookingStatus(s.id, b, 'confirmed')}>確認</button>}
-                          {b.status !== 'pending' && b.status !== 'cancelled' && <button className="btn-sm" onClick={() => setBookingStatus(s.id, b, 'pending')}>改待確認</button>}
-                          {b.status !== 'cancelled' && <button className="btn-sm btn-danger" onClick={() => setBookingStatus(s.id, b, 'cancelled')}>取消</button>}
-                        </div>
-                      )
-                    })}
+                    {/* 本場獄卒改由「獄卒排班」直接檢視,此處不再重複顯示 */}
                   </>)}
                 </div>
               )}
