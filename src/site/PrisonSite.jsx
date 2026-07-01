@@ -161,6 +161,8 @@ export default function PrisonSite() {
   const [selBooking, setSelBooking] = useState(null) // 我在 sel 這場的預約(含 cancelled)
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [receipt, setReceipt] = useState(null)       // 預約成功明細:{ inmateNo, text, account, password }
+  const [copied, setCopied] = useState('')           // 複製回饋:'' | 'receipt' | 'cred'
   const [myProfile, setMyProfile] = useState(null)   // 預約者既有 profile(暱稱/頭像來源判定)
   const [bkName, setBkName] = useState('')           // 入監暱稱(預設帶既有 game_name)
   const [bkAvatar, setBkAvatar] = useState('')       // 入監頭像 URL(預設帶既有 avatar_url)
@@ -270,8 +272,24 @@ export default function PrisonSite() {
     setGName(''); setGPw(''); setGBusy(false); setGErr(null)
   }
   const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', guards: 2 }) }
-  const openModal = s => { setSel(s); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); resetModalAuth() }
-  const closeModal = () => { setSel(null); setMsg(null); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); setNamedGuards([]); resetModalAuth() }
+  const openModal = s => { setSel(s); setMsg(null); setReceipt(null); setCopied(''); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); resetModalAuth() }
+  const closeModal = () => { setSel(null); setMsg(null); setReceipt(null); setCopied(''); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); setNamedGuards([]); resetModalAuth() }
+
+  // 預約明細文字(供犯人複製留存)。以目前選擇的即時報價 + 場次/身分組成。
+  function buildReceiptText(inmateNo, identity) {
+    const sum = priceSummary()
+    const lines = ['死線監獄 · 預約明細']
+    lines.push(`場次：${sel.title}${sel.dateISO ? `（${sel.dateISO}）` : ''}`)
+    lines.push(`身分：${identity}${inmateNo != null ? ` · 犯人編號 ${String(inmateNo).padStart(4, '0')}` : ''}`)
+    for (const [lbl, det, amt] of sum.lines) lines.push(`・${lbl}${det ? `（${det}）` : ''} ${amt} 萬`)
+    if (sum.capture) lines.push(`・監獄外抓捕 ${sum.capture.guards} 位（委託人另付）`)
+    lines.push(`預估總額：${sum.total} 萬`)
+    return lines.join('\n')
+  }
+  async function copyText(text, tag) {
+    try { await navigator.clipboard.writeText(text); setCopied(tag); setTimeout(() => setCopied(''), 2000) }
+    catch { setCopied('') }
+  }
 
   // 由目前選擇組出送出用的 payload:指名(多筆)/每卒加購/抓捕訂單
   const buildPicks = () => {
@@ -354,8 +372,8 @@ export default function PrisonSite() {
     const r = await createGuestBooking(sel.id, { game_name: name, server: gServer.trim(), password: sel.hasPassword ? gPw.trim() : null, ...buildPicks() })
     setGBusy(false)
     if (r.ok) {
-      const noTag = r.inmate_no != null ? `【犯人編號 ${String(r.inmate_no).padStart(4, '0')}】` : ''
-      setMsg(`${noTag}預約成功。鈴響時見。（不註冊預約如需取消，請至 Discord 聯繫典獄長）`)
+      const identity = gServer.trim() ? `${name}@${gServer.trim()}` : name
+      setReceipt({ inmateNo: r.inmate_no, text: buildReceiptText(r.inmate_no, identity), account: r.account, password: r.password })
       loadData()
       return
     }
@@ -394,7 +412,10 @@ export default function PrisonSite() {
       ...buildPicks(),
     })
     setSubmitting(false)
-    if (r.ok) setMsg(`${r.inmate_no != null ? `【犯人編號 ${String(r.inmate_no).padStart(4, '0')}】` : ''}預約成功。鈴響時見。`)
+    if (r.ok) {
+      const identity = bkName.trim() || myProfile?.game_name || '會員'
+      setReceipt({ inmateNo: r.inmate_no, text: buildReceiptText(r.inmate_no, identity), account: null, password: null })
+    }
     else if (r.error === 'already_booked') setMsg('你已在此梯次服刑名冊上。')
     else if (r.error === 'full') setMsg('此梯次已停止收監。')
     else if (r.error === 'wrong_password') setMsg('通行密鑰不正確，請重新開啟報名並輸入密鑰。')
@@ -799,7 +820,27 @@ export default function PrisonSite() {
                 </div>
               )}
 
-              {msg ? (
+              {receipt ? (
+                <div className="m-receipt">
+                  <div className="m-receipt-hd">{receipt.inmateNo != null ? `【犯人編號 ${String(receipt.inmateNo).padStart(4, '0')}】` : ''}預約成功</div>
+                  <div className="m-receipt-sub">本次預約清單(可複製留存):</div>
+                  <pre className="m-receipt-text">{receipt.text}</pre>
+                  <button className="m-dc" type="button" onClick={() => copyText(receipt.text, 'receipt')}>
+                    {copied === 'receipt' ? '已複製 ✓' : '複製預約明細'}
+                  </button>
+                  {receipt.account && (
+                    <div className="m-receipt-cred">
+                      <div className="m-receipt-sub">你的登入帳密(僅顯示這一次,請務必截圖/複製留存):</div>
+                      <div className="m-cred-row"><span>帳號</span><b>{receipt.account}</b></div>
+                      <div className="m-cred-row"><span>密碼</span><b>{receipt.password}</b></div>
+                      <button className="m-dc" type="button" onClick={() => copyText(`帳號 ${receipt.account}\n密碼 ${receipt.password}`, 'cred')}>
+                        {copied === 'cred' ? '已複製 ✓' : '複製帳號密碼'}
+                      </button>
+                      <p className="m-note" style={{ margin: '8px 0 0' }}>可用此帳號密碼登入後台系統。日後免登入以<b style={{ color: 'var(--text)' }}>相同暱稱＋伺服器</b>預約會累積到同一份犯人資料。若遺失帳密請聯繫典獄長。</p>
+                    </div>
+                  )}
+                </div>
+              ) : msg ? (
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
                 <>

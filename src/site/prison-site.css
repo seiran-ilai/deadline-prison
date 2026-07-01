@@ -325,7 +325,19 @@
 .dp-modal .m-input{background:var(--concrete-0); border:1px solid var(--steel); color:var(--text);
   padding:10px 12px; font-family:var(--cjk); font-size:14px; width:100%}
 .dp-modal .m-input:focus{outline:none; border-color:var(--hazard)}
-.dp-modal .m-input::placeholder{color:var(--dim); opacity:1}   /* 灰字提示(如 暱稱＠伺服器) */
+.dp-modal .m-input::placeholder{color:var(--dim); opacity:1}   /* 灰字提示 */
+/* 預約成功明細 + 帳密留存 */
+.dp-modal .m-receipt{display:flex; flex-direction:column; gap:10px}
+.dp-modal .m-receipt-hd{font-family:var(--cjk); font-weight:800; font-size:18px; color:var(--hazard)}
+.dp-modal .m-receipt-sub{font-size:12px; color:var(--dim)}
+.dp-modal .m-receipt-text{white-space:pre-wrap; word-break:break-word; font-family:var(--cjk); font-size:13px;
+  line-height:1.7; color:var(--text); background:var(--concrete-0); border:1px solid var(--steel);
+  border-radius:8px; padding:12px 14px; margin:0}
+.dp-modal .m-receipt-cred{border:1px solid var(--hazard); border-radius:8px; padding:12px 14px;
+  background:rgba(245,197,24,.06); display:flex; flex-direction:column; gap:6px}
+.dp-modal .m-cred-row{display:flex; align-items:baseline; gap:10px; font-size:14px}
+.dp-modal .m-cred-row span{flex:0 0 44px; color:var(--dim); font-size:12px}
+.dp-modal .m-cred-row b{font-family:var(--mono); color:var(--text); font-size:15px; letter-spacing:.5px; word-break:break-all}
 /* modal 內 email/Discord 雙通道:分隔線 + 切換連結 + 擇一提示 */
 .dp-modal .m-or{display:flex; align-items:center; gap:12px; margin:16px 0; color:var(--dim); font-family:var(--mono); font-size:11px; letter-spacing:2px}
 .dp-modal .m-or span{flex:1; height:1px; background:var(--steel)}

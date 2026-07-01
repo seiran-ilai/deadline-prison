@@ -88,7 +88,13 @@ export default async function handler(req, res) {
       count: (sess.booked ?? 0) + 1, action: '新報名',
     })
 
-    return res.status(200).json({ ok: true, booked: (sess.booked ?? 0) + 1, capacity: sess.capacity, inmate_no: anon.inmateNo ?? null })
+    return res.status(200).json({
+      ok: true, booked: (sess.booked ?? 0) + 1, capacity: sess.capacity,
+      inmate_no: anon.inmateNo ?? null,
+      // 首次(新建帳號)才回傳明文帳密供犯人留存;沿用既有帳號則不回傳
+      account: anon.reused ? null : (anon.account ?? null),
+      password: anon.reused ? null : (anon.password ?? null),
+    })
   } catch (e) {
     return res.status(500).json({ error: 'server_error', detail: String(e?.message || e) })
   }

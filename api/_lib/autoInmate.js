@@ -20,11 +20,14 @@ export async function createAnonInmate(supabase, name, server = '', accountType 
     (p.server || '').trim().toLowerCase() === svLc)
   if (hit) return { userId: hit.id, inmateNo: hit.inmate_no, name: gn, server: sv, reused: true }
 
-  const email = `auto-${randomUUID()}@${ACCOUNT_DOMAIN}`
+  // 首次:建可登入帳號(帳號名為易輸入的隨機碼,密碼明文回傳一次供犯人留存),再建檔發號。
+  const account = 'g' + randomUUID().replace(/-/g, '').slice(0, 8)   // a-f0-9,符合登入帳號名
+  const password = genPassword()
+  const email = `${account}@${ACCOUNT_DOMAIN}`
   const { data: created, error: cErr } = await supabase.auth.admin.createUser({
     email,
-    password: genPassword(),
-    email_confirm: true,   // 假 email 直接視為已驗證;此帳號不對外、無人持有密碼
+    password,
+    email_confirm: true,
     user_metadata: { game_name: gn, server: sv || null, account_type: accountType, auto_inmate: true },
   })
   if (cErr || !created?.user) return { error: cErr?.message || 'create_user_failed' }
@@ -35,5 +38,5 @@ export async function createAnonInmate(supabase, name, server = '', accountType 
     await supabase.auth.admin.deleteUser(created.user.id)   // 回滾,不留半套
     return { error: pErr.message }
   }
-  return { userId: created.user.id, inmateNo, name: gn, server: sv }
+  return { userId: created.user.id, inmateNo, name: gn, server: sv, account, password, reused: false }
 }
