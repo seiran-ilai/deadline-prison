@@ -388,10 +388,14 @@
 .admin .memo-radio input[type=radio]{accent-color:var(--hazard); width:16px; height:16px; cursor:pointer}
 
 /* 管理分頁:MEMO 列 */
-.admin .memo-row{display:flex; flex-direction:column; gap:8px}
-.admin .memo-row .memo-row-main{display:flex; align-items:flex-start; gap:8px}
-.admin .memo-row .memo-content{font-size:14px; color:var(--text); white-space:pre-wrap; word-break:break-word; flex:1; min-width:0}
-.admin .memo-row .memo-row-meta{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+/* MEMO 管理:卡片網格(寬螢幕多欄並排,避免整條滿版留白) */
+.admin .memo-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; margin-bottom:8px}
+.admin .memo-card{display:flex; flex-direction:column; gap:10px; border:1px solid var(--line); border-radius:8px;
+  padding:14px; background:var(--panel); min-height:110px}
+.admin .memo-card .memo-card-top{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.admin .memo-card .memo-obj{font-size:12px}
+.admin .memo-card .memo-content{flex:1; font-size:14px; color:var(--text); white-space:pre-wrap; word-break:break-word}
+.admin .memo-card .memo-card-acts{display:flex; gap:6px; justify-content:flex-end; border-top:1px solid var(--line); padding-top:10px}
 
 /* 服刑中面板:可勾選確認項 */
 /* 確認項清單:寬版(如指名場上排 MEMO)自動兩直欄,窄版單欄 */

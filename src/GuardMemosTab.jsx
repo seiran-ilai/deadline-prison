@@ -50,15 +50,15 @@ export default function GuardMemosTab({ userId }) {
   const bySession = {}
   for (const m of sessionMemos) (bySession[m.session_id] ??= []).push(m)
 
-  const MemoRow = ({ m }) => (
-    <div className="panel memo-row">
-      <div className="memo-row-main">
+  // 卡片式(網格排列):標籤 + 對象 → 內容 → 動作,避免整條滿版留白
+  const renderMemo = (m) => (
+    <div key={m.id} className="memo-card">
+      <div className="memo-card-top">
         <span className={`role-tag ${m.scope === 'every' ? 'warden' : 'guard'}`}>{m.scope === 'every' ? '每場' : '指定場'}</span>
-        <span className="memo-content">{m.content}</span>
+        {m.target_prisoner_id && <span className="faint memo-obj">對象：{prisonerName[m.target_prisoner_id] ?? '（已不存在）'}</span>}
       </div>
-      <div className="memo-row-meta">
-        {m.target_prisoner_id && <span className="faint">對象：{prisonerName[m.target_prisoner_id] ?? '（已不存在）'}</span>}
-        <span className="spacer" />
+      <div className="memo-content">{m.content}</div>
+      <div className="memo-card-acts">
         <button className="btn-sm" onClick={() => setModal({ initial: m })}>編輯</button>
         <button className="btn-sm btn-danger" onClick={() => remove(m)}>刪除</button>
       </div>
@@ -78,12 +78,12 @@ export default function GuardMemosTab({ userId }) {
       ) : (
         <>
           <div className="group-lbl">每場 MEMO ({everyMemos.length})<span className="ln" /></div>
-          {everyMemos.length === 0 ? <p className="empty">沒有每場 MEMO</p> : everyMemos.map(m => <MemoRow key={m.id} m={m} />)}
+          {everyMemos.length === 0 ? <p className="empty">沒有每場 MEMO</p> : <div className="memo-grid">{everyMemos.map(renderMemo)}</div>}
 
           {Object.keys(bySession).map(sid => (
             <div key={sid}>
               <div className="group-lbl">指定場：{sessionTitle[sid] ?? '（場次已刪除）'} ({bySession[sid].length})<span className="ln" /></div>
-              {bySession[sid].map(m => <MemoRow key={m.id} m={m} />)}
+              <div className="memo-grid">{bySession[sid].map(renderMemo)}</div>
             </div>
           ))}
         </>
