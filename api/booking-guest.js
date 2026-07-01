@@ -56,10 +56,14 @@ export default async function handler(req, res) {
           .map(a => ({ g: a.g, polaroid: Math.max(0, Math.min(99, parseInt(a.polaroid) || 0)), sign: !!a.sign, portrait: Math.max(0, Math.min(99, parseInt(a.portrait) || 0)) }))
           .filter(a => a.polaroid > 0 || a.portrait > 0)
       : []
-    // 抓捕訂單:伺服器欄位已移除(預約人暱稱已含伺服器);不再寫入 capture.server。
-    const cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
-      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
+    // 抓捕訂單:被抓捕者(target)帶暱稱 + 伺服器,結帳時自動建檔發號(account_type=capture)。
+    let cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
+      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), targetServer: String(capture.targetServer || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
       : null
+    if (cleanCapture?.target) {
+      const tgt = await createAnonInmate(supabase, cleanCapture.target, cleanCapture.targetServer, 'capture')
+      if (tgt.inmateNo != null) cleanCapture = { ...cleanCapture, target_no: tgt.inmateNo }
+    }
 
     // 防重複(同場 + 同暱稱 + 同伺服器,未取消)
     let dupQ = supabase.from('bookings').select('id, server')
@@ -83,7 +87,7 @@ export default async function handler(req, res) {
     // Discord 通知(組固定格式播報字串;訪客名稱即 gn=暱稱@伺服器;失敗不擋預約)
     await sendReservationBroadcast(supabase, {
       webhook: WEBHOOK, sess, picks, addons: cleanAddons,
-      captureTarget: cleanCapture?.target || null,
+      captureTarget: cleanCapture ? (cleanCapture.targetServer ? `${cleanCapture.target}@${cleanCapture.targetServer}` : cleanCapture.target) : null,
       isMember: false, name: sv ? `${gn}@${sv}` : gn, inmateNo: null,
       count: (sess.booked ?? 0) + 1, action: '新報名',
     })

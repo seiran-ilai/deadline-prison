@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { sendReservationBroadcast } from './_lib/reservationBroadcast.js'
+import { getServiceClient } from './_lib/wardenAuth.js'
+import { createAnonInmate } from './_lib/autoInmate.js'
 
 // /api/booking — POST：驗證登入(以伺服器端 token 為準)→ 寫 bookings → 送 Discord 通知。
 // 身分不信任前端自報;一律用 Authorization 帶來的 JWT 經 getUser 驗證。
@@ -69,10 +71,18 @@ export default async function handler(req, res) {
           .map(a => ({ g: a.g, polaroid: Math.max(0, Math.min(99, parseInt(a.polaroid) || 0)), sign: !!a.sign, portrait: Math.max(0, Math.min(99, parseInt(a.portrait) || 0)) }))
           .filter(a => a.polaroid > 0 || a.portrait > 0)
       : []
-    // 抓捕訂單:伺服器欄位已移除(預約人暱稱已含伺服器);不再寫入 capture.server。
-    const cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
-      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
+    // 抓捕訂單:被抓捕者(target)帶暱稱 + 伺服器,自動建檔發號(account_type=capture)。
+    // 建帳號需 service_role,故此處另取 service client(user JWT 無 auth.admin 權限)。
+    let cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
+      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), targetServer: String(capture.targetServer || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
       : null
+    if (cleanCapture?.target) {
+      const svc = getServiceClient()
+      if (svc) {
+        const tgt = await createAnonInmate(svc, cleanCapture.target, cleanCapture.targetServer, 'capture')
+        if (tgt.inmateNo != null) cleanCapture = { ...cleanCapture, target_no: tgt.inmateNo }
+      }
+    }
 
     // insert(DB 唯一鍵兜底重複)
     // game_name / avatar_url:前端帶來的展示值(暱稱/頭像),僅供該筆預約顯示,不作身分依據;
@@ -99,7 +109,7 @@ export default async function handler(req, res) {
     // 送 Discord 通知(組固定格式播報字串;URL 取自 env;失敗不擋預約)
     await sendReservationBroadcast(supabase, {
       webhook: WEBHOOK, sess, picks, addons: cleanAddons,
-      captureTarget: cleanCapture?.target || null,
+      captureTarget: cleanCapture ? (cleanCapture.targetServer ? `${cleanCapture.target}@${cleanCapture.targetServer}` : cleanCapture.target) : null,
       isMember: true, name: gn || dc_name || '(unknown)', inmateNo,
       count: (sess.booked ?? 0) + 1, action: '新報名',
     })

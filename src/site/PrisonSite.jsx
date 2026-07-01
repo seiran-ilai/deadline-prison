@@ -171,7 +171,7 @@ export default function PrisonSite() {
   const [namedGuards, setNamedGuards] = useState([]) // 指名互動場:[{ guard_id, name, avatar, slots:[{index,label,taken}] }]
   const [reqSel, setReqSel] = useState(() => new Set())  // 指名選擇:Set of "guardId|slotIndex"(named 帶時格;crunch 監督用 "guardId|")
   const [addonsByGuard, setAddonsByGuard] = useState({}) // 每卒加購:{ [guardId]: { polaroid, sign } }
-  const [capture, setCapture] = useState({ on: false, client: '', target: '', server: '', guards: 2 }) // 集體場「把朋友抓進去」(guards=抓捕獄卒人數)
+  const [capture, setCapture] = useState({ on: false, client: '', target: '', targetServer: '', guards: 2 }) // 集體場「把朋友抓進去」(被抓捕者暱稱+伺服器 → 自動建號)
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
@@ -271,7 +271,7 @@ export default function PrisonSite() {
     setMPw(''); setMAuthBusy(false); setMAuthErr(null)
     setGName(''); setGPw(''); setGBusy(false); setGErr(null)
   }
-  const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', guards: 2 }) }
+  const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', targetServer: '', guards: 2 }) }
   const openModal = s => { setSel(s); setMsg(null); setReceipt(null); setCopied(''); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); resetModalAuth() }
   const closeModal = () => { setSel(null); setMsg(null); setReceipt(null); setCopied(''); setPw(''); setPwOk(false); setPwErr(null); resetPicks(); setNamedGuards([]); resetModalAuth() }
 
@@ -298,7 +298,7 @@ export default function PrisonSite() {
       .map(([g, a]) => ({ g, polaroid: a?.polaroid || 0, sign: !!a?.sign, portrait: a?.portrait || 0 }))
       .filter(a => a.polaroid > 0 || a.portrait > 0)
     const cap = (sel?.kind === 'crunch' && capture.on && (capture.client.trim() || capture.target.trim()))
-      ? { client: capture.client.trim(), target: capture.target.trim(), guards: Math.max(2, capture.guards || 2) } : null
+      ? { client: capture.client.trim(), target: capture.target.trim(), targetServer: capture.targetServer.trim(), guards: Math.max(2, capture.guards || 2) } : null
     return { requested_slots, addons, capture: cap }
   }
   // 指名/監督多選 toggle;每卒加購數量設定(0..99)
@@ -785,9 +785,13 @@ export default function PrisonSite() {
                       {capture.on && (
                         <div className="m-capture-fields">
                           <div className="m-field"><span className="m-field-lbl">委託人暱稱</span>
-                            <input className="m-input" placeholder="暱稱＠伺服器" value={capture.client} onChange={e => setCapture({ ...capture, client: e.target.value })} /></div>
-                          <div className="m-field"><span className="m-field-lbl">犯人暱稱</span>
-                            <input className="m-input" placeholder="暱稱＠伺服器" value={capture.target} onChange={e => setCapture({ ...capture, target: e.target.value })} /></div>
+                            <input className="m-input" placeholder="你的暱稱" value={capture.client} onChange={e => setCapture({ ...capture, client: e.target.value })} /></div>
+                          <div className="m-field-row" style={{ display: 'flex', gap: 10 }}>
+                            <div className="m-field" style={{ flex: 1 }}><span className="m-field-lbl">犯人暱稱</span>
+                              <input className="m-input" placeholder="被抓捕者暱稱" value={capture.target} onChange={e => setCapture({ ...capture, target: e.target.value })} /></div>
+                            <div className="m-field" style={{ flex: 1 }}><span className="m-field-lbl">犯人伺服器</span>
+                              <input className="m-input" placeholder="被抓捕者伺服器" value={capture.targetServer} onChange={e => setCapture({ ...capture, targetServer: e.target.value })} /></div>
+                          </div>
                           <div className="m-field">
                             <span className="m-field-lbl">抓捕獄卒人數</span>
                             <div className="m-astep" style={{ paddingTop: 4 }}>
