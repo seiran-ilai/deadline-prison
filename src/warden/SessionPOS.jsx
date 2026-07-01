@@ -25,6 +25,7 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
   const [items, setItems] = useState([])       // 今日 pos_order_items
   const [loading, setLoading] = useState(true)
   const [customer, setCustomer] = useState('') // 指名場本單犯人名稱
+  const [customerServer, setCustomerServer] = useState('') // 臨時報名犯人伺服器(暱稱/伺服器分欄;自動建號用)
   const [orderNote, setOrderNote] = useState('') // 結帳備註
   const [ordersById, setOrdersById] = useState({}) // order_id -> { customer_name, note }
   const [pick, setPick] = useState('')         // 目前選的品項 key
@@ -154,25 +155,34 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
     const gsb = []
     for (const it of inserted ?? []) if (it.item_type === 'nominate') for (const s of arr(it.slot_times)) gsb.push({ session_id: sid, guard_id: it.target_guard_id, slot_index: s, order_item_id: it.id })
     if (gsb.length) await supabase.from('guard_slot_bookings').insert(gsb)
-    // 臨時報名:把犯人加入本場名單(建走查 booking 列),名單沒有才追加;
-    // 若該筆有「典獄長分配」則結帳後把專屬看守寫回這筆走查 booking(inmate_guards.booking_id)。
+    // 臨時報名:建走查犯人(/api/walkin 自動建檔發號 + 暱稱/伺服器),名單沒有才追加;
+    // 若該筆有「典獄長分配」則把專屬看守寫回這筆走查 booking(inmate_guards.booking_id)。
     const signupItem = cart.find(c => c.item_type === 'signup')
+    let walkNo = null
     if (cust && signupItem && !rosterNames.includes(cust)) {
-      const { data: bid, error: wErr } = await supabase.rpc('warden_add_walkin', { p_session: sid, p_name: cust })
-      if (wErr) setMsg('已結帳，但追加走查犯人失敗：' + wErr.message)
-      else {
+      const { data: { session: authSession } } = await supabase.auth.getSession()
+      const token = authSession?.access_token
+      const resp = token ? await fetch('/api/walkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ session_id: sid, name: cust, server: customerServer.trim() }),
+      }).then(r => r.json()).catch(() => ({})) : {}
+      if (resp.ok) {
+        walkNo = resp.inmate_no
         setRosterNames(prev => [...new Set([...prev, cust])])
-        if (bid && signupItem.assign_guard_id) {
-          const { error: aErr } = await supabase.from('inmate_guards').insert({ booking_id: bid, guard_id: signupItem.assign_guard_id })
+        if (resp.booking_id && signupItem.assign_guard_id) {
+          const { error: aErr } = await supabase.from('inmate_guards').insert({ booking_id: resp.booking_id, guard_id: signupItem.assign_guard_id })
           if (aErr) setMsg('已結帳、已追加,但分配專屬獄卒失敗：' + aErr.message)
         }
-      }
+      } else setMsg('已結帳,但臨時報名建號失敗：' + (resp.error || ''))
     }
     // 樂觀更新本地(不整頁刷新):新品項插到今日總表頂端、訂單備註/占用一併更新
     setItems(prev => [...(inserted ?? []), ...prev])
     setOrdersById(prev => ({ ...prev, [order.id]: { customer_name: cust || null, note: orderNote.trim() || null } }))
     setOccupied(prev => { const n = new Set(prev); for (const it of inserted ?? []) if (it.item_type === 'nominate') for (const s of arr(it.slot_times)) n.add(`${it.target_guard_id}|${s}`); return n })
-    setBusy(false); setMsg(`已結帳 ${rows.length} 項 · ${cartTotal} 萬`); setCart([]); setCustomer(''); setOrderNote('')
+    setBusy(false)
+    setMsg(`已結帳 ${rows.length} 項 · ${cartTotal} 萬${walkNo != null ? ` · 臨時報名犯人編號 ${String(walkNo).padStart(4, '0')}` : ''}`)
+    setCart([]); setCustomer(''); setCustomerServer(''); setOrderNote('')
     onPosChange?.()   // 通知薪資結算重算(結帳後自動更新,免手動刷新)
   }
 
@@ -244,6 +254,9 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
           {!pick ? <p className="empty">選一個品項以填寫細節</p> : (
             <div className="pos-detail">
               {pick === 'signup' && (<>
+                {/* 臨時報名犯人伺服器(暱稱=上方本單犯人;自動建檔發號用) */}
+                <div className="pos-fld"><span>犯人伺服器</span>
+                  <input className="inp" style={{ maxWidth: 200 }} value={customerServer} onChange={e => setCustomerServer(e.target.value)} placeholder="被報名犯人的伺服器" /></div>
                 {/* 指名獄卒(付費指定監督) */}
                 <label className="pos-chk"><input type="checkbox" checked={d.supervise} onChange={e => setD({ ...d, supervise: e.target.checked, target_guard_id: '' })} />指名監督獄卒 +10 萬</label>
                 {d.supervise && (
