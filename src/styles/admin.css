@@ -394,8 +394,9 @@
 .admin .memo-row .memo-row-meta{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
 
 /* 服刑中面板:可勾選確認項 */
+/* 確認項清單:寬版(如指名場上排 MEMO)自動兩直欄,窄版單欄 */
+.admin .memo-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:0 24px}
 .admin .memo-check{display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--line)}
-.admin .memo-check:last-child{border-bottom:none}
 .admin .memo-check > input[type=checkbox]{margin-top:3px}
 .admin .memo-check .memo-check-body{flex:1; min-width:0; display:flex; flex-direction:column; gap:6px}
 .admin .memo-check .memo-check-body > span{white-space:pre-wrap; word-break:break-word}

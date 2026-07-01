@@ -74,7 +74,7 @@ export default function SessionMemoPanel({ userId, session }) {
         {msg && <div className="banner err" style={{ marginBottom: 10 }}>{msg}<button onClick={() => setMsg('')}>✕</button></div>}
         {loading ? <p className="empty">載入中…</p> : memos.length === 0 ? (
           <p className="empty">本場尚無確認項，點右上「＋ 新增」建立。</p>
-        ) : memos.map(m => {
+        ) : <div className="memo-list">{memos.map(m => {
           const done = checked.has(m.id)
           return (
             <div key={m.id} className="memo-check">
@@ -88,7 +88,7 @@ export default function SessionMemoPanel({ userId, session }) {
               </div>
             </div>
           )
-        })}
+        })}</div>}
       </div>
 
       {adding && (

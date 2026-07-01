@@ -455,8 +455,10 @@ export default function GuardWork({ userId }) {
             </div>
           )}
 
-          {/* === 本場廣播(指定由我執行的,唯讀) === */}
-          <SessionVisits sessionId={session.id} userId={userId} role="guard" />
+          {/* === 本場廣播(指定由我執行的,唯讀)=== 指名互動無探監廣播,不顯示 */}
+          {session.kind !== 'named' && (
+            <SessionVisits sessionId={session.id} userId={userId} role="guard" />
+          )}
 
           {/* === 底部:本場獄卒(頭貼格狀,同犯人端) === */}
           <div className="card-panel">
