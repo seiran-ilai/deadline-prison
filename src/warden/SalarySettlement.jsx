@@ -6,6 +6,8 @@ import { sendSalaryBroadcast, zhSalaryError } from '../salaryApi'
 
 // 伊萊諾斯(典獄長本人)以收監編號 0001 辨識;其薪資與監獄留存皆留在身上,不對外發放。
 const ELAI_INMATE_NO = 1
+const TEN_K = 10000                                     // 「萬」→ 原始 Gil 換算(結算用萬、驗算用完整 Gil)
+const gilFmt = n => `${Math.round(Number(n) || 0).toLocaleString('en-US')} Gil`   // 原始 Gil 千分位顯示
 
 // 場次薪資結算(僅典獄長,唯讀):讀 pos_order_items,依 salaryRules 逐筆算每位獄卒薪資與監獄收支。
 // 只計算顯示,不寫入。金額「萬」整數。已移除 purchase_addons 與監獄外抓捕。
@@ -70,14 +72,17 @@ export default function SalarySettlement({ currentSession, embedded = false }) {
   const isFree = kind === 'free'
 
   // 費用驗算(集體/指名場):原GIL + 當日營業額 = 發薪前總額;發薪後只留伊萊諾斯薪資與監獄留存。
+  // 結算金額單位為「萬」,驗算改用原始 Gil(典獄長輸入完整金額),故換算 ×10000。
   const elai = result.guards.find(g => g.inmate_no === ELAI_INMATE_NO) || null
-  const elaiSalary = elai?.final ?? 0
-  const othersSalary = result.guards.filter(g => g.inmate_no !== ELAI_INMATE_NO).reduce((s, g) => s + g.final, 0)
+  const revenueGil = result.revenue * TEN_K
+  const elaiGil = (elai?.final ?? 0) * TEN_K
+  const retainGil = result.retain * TEN_K
+  const othersGil = result.guards.filter(g => g.inmate_no !== ELAI_INMATE_NO).reduce((s, g) => s + g.final, 0) * TEN_K
   const g0 = Number(gil) || 0
-  const preTotal = g0 + result.revenue                  // 發薪前總金額 = 原GIL + 當日營業額
-  const afterBalance = preTotal - othersSalary          // 發薪後餘額 = 前總額 − 其他獄卒薪資
-  const shouldRemain = g0 + elaiSalary + result.retain  // 對照:原GIL + 伊萊諾斯薪資 + 監獄留存
-  const diff = afterBalance - shouldRemain              // 驗算差額(理應為 0)
+  const preTotal = g0 + revenueGil            // 發薪前總金額 = 原GIL + 當日營業額
+  const afterBalance = preTotal - othersGil   // 發薪後餘額 = 前總額 − 其他獄卒薪資
+  const shouldRemain = g0 + elaiGil + retainGil  // 對照:原GIL + 伊萊諾斯薪資 + 監獄留存
+  const diff = afterBalance - shouldRemain     // 驗算差額(理應為 0)
 
   // 發送今日薪資明細到 Discord 頻道(測試階段:只送伊萊諾斯 No.0001)
   async function sendElaiPayslip() {
@@ -154,58 +159,68 @@ export default function SalarySettlement({ currentSession, embedded = false }) {
               </div>
             )}
 
-            {/* B. 監獄收支卡 */}
-            <div className="pay-sec-lbl">監獄收支<span className="ln" />
-              <button className="btn-sm" onClick={sendElaiPayslip} disabled={sending || !elai}
+            {/* B. 監獄收支 / C. 費用驗算 並列 */}
+            <div className="settle-cols">
+              {/* B. 監獄收支卡 */}
+              <div>
+                <div className="pay-sec-lbl">監獄收支<span className="ln" /></div>
+                <div className="prison-card">
+                  <div className="prison-block">
+                    <div className="pb-title">營業額來源</div>
+                    {result.revenueRows.length === 0 ? <div className="prison-row"><span>—</span><Amt v={0} /></div>
+                      : result.revenueRows.map((r, i) => (
+                        <div key={i} className="prison-row"><span>{r.label}</span><Amt v={r.amount} /></div>
+                      ))}
+                    <div className="prison-row sum"><span>營業額合計</span><Amt v={result.revenue} strong /></div>
+                  </div>
+                  <div className="prison-block">
+                    <div className="pb-title">結算</div>
+                    <div className="prison-row"><span>獄卒直接薪資</span><Amt v={-result.directTotal} neg /></div>
+                    <div className="prison-row sum"><span>淨收入（營業額 − 直接薪資）</span><Amt v={result.net} neg={result.net < 0} /></div>
+                    <div className="prison-row"><span>均分獎金池（淨收 50%，發給獄卒）</span><Amt v={-result.pool} neg /></div>
+                    <div className="prison-row hl"><span>監獄留存（淨收 50%，用於後續活動經費）</span><Amt v={result.retain} neg={result.retain < 0} strong /></div>
+                  </div>
+                </div>
+                <p className="settle-note">資料來源 POS 結帳(pos_order_items)。金額單位「萬」。此頁僅計算顯示，不寫入。</p>
+              </div>
+
+              {/* C. 費用驗算(僅計算,不寫入;單位為原始 Gil):原GIL + 當日營業額 → 發薪前總額;發薪後只留伊萊諾斯薪資與監獄留存。 */}
+              <div>
+                <div className="pay-sec-lbl">驗算<span className="ln" /></div>
+                <div className="prison-card">
+                  <div className="prison-block">
+                    <div className="pb-title">輸入</div>
+                    <label className="prison-row" style={{ alignItems: 'center' }}>
+                      <span>原有金額（Gil）</span>
+                      <input className="inp mono" type="number" value={gil} onChange={e => setGil(e.target.value)}
+                        onFocus={e => e.target.select()} placeholder="0" style={{ width: 140, textAlign: 'right' }} />
+                    </label>
+                  </div>
+                  <div className="prison-block">
+                    <div className="pb-title">驗算</div>
+                    <div className="prison-row"><span>原有金額</span><span className="pay-amt">{gilFmt(g0)}</span></div>
+                    <div className="prison-row"><span>＋ 當日營業額</span><span className="pay-amt">{gilFmt(revenueGil)}</span></div>
+                    <div className="prison-row sum"><span>發薪前總金額</span><span className="pay-amt strong">{gilFmt(preTotal)}</span></div>
+                    <div className="prison-row"><span>－ 其他獄卒薪資（伊萊諾斯以外）</span><span className="pay-amt neg">-{gilFmt(othersGil)}</span></div>
+                    <div className="prison-row hl"><span>發薪後餘額</span><span className={`pay-amt strong${afterBalance < 0 ? ' neg' : ''}`}>{gilFmt(afterBalance)}</span></div>
+                    <div className="prison-row" style={{ opacity: .8 }}><span>對照：原GIL + 伊萊諾斯薪資（{gilFmt(elaiGil)}）+ 監獄留存（{gilFmt(retainGil)}）</span><span className="pay-amt">{gilFmt(shouldRemain)}</span></div>
+                    {Math.abs(diff) > 0.001 && (
+                      <div className="prison-row" style={{ color: 'var(--alarm, #d8412f)' }}><span>驗算差額（理應為 0）</span><span className="pay-amt neg">{gilFmt(diff)}</span></div>
+                    )}
+                  </div>
+                </div>
+                <p className="settle-note">單位為原始 Gil（結算「萬」自動 ×10000）。發薪後餘額 = 原有金額 + 當日營業額 − 伊萊諾斯以外獄卒薪資;剩下的即伊萊諾斯薪資與監獄留存。</p>
+              </div>
+            </div>
+
+            {/* 發送今日薪資明細:兩欄下方置中一列(測試:只送伊萊諾斯 No.0001) */}
+            <div className="settle-send">
+              <button className="btn-sm btn-pri" onClick={sendElaiPayslip} disabled={sending || !elai}
                 title={elai ? '發送伊萊諾斯今日薪資明細到 Discord 頻道' : '本場找不到伊萊諾斯（No.0001）'}>
                 {sending ? '發送中…' : '發送今日薪資明細'}
               </button>
+              {sendMsg && <p className="settle-note" style={{ margin: 0 }}>{sendMsg}</p>}
             </div>
-            {sendMsg && <p className="settle-note" style={{ margin: '0 0 8px' }}>{sendMsg}</p>}
-            <div className="prison-card">
-              <div className="prison-block">
-                <div className="pb-title">營業額來源</div>
-                {result.revenueRows.length === 0 ? <div className="prison-row"><span>—</span><Amt v={0} /></div>
-                  : result.revenueRows.map((r, i) => (
-                    <div key={i} className="prison-row"><span>{r.label}</span><Amt v={r.amount} /></div>
-                  ))}
-                <div className="prison-row sum"><span>營業額合計</span><Amt v={result.revenue} strong /></div>
-              </div>
-              <div className="prison-block">
-                <div className="pb-title">結算</div>
-                <div className="prison-row"><span>獄卒直接薪資</span><Amt v={-result.directTotal} neg /></div>
-                <div className="prison-row sum"><span>淨收入（營業額 − 直接薪資）</span><Amt v={result.net} neg={result.net < 0} /></div>
-                <div className="prison-row"><span>均分獎金池（淨收 50%，發給獄卒）</span><Amt v={-result.pool} neg /></div>
-                <div className="prison-row hl"><span>監獄留存（淨收 50%，用於後續活動經費）</span><Amt v={result.retain} neg={result.retain < 0} strong /></div>
-              </div>
-            </div>
-            <p className="settle-note">資料來源 POS 結帳(pos_order_items)。金額單位「萬」。此頁僅計算顯示，不寫入。</p>
-
-            {/* C. 費用驗算(僅計算,不寫入):原GIL + 當日營業額 → 發薪前總額;發薪後只留伊萊諾斯薪資與監獄留存。 */}
-            <div className="pay-sec-lbl">費用驗算<span className="ln" /></div>
-            <div className="prison-card">
-              <div className="prison-block">
-                <div className="pb-title">輸入</div>
-                <label className="prison-row" style={{ alignItems: 'center' }}>
-                  <span>原有金額（萬 Gil）</span>
-                  <input className="inp mono" type="number" value={gil} onChange={e => setGil(e.target.value)}
-                    onFocus={e => e.target.select()} placeholder="0" style={{ width: 120, textAlign: 'right' }} />
-                </label>
-              </div>
-              <div className="prison-block">
-                <div className="pb-title">驗算</div>
-                <div className="prison-row"><span>原有金額</span><Amt v={g0} /></div>
-                <div className="prison-row"><span>＋ 當日營業額</span><Amt v={result.revenue} /></div>
-                <div className="prison-row sum"><span>發薪前總金額</span><Amt v={preTotal} strong /></div>
-                <div className="prison-row"><span>－ 其他獄卒薪資（伊萊諾斯以外）</span><Amt v={-othersSalary} neg /></div>
-                <div className="prison-row hl"><span>發薪後餘額</span><Amt v={afterBalance} neg={afterBalance < 0} strong /></div>
-                <div className="prison-row" style={{ opacity: .8 }}><span>對照：原GIL + 伊萊諾斯薪資（{money(elaiSalary)}）+ 監獄留存（{money(result.retain)}）</span><Amt v={shouldRemain} /></div>
-                {Math.abs(diff) > 0.001 && (
-                  <div className="prison-row" style={{ color: 'var(--alarm, #d8412f)' }}><span>驗算差額（理應為 0）</span><Amt v={diff} neg /></div>
-                )}
-              </div>
-            </div>
-            <p className="settle-note">驗算單位「萬」,與薪資結算一致。發薪後餘額 = 原有金額 + 當日營業額 − 伊萊諾斯以外獄卒薪資;剩下的即伊萊諾斯薪資與監獄留存。</p>
           </>)}
     </div>
   )
