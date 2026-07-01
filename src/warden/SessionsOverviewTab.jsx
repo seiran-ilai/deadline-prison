@@ -115,7 +115,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
 
   async function openNew() {
     if (!newTitle) { setMsg('請填場次名'); return }
-    const payload = { title: newTitle, is_public: newPublic, kind: newKind }
+    const payload = { title: newTitle, is_public: newPublic, kind: newKind, total_rounds: 4 }   // 番茄鐘預設 4 輪
     if (newDate) payload.session_date = newDate
     payload.capacity = capValue(newCap)
     if (newKind === 'named') { payload.start_time = newStart || null; payload.slot_count = slotValue(newSlots) }
@@ -189,20 +189,41 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
     reloadShared()   // 背景同步共用 sessions(ended 會從 SessionTab 下拉消失),不重抓本頁
   }
 
+  // 自由入場 / 指名互動:開始入場即開始服刑(免第二次點)。依序 intake(帶入名單)→ serving,只用已知合法轉移。
+  async function startServingDirect(s) {
+    const snapshot = sessions
+    setSessions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'serving' } : x))
+    setMsg('已開始服刑')
+    const r1 = await supabase.rpc('set_session_status', { p_session: s.id, p_new_status: 'intake' })
+    if (r1.error) { setSessions(snapshot); setMsg('開始失敗，已還原：' + r1.error.message); return }
+    const { data: skipped } = await supabase.rpc('materialize_session_bookings', { p_session: s.id })
+    const r2 = await supabase.rpc('set_session_status', { p_session: s.id, p_new_status: 'serving' })
+    if (r2.error) { setSessions(snapshot); setMsg('開始服刑失敗，已還原：' + r2.error.message); return }
+    setRosterById(prev => { const n = { ...prev }; delete n[s.id]; return n })   // 失效快取
+    const skipMsg = materializeResultMsg(skipped)
+    setMsg(skipMsg && skipMsg !== '已帶入預約名單' ? skipMsg : '已開始服刑')
+    reloadShared()
+  }
+
   // 依 normalizeStatus(s) 顯示對應狀態機按鈕(退回類用次要/危險色與正向鈕區隔)
   function statusButtons(s) {
+    // 自由入場 / 指名互動無番茄鐘,開始入場即開始服刑(直接進 serving);集體維持 入場→服刑 兩段。
+    const directServe = s.kind === 'free' || s.kind === 'named'
+    const startBtn = directServe
+      ? <button className="btn-sm btn-pri" onClick={() => startServingDirect(s)}>開始入場</button>
+      : <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'intake', '已開始入場')}>開始入場</button>
     switch (normalizeStatus(s)) {
       case 'booking':
         return (<>
           <button className="btn-sm" onClick={() => setStatus(s, 'booking_paused', '已停止預約')}>停止預約</button>
-          <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'intake', '已開始入場')}>開始入場</button>
+          {startBtn}
         </>)
       case 'booking_paused':
         return (<>
           <button className="btn-sm" onClick={() => setStatus(s, 'booking', '已恢復報名')}>恢復報名</button>
-          <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'intake', '已開始入場')}>開始入場</button>
+          {startBtn}
         </>)
-      case 'intake':
+      case 'intake':   // 一般只有集體場會停在此;free/named 若因舊資料落此也給開始服刑
         return (<>
           <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'serving', '已開始服刑')}>開始服刑</button>
           <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'booking_paused', '已退回停止預約')}>退回停止預約</button>
@@ -211,7 +232,9 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
       case 'serving':
         return (<>
           <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'ended', '已結束服刑', '確定結束本場服刑？結束後不可重開')}>結束服刑</button>
-          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'intake', '已退回入場', '將清掉番茄鐘計時、退回入場狀態，全場回到等待')}>退回入場（清番茄鐘）</button>
+          {directServe
+            ? <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'booking', '已退回預約中', '將退回預約中，全場回到等待')}>退回預約中</button>
+            : <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'intake', '已退回入場', '將清掉番茄鐘計時、退回入場狀態，全場回到等待')}>退回入場（清番茄鐘）</button>}
         </>)
       default:   // ended:不顯示狀態機按鈕
         return <span className="muted">已結束</span>

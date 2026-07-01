@@ -137,7 +137,7 @@ export default function BroadcastScreen({ sessionId }) {
   // 番茄鐘階段切換鈴聲(大螢幕):階段或輪次一變就響;尚未開始/已結束不響。
   // 每秒的 setTick 會驅動重算,故 bellKey 會即時反映切換。
   const bellSt = session?.timer_started_at && !session?.timer_ended_at
-    ? pomodoroState(Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000), session.total_rounds ?? 8, session.timer_ended_at)
+    ? pomodoroState(Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000), session.total_rounds ?? 4, session.timer_ended_at)
     : null
   const bellKey = bellSt && !bellSt.ended ? `${bellSt.phase}-${bellSt.round}` : null
   const { armed: bellArmed, arm: armBell } = useTransitionBell(bellKey)
@@ -158,7 +158,7 @@ export default function BroadcastScreen({ sessionId }) {
   if (!session) return <div style={{ ...screen, justifyContent: 'center', alignItems: 'center' }}>讀取中…</div>
 
   // ===== 計時主區(大鐘 + 階段進度條 + 輪次刻度)=====
-  const N = session.total_rounds ?? 8
+  const N = session.total_rounds ?? 4
   let timerBlock
   if (!session.timer_started_at) {
     timerBlock = <div style={{ fontSize: 54, color: C.dim, letterSpacing: 6 }}>尚未開始服刑</div>

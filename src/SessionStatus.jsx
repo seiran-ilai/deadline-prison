@@ -101,7 +101,7 @@ export default function SessionStatus({ userId, session: sessionProp = undefined
   // hook 必須在任何 early return 之前;bellKey 由 data 安全推算(尚未開始/已結束 → null 不響)。
   const bellSess = usingProp ? sessionProp : data?.session
   const bellSt = bellSess?.timer_started_at && !bellSess?.timer_ended_at
-    ? pomodoroState(Math.floor((Date.now() - new Date(bellSess.timer_started_at).getTime()) / 1000), bellSess.total_rounds ?? 8, bellSess.timer_ended_at)
+    ? pomodoroState(Math.floor((Date.now() - new Date(bellSess.timer_started_at).getTime()) / 1000), bellSess.total_rounds ?? 4, bellSess.timer_ended_at)
     : null
   const { armed: bellArmed, arm: armBell } = useTransitionBell(bellSt && !bellSt.ended ? `${bellSt.phase}-${bellSt.round}` : null)
 
@@ -125,10 +125,11 @@ export default function SessionStatus({ userId, session: sessionProp = undefined
   // 狀態一律看 normalizeStatus,不再用 timer_started_at 有無當狀態判斷
   const ds = normalizeStatus(session)
 
-  // 指名互動:不需要番茄鐘,只顯示本場狀態
-  if (session.kind === 'named') {
-    const t = ds === 'ended' ? '本場已結束' : ds === 'serving' ? '指名互動進行中' : '尚未開始'
-    return <TimerWaiting text={t} sub={`本場：${session.title}（指名互動 · 無番茄鐘）`} />
+  // 指名互動 / 自由入場:不需要番茄鐘,只顯示本場狀態
+  if (session.kind === 'named' || session.kind === 'free') {
+    const kindTxt = session.kind === 'named' ? '指名互動' : '自由入場'
+    const t = ds === 'ended' ? '本場已結束' : ds === 'serving' ? `${kindTxt}進行中` : '尚未開始'
+    return <TimerWaiting text={t} sub={`本場：${session.title}（${kindTxt} · 無番茄鐘）`} />
   }
 
   // intake(尚未開始倒數):場次已開始入場即視為在場,番茄鐘尚未起跑。先放鈴聲啟用鈕。
@@ -143,7 +144,7 @@ export default function SessionStatus({ userId, session: sessionProp = undefined
   if (ds === 'ended') return <TimerWaiting text="本場已結束" sub={`本場：${session.title}`} />
 
   // serving:番茄鐘倒數(timer_started_at 只在此拿來算倒數)
-  const N = session.total_rounds ?? 8
+  const N = session.total_rounds ?? 4
   const elapsed = Math.floor((Date.now() - new Date(session.timer_started_at).getTime()) / 1000)
   const st = pomodoroState(elapsed, N, session.timer_ended_at)
   if (st.ended) {

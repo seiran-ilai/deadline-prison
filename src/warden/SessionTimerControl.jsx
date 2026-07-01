@@ -42,7 +42,7 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
 
   // 整場 ±輪:即時改 total_rounds;−輪 下限 = max(目前進行中的輪數, 1)
   async function changeRounds(delta) {
-    const next = (session.total_rounds ?? 8) + delta
+    const next = (session.total_rounds ?? 4) + delta
     if (next < roundFloor) { setMsg('不能少於目前進行中的輪數'); return }
     setBusy(true)
     try {
@@ -53,7 +53,7 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
   }
 
   // 番茄鐘狀態(與直播大螢幕、犯人手機共用同一純函式)
-  const totalRounds = session.total_rounds ?? 8
+  const totalRounds = session.total_rounds ?? 4
   let timerStatus = 'idle'   // idle | running | ended
   let curRound = 1
   if (session.timer_started_at) {
