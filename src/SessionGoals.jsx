@@ -3,17 +3,10 @@ import { supabase } from './supabaseClient'
 import { ProgressBar } from './ManuscriptManager'
 import MessageBanner from './MessageBanner'
 import SessionStatus from './SessionStatus'
-import { computeProgress, goalStatusLabel } from './progress'
+import { computeProgress } from './progress'
 import ProfileCard from './ProfileCard'
 import SessionVisits from './SessionVisits'
 import { normalizeStatus } from './warden/constants'
-
-// 同囚列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
-const PRESENCE_STYLE = {
-  '服刑完畢': { bg: '#666', color: '#fff' },                       // 完成:深灰
-  '服刑中': { bg: '#d9534f', color: '#fff' },                      // 進行中:警示紅
-  '尚未挑稿': { bg: 'rgba(255,255,255,.08)', color: '#9298a2' },   // 沒挑目標:次要灰
-}
 
 const PRIORITY = {
   1: { label: '高', bg: '#d9534f' },
@@ -41,11 +34,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [goalModalOpen, setGoalModalOpen] = useState(false) // 「新增本場目標」modal 開關
   const [expanded, setExpanded] = useState([])    // 展開中的目標(manuscript_id)
   const [showAllGoals, setShowAllGoals] = useState(false)     // 本場目標:展開全部(取消固定高度)
-  const [showAllInmates, setShowAllInmates] = useState(false) // 本場囚犯:展開全部(取消固定高度)
-  const [cellmates, setCellmates] = useState([])  // 本場同囚(其他犯人)
   const [guards, setGuards] = useState([])        // 本場獄卒(role=guard/warden)
   const [myGuards, setMyGuards] = useState([])    // 我的專屬獄卒(inmate_guards)
-  const [myProfile, setMyProfile] = useState(null)        // 我自己的 profile(本場囚犯列「你」那筆顯示用)
   const [myItems, setMyItems] = useState([])              // 指名互動:我的 POS 購入明細(本場)
   const [myBooking, setMyBooking] = useState(null)        // 指名互動:我的本場預約(時段/加購/抓捕)
   const [bkGuardName, setBkGuardName] = useState({})      // 預約牽涉的獄卒 id → 名字
@@ -86,11 +76,6 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     }
     setSession(sess); setMyInmate(mine)
     if (!mine) { setGoals([]); setActives([]); setStepsByMs({}); setLoading(false); return }
-
-    // 我自己的 profile(顯示在「本場囚犯」列的「你」那筆;與身分卡同一來源)
-    const { data: meProf } = await supabase.from('profiles')
-      .select('id, inmate_no, game_name, display_name, avatar_url').eq('id', userId).maybeSingle()
-    setMyProfile(meProf ?? null)
 
     // 2) 我的稿件(全部,供解析標題;active 供挑選)
     const { data: ms } = await supabase.from('manuscripts')
@@ -143,60 +128,16 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   }
   useEffect(() => { if (userId) load() }, [userId])
 
-  // 本場同囚:分開查再合併(避開 RLS 巢狀查詢坑),不走會閃 loading 的 load()
+  // 本場獄卒一覽(供底部「本場獄卒」顯示)。稿件不再對同場犯人公開,故不載入同囚稿件/目標。
   async function loadCellmates(sessionId, myMemberId) {
-    // 1) 同場其他人(排除自己)
     const { data: si } = await supabase.from('session_inmates')
-      .select('id, member_id, state, role_in_session').eq('session_id', sessionId).neq('member_id', myMemberId)
-    if (!si || si.length === 0) { setCellmates([]); setGuards([]); return }
-    const memberIds = si.map(r => r.member_id)
-    const siIds = si.map(r => r.id)
-    // 2) 他們的 profiles(含 role,用來分出獄卒)
+      .select('id, member_id, role_in_session').eq('session_id', sessionId).neq('member_id', myMemberId)
+    const guardRows = (si ?? []).filter(r => r.role_in_session === 'guard')
+    if (!guardRows.length) { setGuards([]); return }
     const { data: profs } = await supabase.from('profiles')
-      .select('id, inmate_no, game_name, display_name, avatar_url, role').in('id', memberIds)
+      .select('id, game_name, display_name, avatar_url, role').in('id', guardRows.map(r => r.member_id))
     const profById = {}; for (const p of profs ?? []) profById[p.id] = p
-    // 3) 他們的本場目標
-    const { data: goals } = await supabase.from('session_goals')
-      .select('id, session_inmate_id, manuscript_id').in('session_inmate_id', siIds)
-    // 4) 目標稿件(RLS 只會回 public 的,staff/private 讀不到)
-    const msIds = [...new Set((goals ?? []).map(g => g.manuscript_id))]
-    const msById = {}
-    if (msIds.length) {
-      const { data: ms } = await supabase.from('manuscripts')
-        .select('id, title, visibility').in('id', msIds)
-      for (const m of ms ?? []) msById[m.id] = m
-    }
-    // 4.5) 同囚每個目標的完成度聚合(done/total/is_done)。
-    //   steps 對同囚不可讀,改用 SECURITY DEFINER RPC 只取「數字」(不外洩子項目標題),
-    //   再用統一的 computeProgress 判定每個目標是否完成 → 狀態 chip 脫離番茄鐘。
-    const { data: prog } = await supabase.rpc('session_goal_progress', { p_session_inmate_ids: siIds })
-    const progByInmate = {}
-    for (const row of prog ?? []) (progByInmate[row.session_inmate_id] ??= []).push(row)
-
-    // 5) 合併:同囚 → 本場目標稿(讀得到=public 顯示稿名,讀不到=保密作業)+ 完成度狀態
-    const goalsByInmate = {}
-    for (const g of goals ?? []) (goalsByInmate[g.session_inmate_id] ??= []).push(g)
-    const merged = si.map(r => {
-      const works = (goalsByInmate[r.id] ?? []).map(g => {
-        const m = msById[g.manuscript_id]
-        return { goalId: g.id, title: m?.title, secret: !m }
-      })
-      // 該同囚自己的目標完成度:total 以「目標數」為準,done 由 RPC 聚合 + computeProgress 判定
-      const totalGoals = works.length
-      const doneGoals = (progByInmate[r.id] ?? [])
-        .filter(row => computeProgress({ done: row.done, total: row.total, isDone: row.is_done }).complete).length
-      return {
-        siId: r.id,
-        state: r.state,
-        roleInSession: r.role_in_session,
-        profile: profById[r.member_id],
-        works,
-        status: goalStatusLabel(doneGoals, totalGoals),
-      }
-    })
-    // 依「本場身分」切分:本場獄卒一覽 vs 本場犯人一覽(兩層身分,非全域 role)
-    setGuards(merged.filter(m => m.roleInSession === 'guard'))
-    setCellmates(merged.filter(m => m.roleInSession !== 'guard'))
+    setGuards(guardRows.map(r => ({ siId: r.id, roleInSession: r.role_in_session, profile: profById[r.member_id] })))
   }
 
   // 我的專屬獄卒(分開查 inmate_guards → profiles 合併)
@@ -236,7 +177,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     const title = newGoalTitle.trim()
     if (!title) { setMsg('目標名稱必填'); return }
     const { data, error } = await supabase.from('manuscripts')
-      .insert({ member_id: userId, title, priority: 2, visibility: 'public' })
+      .insert({ member_id: userId, title, priority: 2, visibility: 'staff' })
       .select('id').single()
     if (error) { setMsg('新建失敗：' + error.message); return }
     setNewGoalTitle('')
@@ -371,10 +312,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         <SessionStatus userId={userId} />
       </div>
 
-      {/* === 中段兩欄:本場目標 + 本場囚犯 === */}
-      <div className="ses-mid">
-
-      {/* 本場目標 */}
+      {/* 本場目標(稿件不對同場犯人公開,已移除本場囚犯同囚清單) */}
       <div className="card-panel">
         <div className="head">
           <h2>本場目標</h2>
@@ -438,70 +376,6 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
           </div>
         </div>
       </div>
-
-      {/* 本場囚犯(含我,我那筆高亮標「你」) */}
-      <div className="card-panel">
-        <div className="head">
-          <h2>本場囚犯</h2>
-          <span className="count">{cellmates.length + 1} 人</span>
-          {cellmates.length + 1 > 5 && (
-            <>
-              <span className="spacer" />
-              <button className="btn-sm cap-toggle" onClick={() => setShowAllInmates(v => !v)}>
-                {showAllInmates ? '收合 ⌃' : '展開全部 ⌄'}
-              </button>
-            </>
-          )}
-        </div>
-        <div className="body">
-          <div className={`cap-list${showAllInmates ? '' : ' capped'}`}>
-          {/* 我 */}
-          <div className="inmate me">
-            <div className="in-av">
-              {myProfile?.avatar_url
-                ? <img src={myProfile.avatar_url} alt="" />
-                : (myProfile?.game_name ?? myProfile?.display_name ?? '你')[0]}
-            </div>
-            <div>
-              <div className="in-nm">{myProfile?.game_name ?? myProfile?.display_name ?? '（未命名）'}</div>
-              <div className="in-no">No.{myProfile?.inmate_no != null ? String(myProfile.inmate_no).padStart(4, '0') : '----'} · 你</div>
-            </div>
-            <span className="in-prog">目標 {goals.filter(g => computeProgress({ steps: stepsByMs[g.manuscript_id] ?? [], isDone: g.manuscript?.is_done }).complete).length}/{goals.length}</span>
-          </div>
-          {/* 其他同囚 */}
-          {cellmates.map(c => {
-            const status = c.status   // 依「該同囚本場目標完成度」判定,與番茄鐘無關
-            const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['尚未挑稿']
-            return (
-              <div key={c.siId} className="inmate">
-                <div className="in-av">
-                  {c.profile?.avatar_url
-                    ? <img src={c.profile.avatar_url} alt="" />
-                    : (c.profile?.game_name ?? c.profile?.display_name ?? '?')[0]}
-                </div>
-                <div>
-                  <div className="in-nm">{c.profile?.game_name ?? c.profile?.display_name ?? '（未知）'}</div>
-                  <div className="in-no">No.{c.profile?.inmate_no != null ? String(c.profile.inmate_no).padStart(4, '0') : '----'}</div>
-                </div>
-                <span className="spacer" />
-                <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>
-                <div className="in-works">
-                  {c.works.length === 0 ? (
-                    <span className="empty">本場還沒挑稿</span>
-                  ) : c.works.map(w => (
-                    <span key={w.goalId} className="chip" style={{ background: w.secret ? 'rgba(255,255,255,.08)' : 'rgba(245,197,24,.15)', color: w.secret ? 'var(--dim)' : 'var(--hazard)' }}>
-                      {w.secret ? '🔒 保密作業' : w.title}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-          </div>
-        </div>
-      </div>
-
-      </div>{/* === /中段兩欄 === */}
 
       {/* === 指名互動:本場預約與購入(時段 / 加購 / POS 購入明細) === */}
       {session.kind === 'named' && (() => {

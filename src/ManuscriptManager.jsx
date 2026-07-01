@@ -9,14 +9,8 @@ const PRIORITY = {
   2: { label: '中', color: '#fff', bg: '#e08e0b' },
   3: { label: '低', color: '#fff', bg: '#888' },
 }
-// 隱私設定
-const VISIBILITY = {
-  public: { label: '公開', icon: '🌐' },
-  staff: { label: '僅獄卒', icon: '👮' },
-  private: { label: '私密', icon: '🔒' },
-}
-
-const blankForm = { title: '', priority: 2, due_date: '', target_date: '', visibility: 'public' }
+// 稿件一律只有本人 + 負責獄卒 + 典獄長可見(不對同場犯人公開);隱私設定已移除。
+const blankForm = { title: '', priority: 2, due_date: '', target_date: '' }
 
 function PriorityTag({ priority }) {
   const p = PRIORITY[priority] ?? PRIORITY[2]
@@ -91,7 +85,7 @@ export default function ManuscriptManager({ userId }) {
 
   async function load() {
     const { data: ms, error } = await supabase.from('manuscripts')
-      .select('id, title, priority, due_date, target_date, status, visibility, is_done, created_at')
+      .select('id, title, priority, due_date, target_date, status, is_done, created_at')
       .eq('member_id', userId).eq('status', view)
       .order('priority').order('created_at')
     if (error) { setMsg('載入失敗：' + error.message); return }
@@ -116,7 +110,7 @@ export default function ManuscriptManager({ userId }) {
       priority: Number(form.priority),
       due_date: form.due_date || null,
       target_date: form.target_date || null,
-      visibility: form.visibility,
+      visibility: 'staff',   // 僅本人 + 負責獄卒 + 典獄長可見
     })
     if (error) { setMsg('新增失敗：' + error.message); return }
     setForm(blankForm); setMsg('已新增稿件'); load()
@@ -129,7 +123,7 @@ export default function ManuscriptManager({ userId }) {
       priority: Number(editing.priority),
       due_date: editing.due_date || null,
       target_date: editing.target_date || null,
-      visibility: editing.visibility,
+      visibility: 'staff',
     }).eq('id', editing.id)
     if (error) { setMsg('更新失敗：' + error.message); return }
     setEditing(null); setMsg('已更新'); load()
@@ -230,11 +224,6 @@ export default function ManuscriptManager({ userId }) {
                 <option value={1}>高</option><option value={2}>中</option><option value={3}>低</option>
               </select>
             </label>
-            <label>隱私
-              <select value={form.visibility} onChange={e => setForm({ ...form, visibility: e.target.value })}>
-                <option value="public">公開</option><option value="staff">僅獄卒</option><option value="private">私密</option>
-              </select>
-            </label>
             <label>截止日
               <input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
             </label>
@@ -256,7 +245,6 @@ export default function ManuscriptManager({ userId }) {
         const prog = computeProgress({ steps, isDone: m.is_done })
         const pct = prog.pct
         const isOpen = expanded.includes(m.id)
-        const vis = VISIBILITY[m.visibility] ?? VISIBILITY.public
         return (
           <div key={m.id} className="panel">
             <div className="panel-head">
@@ -267,7 +255,6 @@ export default function ManuscriptManager({ userId }) {
               )}
               <PriorityTag priority={m.priority} />
               <strong style={{ fontSize: 16 }} className={!prog.hasSteps && m.is_done ? 'done-text' : ''}>{m.title}</strong>
-              <span title={vis.label}>{vis.icon}</span>
               <DeadlineBadge dueDate={m.due_date} pct={pct} />
               <span className="spacer" />
               <button className="btn-sm" onClick={() => toggleExpand(m.id)}>{isOpen ? '收合' : '展開子項目'}</button>
@@ -320,11 +307,6 @@ export default function ManuscriptManager({ userId }) {
             <label>優先序
               <select value={editing.priority} onChange={e => setEditing({ ...editing, priority: e.target.value })}>
                 <option value={1}>高</option><option value={2}>中</option><option value={3}>低</option>
-              </select>
-            </label>
-            <label>隱私
-              <select value={editing.visibility} onChange={e => setEditing({ ...editing, visibility: e.target.value })}>
-                <option value="public">公開</option><option value="staff">僅獄卒</option><option value="private">私密</option>
               </select>
             </label>
             <label>截止日
