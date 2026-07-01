@@ -26,6 +26,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   const [goalModalInmate, setGoalModalInmate] = useState(null) // 開啟「新增本場目標」modal 的犯人 roster row(null=關閉)
   const [goalExpanded, setGoalExpanded] = useState([])   // 展開中的目標(session_goals.id)
   const [startingServe, setStartingServe] = useState(false) // 「開始服刑」處理中:即時回饋 + 防連點
+  const [posVer, setPosVer] = useState(0)                // POS 異動版本號:每次結帳/刪項 +1,通知內嵌薪資結算重算
 
   async function loadRoster(sid) {
     if (!sid) { setRoster([]); return }
@@ -295,12 +296,13 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       {/* 進行中場次 POS(指名/集體場):上班獄卒排程 + 走查加購(寫結算)+ 臨時追加犯人。上班獄卒直接由排班帶入 */}
       {isWarden && currentSession && ['named', 'crunch'].includes(currentSessionObj?.kind)
         && ['intake', 'serving'].includes(normalizeStatus(currentSessionObj)) && (
-        <SessionPOS session={currentSessionObj} inmates={inmates} setMsg={setMsg} reloadShared={reloadShared} />
+        <SessionPOS session={currentSessionObj} inmates={inmates} setMsg={setMsg} reloadShared={reloadShared}
+          onPosChange={() => setPosVer(v => v + 1)} />
       )}
 
-      {/* 薪資結算(整場總覽 + 每位獄卒明細)內嵌於進行中場次,讀 POS */}
+      {/* 薪資結算(整場總覽 + 每位獄卒明細)內嵌於進行中場次,讀 POS。posVer 變動即重算(結帳後自動更新) */}
       {isWarden && currentSession && ['named', 'crunch'].includes(currentSessionObj?.kind) && (
-        <SalarySettlement currentSession={currentSession} embedded />
+        <SalarySettlement currentSession={currentSession} embedded posVersion={posVer} />
       )}
 
       {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用 addInmateGoal,可連續挑多筆。

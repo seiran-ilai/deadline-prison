@@ -16,7 +16,7 @@ const money = n => `${n} 萬`
 
 const EMPTY_D = { person_name: '', target_guard_id: '', qty: 1, with_signature: false, visitor_name: '', message: '', interaction_note: '', supervise: false, slot_times: [] }
 
-export default function SessionPOS({ session, inmates, setMsg }) {
+export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
   const sid = session?.id
   const kind = session?.kind
   const [guards, setGuards] = useState([])     // 上班獄卒 [{id,name,portrait_only,slots:number[]}]
@@ -163,6 +163,7 @@ export default function SessionPOS({ session, inmates, setMsg }) {
     setOrdersById(prev => ({ ...prev, [order.id]: { customer_name: cust || null, note: orderNote.trim() || null } }))
     setOccupied(prev => { const n = new Set(prev); for (const it of inserted ?? []) if (it.item_type === 'nominate') for (const s of arr(it.slot_times)) n.add(`${it.target_guard_id}|${s}`); return n })
     setBusy(false); setMsg(`已結帳 ${rows.length} 項 · ${cartTotal} 萬`); setCart([]); setCustomer(''); setOrderNote('')
+    onPosChange?.()   // 通知薪資結算重算(結帳後自動更新,免手動刷新)
   }
 
   async function toggleStatus(it, field) {
@@ -176,6 +177,7 @@ export default function SessionPOS({ session, inmates, setMsg }) {
     setConfirmDel(null)
     const { error } = await supabase.from('pos_order_items').delete().eq('id', it.id)
     if (error) { setMsg('刪除失敗：' + error.message); load() }   // 失敗才重載回滾
+    else onPosChange?.()   // 通知薪資結算重算
   }
 
   const salesTotal = items.reduce((s, x) => s + (x.amount || 0), 0)

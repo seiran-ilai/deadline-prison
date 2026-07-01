@@ -18,7 +18,7 @@ const Amt = ({ v, neg = false, strong = false }) => (
   <span className={`pay-amt${neg ? ' neg' : ''}${strong ? ' strong' : ''}`}>{money(v)}</span>
 )
 
-export default function SalarySettlement({ currentSession, embedded = false }) {
+export default function SalarySettlement({ currentSession, embedded = false, posVersion = 0 }) {
   const [allSessions, setAllSessions] = useState([])
   const [sid, setSid] = useState(currentSession || '')
   const [guards, setGuards] = useState([])   // [{id, name}]
@@ -66,7 +66,7 @@ export default function SalarySettlement({ currentSession, embedded = false }) {
     setItems(itemsC)
     setLoading(false)
   }
-  useEffect(() => { loadSession(sid) }, [sid])
+  useEffect(() => { loadSession(sid) }, [sid, posVersion])   // sid 或 POS 異動(結帳/刪項)時重算
 
   const result = calcSettlement({ kind, guards, items })   // React Compiler 自動記憶化(手動 useMemo 會被跳過優化)
   const isFree = kind === 'free'
