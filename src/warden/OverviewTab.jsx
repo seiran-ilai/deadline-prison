@@ -1,7 +1,33 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { ROLE_LABEL } from './constants'
 import { CreateAccountSection, RenameAccountModal, IssueCredentialsModal } from './AccountAdmin'
+
+// 卡片右上角「⋯」動作選單:點擊展開,點外面或選完即收。沿用後台既有按鈕語彙。
+function CardMenu({ items }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+  return (
+    <div className="gc-menu" ref={ref}>
+      <button type="button" className="gc-menu-btn" aria-label="更多動作" onClick={() => setOpen(o => !o)}>⋯</button>
+      {open && (
+        <div className="gc-menu-pop">
+          {items.map((it, i) => (
+            <button key={i} type="button" className="gc-menu-item" onClick={() => { setOpen(false); it.onClick() }}>
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // 名單總覽(卡片網格版):已配號清單,分獄卒區 / 犯人區。
 // 登入即建檔發號,不再有「未配對 / 預約中」待處理區;搜尋 / 排序作用於整份清單。
@@ -51,31 +77,53 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
     setMsg(val ? `${nm(p)} 設為肖像畫負責` : `${nm(p)} 取消肖像畫負責`)
   }
 
-  // 已配號卡片(獄卒區 / 犯人區):頭貼 + 暱稱 + 編號 + 角色標籤 + 編輯
-  const MemberCard = (p) => {
-    const roleClass = p.role === 'warden' ? 'warden' : p.role === 'guard' ? 'guard' : 'member'
-    const isStaffCard = roleClass === 'guard' || roleClass === 'warden'
+  // 獄方管理卡(正方形,一排 6 張):頭像 → 名字 → 編號 → 身分標籤 → 底部狀態徽章;動作收進右上「⋯」。
+  // 典獄長金色(#E8B600)點綴、獄卒沿用綠色。狀態徽章即時樂觀寫回 profiles(portrait_only / offers_polaroid)。
+  const StaffCard = (p) => {
+    const isChief = p.role === 'warden'
+    const roleClass = isChief ? 'warden' : 'guard'
     const name = p.game_name ?? p.display_name ?? '（未命名）'
     return (
-      <div key={p.id} className={`ov-card${isStaffCard ? ' staff' : ''}`}>
+      <div key={p.id} className={`gc-card${isChief ? ' chief' : ''}`}>
+        {isWarden && (
+          <CardMenu items={[
+            { label: '編輯', onClick: () => onEditMember(p) },
+            { label: '核發帳密', onClick: () => setIssueTarget(p) },
+            ...(p.account_type === 'warden_created' ? [{ label: '改帳號名', onClick: () => setRenameTarget(p) }] : []),
+          ]} />
+        )}
+        <div className="gc-av">
+          {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{name[0] ?? '?'}</span>}
+        </div>
+        <div className="gc-nm">{name}</div>
+        <div className="gc-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
+        <span className={`role-tag ${roleClass}`}>{ROLE_LABEL[p.role] ?? '獄卒'}</span>
+        {isWarden && (
+          <div className="gc-badges">
+            <button type="button" className={`gc-badge${porOf(p) ? ' on' : ''}`}
+              onClick={() => togglePortraitOnly(p)}>肖像</button>
+            {/* 肖像畫負責時不提供加購拍立得(沿用原欄位連動邏輯) */}
+            {!porOf(p) && (
+              <button type="button" className={`gc-badge${polOf(p) ? ' on' : ''}`}
+                onClick={() => toggleOffersPolaroid(p)}>拍立得</button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // 已配號卡片(犯人區):頭貼 + 暱稱 + 編號 + 角色標籤 + 動作(編輯 / 核發帳密 / 改帳號名)
+  const MemberCard = (p) => {
+    const name = p.game_name ?? p.display_name ?? '（未命名）'
+    return (
+      <div key={p.id} className="ov-card">
         <div className="ov-av">
           {p.avatar_url ? <img src={p.avatar_url} alt="" /> : <span>{name[0] ?? '?'}</span>}
         </div>
         <div className="ov-nm">{name}</div>
         <div className="ov-no">No.{String(p.inmate_no).padStart(4, '0')}</div>
-        <span className={`role-tag ${roleClass}`}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
-        {isWarden && isStaffCard && (
-          <label className="ov-polaroid">
-            <input type="checkbox" checked={porOf(p)} onChange={() => togglePortraitOnly(p)} />
-            肖像畫負責
-          </label>
-        )}
-        {isWarden && isStaffCard && !porOf(p) && (
-          <label className="ov-polaroid">
-            <input type="checkbox" checked={polOf(p)} onChange={() => toggleOffersPolaroid(p)} />
-            可加購拍立得
-          </label>
-        )}
+        <span className={`role-tag ${p.role === 'member' ? 'member' : p.role}`}>{ROLE_LABEL[p.role] ?? '犯人'}</span>
         {isWarden && (
           <div className="ov-acts">
             <button className="btn-sm" onClick={() => onEditMember(p)}>編輯</button>
@@ -112,7 +160,7 @@ export default function OverviewTab({ inmates, loading, isWarden, onEditMember, 
             {staff.length > 0 && (
               <section className="ov-group">
                 <div className="subgroup mine">獄方 ({staff.length})<span className="ln" /></div>
-                <div className="ov-grid">{staff.map(MemberCard)}</div>
+                <div className="gc-grid">{staff.map(StaffCard)}</div>
               </section>
             )}
 

@@ -581,8 +581,40 @@
 .admin .ov-card .ov-nm{font-weight:700; font-size:14px; line-height:1.3; word-break:break-word; max-width:100%}
 .admin .ov-card .ov-no{font-family:var(--mono); font-size:12px; color:var(--dim)}
 .admin .ov-card .ov-acts{display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:2px}
-.admin .ov-card .ov-polaroid{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim); cursor:pointer; margin:0}
-.admin .ov-card .ov-polaroid input{margin:0; width:15px; height:15px}
+
+/* ---- 獄方管理卡(正方形,一排 6 張;綠色系,典獄長金色 #E8B600 點綴) ---- */
+.admin .gc-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:8px}
+.admin .gc-card{position:relative; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; text-align:center;
+  gap:6px; padding:16px 10px 12px; border:1px solid rgba(63,179,107,.35); background:rgba(63,179,107,.06); border-radius:8px}
+.admin .gc-card.chief{border-color:rgba(232,182,0,.55)}
+.admin .gc-card.chief::before{content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:#E8B600; border-radius:8px 8px 0 0}
+.admin .gc-card .gc-av{width:52px; height:52px; border-radius:8px; overflow:hidden; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-weight:700; font-size:22px;
+  background:rgba(63,179,107,.15); color:var(--ok)}
+.admin .gc-card.chief .gc-av{background:rgba(232,182,0,.14); color:#E8B600}
+.admin .gc-card .gc-av img{width:100%; height:100%; object-fit:cover}
+.admin .gc-card .gc-nm{font-weight:700; font-size:13px; line-height:1.3; word-break:break-word; max-width:100%}
+.admin .gc-card .gc-no{font-family:var(--mono); font-size:11px; color:var(--dim)}
+.admin .gc-card.chief .role-tag.warden{background:rgba(232,182,0,.18); color:#E8B600}
+/* 底部狀態徽章列 */
+.admin .gc-card .gc-badges{display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:auto}
+.admin .gc-badge{font-size:12px; padding:4px 11px; border-radius:999px; border:1px solid var(--line-2);
+  background:var(--panel-2); color:var(--faint); cursor:pointer; transition:.15s; line-height:1.4}
+.admin .gc-badge:hover{border-color:var(--steel)}
+.admin .gc-badge.on{border-color:var(--ok); background:rgba(63,179,107,.15); color:var(--ok)}
+.admin .gc-badge.on:hover{border-color:var(--ok)}
+/* 右上角「⋯」動作選單 */
+.admin .gc-menu{position:absolute; top:6px; right:6px}
+.admin .gc-menu-btn{width:26px; height:26px; padding:0; line-height:1; border-radius:6px; font-size:18px;
+  background:transparent; border:1px solid transparent; color:var(--dim)}
+.admin .gc-menu-btn:hover{background:var(--raise); border-color:var(--line-2); color:var(--text)}
+.admin .gc-menu-pop{position:absolute; top:30px; right:0; z-index:20; min-width:112px; padding:4px;
+  display:flex; flex-direction:column; background:var(--panel-2); border:1px solid var(--line-2);
+  border-radius:var(--r); box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.admin .gc-menu-item{width:100%; text-align:left; padding:8px 12px; border:none; border-radius:4px;
+  background:transparent; color:var(--text); font-size:13px; white-space:nowrap}
+.admin .gc-menu-item:hover{background:var(--raise); border-color:transparent}
 
 /* 個人資料分頁 */
 .admin .profile-page{max-width:560px; margin:0 auto}
@@ -709,6 +741,11 @@
 @media (max-width:600px){
   .admin .ov-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px}
   .admin .ov-card .ov-av{width:72px; height:72px; font-size:28px}
+  .admin .gc-grid{grid-template-columns:repeat(3,1fr); gap:10px}
+}
+
+@media (min-width:601px) and (max-width:1100px){
+  .admin .gc-grid{grid-template-columns:repeat(4,1fr)}
 }
 
 @media (max-width:860px){
