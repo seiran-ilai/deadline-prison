@@ -5,16 +5,20 @@ import { supabase } from '../supabaseClient'
 // 自管 inmate_guards 的讀取 / 指派 / 移除。供 SessionTab(進行中場次)與 SessionsOverviewTab(場次總覽展開)共用,
 // 避免兩處重複維護指派邏輯。沿用既有分開查再 JS 合併的風格,不用巢狀 select。
 //   props:
-//     sessionInmateId — 犯人在本場的 session_inmates id
+//     sessionInmateId — 已入場犯人在本場的 session_inmates id(正式在場犯人)
+//     bookingId       — 走查預約 id(匿名臨時報名犯人);與 sessionInmateId 二擇一
 //     guardRoster     — 本場獄卒清單 [{ id, member_id, profile }](用來提供可指派選項與解析暱稱)
 //     setMsg          — 錯誤/提示訊息回拋
-export default function GuardAssign({ sessionInmateId, guardRoster, setMsg }) {
+export default function GuardAssign({ sessionInmateId, bookingId, guardRoster, setMsg }) {
   const [assigned, setAssigned] = useState([])   // [{ id, guard_id, profile }]
   const [pick, setPick] = useState('')           // 下拉選中要指派的 guard member_id
+  const keyCol = sessionInmateId ? 'session_inmate_id' : 'booking_id'   // 對象欄位(正式在場 / 走查)
+  const keyVal = sessionInmateId ?? bookingId
 
   async function load() {
+    if (!keyVal) { setAssigned([]); return }
     const { data: igs } = await supabase.from('inmate_guards')
-      .select('id, guard_id').eq('session_inmate_id', sessionInmateId)
+      .select('id, guard_id').eq(keyCol, keyVal)
     if (!igs || !igs.length) { setAssigned([]); return }
     // 獄卒 profile:優先用本場獄卒清單解析;讀不到的(可能已移出本場)再補查 profiles
     const byId = {}; for (const g of guardRoster ?? []) if (g.profile) byId[g.member_id] = g.profile
@@ -26,12 +30,12 @@ export default function GuardAssign({ sessionInmateId, guardRoster, setMsg }) {
     }
     setAssigned(igs.map(g => ({ id: g.id, guard_id: g.guard_id, profile: byId[g.guard_id] })))
   }
-  useEffect(() => { load() }, [sessionInmateId])
+  useEffect(() => { load() }, [sessionInmateId, bookingId])
 
   async function assignGuard() {
     if (!pick) return
     const { error } = await supabase.from('inmate_guards')
-      .insert({ session_inmate_id: sessionInmateId, guard_id: pick })
+      .insert({ [keyCol]: keyVal, guard_id: pick })
     if (error) { setMsg?.('指派失敗：' + error.message); return }
     setPick(''); load()
   }
