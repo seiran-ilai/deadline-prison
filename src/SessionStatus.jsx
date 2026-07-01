@@ -23,8 +23,11 @@ function TimerWaiting({ text, sub }) {
 
 // 「服刑計時 / 狀態階段」:番茄鐘已開始顯示倒數,否則用現有資料推算當下階段文字
 // 階段依「我這場的 role_in_session」分流(犯人/獄卒各一套),依序判斷。
-export default function SessionStatus({ userId }) {
-  const [loading, setLoading] = useState(true)
+// sessionProp:外部(如獄卒作業)直接給定「當前場次」,則不自載(改以該場次算番茄鐘/狀態)。
+// 不給則沿用自載(犯人頁:依本人 session_inmates / 未取消預約判定所在場)。
+export default function SessionStatus({ userId, session: sessionProp = undefined }) {
+  const usingProp = sessionProp !== undefined
+  const [loading, setLoading] = useState(!usingProp)
   // { session, role, hasGuard, hasInmates } 或 { session: null }(未報到)
   const [data, setData] = useState(null)
   const [, setTick] = useState(0)
@@ -80,13 +83,13 @@ export default function SessionStatus({ userId }) {
     setLoading(false)
   }
 
-  // 每 10 秒重抓狀態(接收典獄長報到/指派/開始/重置)
+  // 每 10 秒重抓狀態(接收典獄長報到/指派/開始/重置)。外部已給場次則不自載。
   useEffect(() => {
-    if (!userId) return
+    if (usingProp || !userId) return
     load()
     const t = setInterval(load, 10000)
     return () => clearInterval(t)
-  }, [userId])
+  }, [userId, usingProp])
 
   // 每秒重算倒數(純前端,不打 DB)
   useEffect(() => {
@@ -96,7 +99,7 @@ export default function SessionStatus({ userId }) {
 
   // 番茄鐘階段切換鈴聲(本人裝置):階段或輪次一變就響。
   // hook 必須在任何 early return 之前;bellKey 由 data 安全推算(尚未開始/已結束 → null 不響)。
-  const bellSess = data?.session
+  const bellSess = usingProp ? sessionProp : data?.session
   const bellSt = bellSess?.timer_started_at && !bellSess?.timer_ended_at
     ? pomodoroState(Math.floor((Date.now() - new Date(bellSess.timer_started_at).getTime()) / 1000), bellSess.total_rounds ?? 8, bellSess.timer_ended_at)
     : null
@@ -105,7 +108,7 @@ export default function SessionStatus({ userId }) {
   // 防呆:userId 尚未就緒(首次登入流程)時不掛載狀態卡
   if (!userId) return null
   if (loading) return <div className="ses-timer waiting"><div className="st-sub">讀取本場狀態中…</div></div>
-  const { session } = data
+  const session = usingProp ? sessionProp : data?.session
 
   // 鈴聲啟用鈕(尚未啟用才顯示;瀏覽器需先點一次才能自動播放)
   const bellBtn = !bellArmed ? (

@@ -291,7 +291,8 @@ export default function GuardWork({ userId }) {
       <div className="ses-top guard">
         <ProfileCard userId={userId} variant="id" label="我 · 看守中" editable={false}
           footer={myInmate ? <div className="id-watch">👁 專屬看守 {myInmates.length} 人 · 本場共 {allInmates.length} 人</div> : null} />
-        <SessionStatus userId={userId} />
+        {/* 指名互動無番茄鐘(改以「我的服務對象」呈現),不顯示此狀態卡;集體/自由用本場資料算,不自載 */}
+        {session?.kind !== 'named' && <SessionStatus userId={userId} session={session ?? null} />}
       </div>
 
       {/* ended 防呆提示(外層一般已擋已結束場次,保險起見;名單維持顯示供獄卒收尾檢視) */}
