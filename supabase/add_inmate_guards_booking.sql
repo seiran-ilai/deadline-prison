@@ -19,3 +19,20 @@ create unique index if not exists inmate_guards_booking_guard_uniq
 -- drop policy if exists inmate_guards_warden_all on public.inmate_guards;
 -- create policy inmate_guards_warden_all on public.inmate_guards
 --   for all using (public.is_warden()) with check (public.is_warden());
+
+-- 4) 獄卒端「我看守的走查犯人」:獄卒讀不到匿名走查 bookings(RLS),
+--    以 SECURITY DEFINER 回傳「指派給我(auth.uid())的走查犯人」供獄卒作業顯示。
+create or replace function public.session_my_ward_bookings(p_session uuid)
+returns table (booking_id uuid, game_name text, avatar_url text)
+language sql
+stable security definer
+set search_path = public
+as $$
+  select b.id, b.game_name, b.avatar_url
+  from public.inmate_guards ig
+  join public.bookings b on b.id = ig.booking_id
+  where ig.guard_id = auth.uid()
+    and b.session_id = p_session
+    and b.status <> 'cancelled'
+$$;
+grant execute on function public.session_my_ward_bookings(uuid) to authenticated;

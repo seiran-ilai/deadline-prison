@@ -46,6 +46,7 @@ export default function GuardWork({ userId }) {
   const [dutyGuards, setDutyGuards] = useState([])  // 上班獄卒名冊(session_named_slots 去重):即時收入均分獎金人數
   const [allInmates, setAllInmates] = useState([])  // 本場 role_in_session='inmate'
   const [myInmates, setMyInmates] = useState([])    // 指派給我的犯人(含本場目標+進度)
+  const [myWardBookings, setMyWardBookings] = useState([])  // 指派給我的走查/臨時報名犯人(booking,無帳號無目標)
   const [stepsByMs, setStepsByMs] = useState({})    // manuscript_id -> [steps]
   const [expanded, setExpanded] = useState([])      // 展開中的目標(session_goals.id)
   const [posItems, setPosItems] = useState([])       // 指名互動:本場 POS 購入(含本單犯人名)
@@ -90,7 +91,7 @@ export default function GuardWork({ userId }) {
   async function loadSession(sess) {
     if (!sess) {
       setSession(null); setMyInmate(null)
-      setAllGuards([]); setAllInmates([]); setMyInmates([]); setStepsByMs({}); setPosItems([]); setBookingByMember({}); setDutyGuards([])
+      setAllGuards([]); setAllInmates([]); setMyInmates([]); setStepsByMs({}); setPosItems([]); setBookingByMember({}); setDutyGuards([]); setMyWardBookings([])
       return
     }
     // 我在本場的記錄(僅排班而無 session_inmates 列時,合成 guard 身分供在場判定)
@@ -162,9 +163,15 @@ export default function GuardWork({ userId }) {
         const bm = {}
         for (const b of bks ?? []) if (b.status !== 'cancelled') bm[b.user_id] = b
         setBookingByMember(bm)
-      } else setBookingByMember({})
+        setMyWardBookings([])
+      } else {
+        setBookingByMember({})
+        // 集體場:指派給我的走查/臨時報名犯人(booking 型專屬看守;獄卒讀不到 bookings 原表,走 RPC)
+        const { data: wb } = await supabase.rpc('session_my_ward_bookings', { p_session: sess.id })
+        setMyWardBookings(wb ?? [])
+      }
     } else {
-      setPosItems([]); setBookingByMember({}); setDutyGuards([])
+      setPosItems([]); setBookingByMember({}); setDutyGuards([]); setMyWardBookings([])
     }
   }
 
@@ -406,8 +413,8 @@ export default function GuardWork({ userId }) {
               <div className="head"><h2>本場囚犯</h2><span className="count">{allInmates.length} 人</span></div>
               <div className="body">
                 {/* 我看守的(綠框高亮、指派給我;保留目標代勾) */}
-                <div className="subgroup mine first">我看守的犯人 ({myInmates.length})<span className="ln" /></div>
-                {myInmates.length === 0 ? (
+                <div className="subgroup mine first">我看守的犯人 ({myInmates.length + myWardBookings.length})<span className="ln" /></div>
+                {myInmates.length === 0 && myWardBookings.length === 0 ? (
                   <p className="empty">目前沒有指派給你的犯人（等典獄長指派專屬獄卒）</p>
                 ) : myInmates.map(c => {
                   const status = presence(c)
@@ -457,6 +464,17 @@ export default function GuardWork({ userId }) {
                     </div>
                   )
                 })}
+
+                {/* 指派給我的走查 / 臨時報名犯人(booking 型;無帳號、無目標) */}
+                {myWardBookings.map(w => (
+                  <div key={w.booking_id} className="inmate mine" style={{ alignItems: 'center' }}>
+                    <div className="in-av">{w.avatar_url ? <img src={w.avatar_url} alt="" /> : (w.game_name ?? '?')[0]}</div>
+                    <div>
+                      <div className="in-nm">{w.game_name ?? '（未填暱稱）'}<span className="tag-mine">指派給我</span></div>
+                      <div className="in-no faint">走查 / 臨時報名</div>
+                    </div>
+                  </div>
+                ))}
 
                 {/* 本場其他囚犯(非我看守的) */}
                 {(() => {
