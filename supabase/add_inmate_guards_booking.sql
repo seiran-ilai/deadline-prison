@@ -13,9 +13,14 @@ alter table public.inmate_guards
 create unique index if not exists inmate_guards_booking_guard_uniq
   on public.inmate_guards (booking_id, guard_id) where booking_id is not null;
 
--- 3) RLS:沿用既有「典獄長全權」policy(is_warden())即可管理 booking 型指派;
---    若你的 inmate_guards 沒有 warden 全權 policy,取消下面註解補上(冪等):
--- alter table public.inmate_guards enable row level security;
+-- 3) RLS:
+--    a) 獄卒可讀「指派給自己」的列(guard_id = auth.uid())→ 獄卒作業「我看守的犯人」直接讀 inmate_guards 才看得到。
+--       (policy 為 OR 疊加,不影響既有典獄長 policy;冪等)
+alter table public.inmate_guards enable row level security;
+drop policy if exists inmate_guards_guard_read on public.inmate_guards;
+create policy inmate_guards_guard_read on public.inmate_guards
+  for select using (guard_id = auth.uid());
+--    b) 沿用既有「典獄長全權」policy(is_warden())管理指派;若你的 inmate_guards 沒有,取消下面註解補上:
 -- drop policy if exists inmate_guards_warden_all on public.inmate_guards;
 -- create policy inmate_guards_warden_all on public.inmate_guards
 --   for all using (public.is_warden()) with check (public.is_warden());
