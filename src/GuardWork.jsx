@@ -8,6 +8,7 @@ import SessionVisits from './SessionVisits'
 import ProfileCard from './ProfileCard'
 import { normalizeStatus } from './warden/constants'
 import { SESSION_KIND_LABEL } from './sessionKind'
+import { slotLabel } from './slots'
 
 // 犯人列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
 const PRESENCE_STYLE = {
@@ -62,7 +63,7 @@ export default function GuardWork({ userId }) {
     ])
     if (!sids.size) { setLiveSessions([]); return [] }
     const { data: rows } = await supabase.from('sessions')
-      .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind').in('id', [...sids])
+      .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind, start_time').in('id', [...sids])
     const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended').sort((a, b) => (a.title > b.title ? 1 : -1))
     setLiveSessions(live)
     return live
@@ -328,7 +329,7 @@ export default function GuardWork({ userId }) {
                             {status && <span className="chip" style={{ background: ps.bg, color: ps.color }}>{status}</span>}
                           </div>
                           <div className="serve-row"><span className="serve-k">預約時段</span>
-                            <span className="serve-v">{t.slots.length ? t.slots.map(s => `第 ${s + 1} 段`).join('、') : <span className="faint">—</span>}</span></div>
+                            <span className="serve-v">{t.slots.length ? t.slots.map(s => slotLabel(session.start_time, s)).join('、') : <span className="faint">—</span>}</span></div>
                           <div className="serve-row goals"><span className="serve-k">購買項目</span>
                             <div className="serve-buys">
                               {t.items.length === 0 ? <span className="faint">—</span> : t.items.map((it, j) => {
