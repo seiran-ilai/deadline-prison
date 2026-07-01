@@ -287,12 +287,14 @@ export default function GuardWork({ userId }) {
         </div>
       )}
 
-      {/* === 上排:我(獄卒) + 計時器(主角,較寬,無專屬獄卒欄) === */}
+      {/* === 上排:我(獄卒) + 計時器 / (指名場)本場 MEMO 填右欄 === */}
       <div className="ses-top guard">
         <ProfileCard userId={userId} variant="id" label="我 · 看守中" editable={false}
           footer={myInmate ? <div className="id-watch">👁 專屬看守 {myInmates.length} 人 · 本場共 {allInmates.length} 人</div> : null} />
-        {/* 指名互動無番茄鐘(改以「我的服務對象」呈現),不顯示此狀態卡;集體/自由用本場資料算,不自載 */}
-        {session?.kind !== 'named' && <SessionStatus userId={userId} session={session ?? null} />}
+        {/* 指名互動無番茄鐘:右欄改放本場 MEMO(免留空);集體/自由顯示番茄鐘狀態卡(用本場資料算,不自載) */}
+        {session?.kind === 'named'
+          ? (myInmate && <SessionMemoPanel userId={userId} session={session} />)
+          : <SessionStatus userId={userId} session={session ?? null} />}
       </div>
 
       {/* ended 防呆提示(外層一般已擋已結束場次,保險起見;名單維持顯示供獄卒收尾檢視) */}
@@ -306,13 +308,8 @@ export default function GuardWork({ userId }) {
         </div></div>
       ) : (
         <>
-          {/* === 中段兩欄:本場 MEMO + 本場囚犯 === */}
-          <div className="ses-mid">
-            {/* 本場 MEMO · 確認項(沿用既有元件 / 邏輯,只套版位) */}
-            <SessionMemoPanel userId={userId} session={session} />
-
-            {/* 指名互動:以「我的服務對象」為主體(預約時段 / 購買項目 / 目標稿件代勾) */}
-            {session.kind === 'named' && (
+          {/* 指名互動:我的服務對象(全寬主體,MEMO 已移到上排);其餘場次:MEMO + 本場囚犯兩欄 */}
+          {session.kind === 'named' ? (
             <div className="card-panel">
               <div className="head"><h2>我的服務對象</h2><span className="count">指名 {serveTargets.length} 位</span></div>
               <div className="body">
@@ -362,10 +359,11 @@ export default function GuardWork({ userId }) {
                 )}
               </div>
             </div>
-            )}
-
-            {/* 本場囚犯(集體趕稿):我看守的置頂高亮 + 其餘分組 */}
-            {session.kind !== 'named' && (
+          ) : (
+            <div className="ses-mid">
+              {/* 本場 MEMO · 確認項 */}
+              <SessionMemoPanel userId={userId} session={session} />
+              {/* 本場囚犯(集體趕稿):我看守的置頂高亮 + 其餘分組 */}
             <div className="card-panel">
               <div className="head"><h2>本場囚犯</h2><span className="count">{allInmates.length} 人</span></div>
               <div className="body">
@@ -454,8 +452,8 @@ export default function GuardWork({ userId }) {
                 })()}
               </div>
             </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* === 本場廣播(指定由我執行的,唯讀) === */}
           <SessionVisits sessionId={session.id} userId={userId} role="guard" />

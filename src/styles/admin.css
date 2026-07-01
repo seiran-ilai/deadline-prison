@@ -455,7 +455,7 @@
 .admin .gw-switch-btn.k-free .gw-kind{background:rgba(63,179,107,.15); color:var(--ok)}
 .admin .gw-switch-btn .gw-title{font-weight:600}
 /* 獄卒作業 · 指名互動:我的服務對象(每位犯人:預約時段 / 購買項目 / 目標稿件代勾) */
-.admin .serve-list{display:flex; flex-direction:column; gap:10px}
+.admin .serve-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:10px; align-items:start}
 .admin .serve-card{border:1px solid var(--line); border-radius:8px; background:var(--panel-2); padding:12px 14px; display:flex; flex-direction:column; gap:8px}
 .admin .serve-head{display:flex; align-items:center; gap:8px}
 .admin .serve-head .serve-nm{font-size:15px; font-weight:700; color:var(--text)}
