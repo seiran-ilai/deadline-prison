@@ -104,7 +104,7 @@ export default async function handler(req, res) {
       count: (sess.booked ?? 0) + 1, action: '新報名',
     })
 
-    return res.status(200).json({ ok: true, booked: (sess.booked ?? 0) + 1, capacity: sess.capacity })
+    return res.status(200).json({ ok: true, booked: (sess.booked ?? 0) + 1, capacity: sess.capacity, inmate_no: inmateNo })
   } catch (e) {
     return res.status(500).json({ error: 'server_error', detail: String(e?.message || e) })
   }

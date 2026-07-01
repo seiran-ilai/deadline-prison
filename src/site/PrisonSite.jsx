@@ -354,7 +354,8 @@ export default function PrisonSite() {
     const r = await createGuestBooking(sel.id, { game_name: name, server: gServer.trim(), password: sel.hasPassword ? gPw.trim() : null, ...buildPicks() })
     setGBusy(false)
     if (r.ok) {
-      setMsg('收監成功。鈴響時見。（不註冊預約如需取消，請至 Discord 聯繫典獄長）')
+      const noTag = r.inmate_no != null ? `【犯人編號 ${String(r.inmate_no).padStart(4, '0')}】` : ''
+      setMsg(`${noTag}預約成功。鈴響時見。（不註冊預約如需取消，請至 Discord 聯繫典獄長）`)
       loadData()
       return
     }
@@ -393,7 +394,7 @@ export default function PrisonSite() {
       ...buildPicks(),
     })
     setSubmitting(false)
-    if (r.ok) setMsg('收監成功。鈴響時見。')
+    if (r.ok) setMsg(`${r.inmate_no != null ? `【犯人編號 ${String(r.inmate_no).padStart(4, '0')}】` : ''}預約成功。鈴響時見。`)
     else if (r.error === 'already_booked') setMsg('你已在此梯次服刑名冊上。')
     else if (r.error === 'full') setMsg('此梯次已停止收監。')
     else if (r.error === 'wrong_password') setMsg('通行密鑰不正確，請重新開啟報名並輸入密鑰。')
