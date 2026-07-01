@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { sendReservationBroadcast } from './_lib/reservationBroadcast.js'
 
 // /api/booking — POST：驗證登入(以伺服器端 token 為準)→ 寫 bookings → 送 Discord 通知。
 // 身分不信任前端自報;一律用 Authorization 帶來的 JWT 經 getUser 驗證。
@@ -8,10 +9,6 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY
 const WEBHOOK = process.env.DISCORD_BOOKING_WEBHOOK_URL
-
-// 場次類型標籤(對照 src/sessionKind.js;serverless 不能 import src,故在此複製一份)
-const KIND_LABEL = { crunch: '集體趕稿', named: '指名互動', free: '自由入場' }
-const kindLabel = k => KIND_LABEL[k] || KIND_LABEL.crunch
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
@@ -72,8 +69,9 @@ export default async function handler(req, res) {
           .map(a => ({ g: a.g, polaroid: Math.max(0, Math.min(99, parseInt(a.polaroid) || 0)), sign: !!a.sign, portrait: Math.max(0, Math.min(99, parseInt(a.portrait) || 0)) }))
           .filter(a => a.polaroid > 0 || a.portrait > 0)
       : []
+    // 抓捕訂單:伺服器欄位已移除(預約人暱稱已含伺服器);不再寫入 capture.server。
     const cleanCapture = (sess.kind === 'crunch' && capture && typeof capture === 'object')
-      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), server: String(capture.server || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
+      ? { client: String(capture.client || '').slice(0, 60), target: String(capture.target || '').slice(0, 60), guards: Math.max(2, Math.min(99, parseInt(capture.guards) || 2)) }
       : null
 
     // insert(DB 唯一鍵兜底重複)
@@ -82,13 +80,12 @@ export default async function handler(req, res) {
     let gn = typeof game_name === 'string' ? game_name.trim().slice(0, 60) : null
     let av = typeof avatar_url === 'string' ? avatar_url.trim().slice(0, 500) : null
     // 後端兜底:前端沒帶到暱稱/頭像時,從本人 profile 補上(本人讀本人列走 RLS)。
-    // 確保每筆預約都留有頭像/暱稱快照,不依賴前端是否成功預填(修正部分預約沒帶到頭像的問題)。
-    if (!gn || !av) {
-      const { data: prof } = await supabase.from('profiles')
-        .select('game_name, avatar_url').eq('id', user.id).maybeSingle()
-      if (!gn) gn = prof?.game_name?.trim().slice(0, 60) || null
-      if (!av) av = prof?.avatar_url?.trim().slice(0, 500) || null
-    }
+    // 確保每筆預約都留有頭像/暱稱快照,不依賴前端是否成功預填;一併取得收監編號(播報用)。
+    const { data: prof } = await supabase.from('profiles')
+      .select('game_name, avatar_url, inmate_no').eq('id', user.id).maybeSingle()
+    if (!gn) gn = prof?.game_name?.trim().slice(0, 60) || null
+    if (!av) av = prof?.avatar_url?.trim().slice(0, 500) || null
+    const inmateNo = prof?.inmate_no ?? null
     const { error: insErr } = await supabase.from('bookings').insert({
       session_id, user_id: user.id, dc_id, dc_name, note: note || null,
       game_name: gn || null, avatar_url: av || null,
@@ -99,24 +96,13 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'insert_failed', detail: insErr.message })
     }
 
-    // 送 Discord 通知(URL 取自 env;失敗不擋預約)
-    if (WEBHOOK) {
-      const n = (sess.booked ?? 0) + 1
-      const cap = sess.capacity != null ? `/${sess.capacity}` : ''
-      const date = sess.session_date ? `（${sess.session_date}）` : ''
-      const kind = `〔${kindLabel(sess.kind)}〕`
-      const req = nameable
-        ? (picks.length ? `｜指名/監督：${picks.length} 筆` : '｜不指定（由典獄長安排）')
-        : ''
-      const capNote = cleanCapture ? `｜抓捕：委託 ${cleanCapture.client || '?'} → ${cleanCapture.target || '?'}（${cleanCapture.server || '?'}）` : ''
-      try {
-        await fetch(WEBHOOK, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: `🔒 新收監｜${dc_name} 報名了${kind}【${sess.title}】${date}目前 ${n}${cap}${req}${capNote}` }),
-        })
-      } catch { /* 通知失敗不影響預約 */ }
-    }
+    // 送 Discord 通知(組固定格式播報字串;URL 取自 env;失敗不擋預約)
+    await sendReservationBroadcast(supabase, {
+      webhook: WEBHOOK, sess, picks, addons: cleanAddons,
+      captureTarget: cleanCapture?.target || null,
+      isMember: true, name: gn || dc_name || '(unknown)', inmateNo,
+      count: (sess.booked ?? 0) + 1, action: '新報名',
+    })
 
     return res.status(200).json({ ok: true, booked: (sess.booked ?? 0) + 1, capacity: sess.capacity })
   } catch (e) {
