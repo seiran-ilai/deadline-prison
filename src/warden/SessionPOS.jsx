@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import { slotLabel } from '../slots'
+import { fetchPriceRows, priceMap, effPrice, hasSale, DEFAULT_PRICES } from '../prices'
 
 // 進行中場次 統一 POS 開單:選品項(chip)→ 該品項專屬細節 → 加入本單(購物車)→ 一次結帳寫入營業額。
 // 取代舊「走查加購 / 臨時追加犯人 / 探監登錄」三個攤開表單。
@@ -9,12 +10,13 @@ import { slotLabel } from '../slots'
 //   本場犯人名單 ← bookings(未取消)
 //   時格占用 ← bookings.requested_slots ∪ guard_slot_bookings(兩邊都查)
 // 結帳寫 pos_orders(paid=true)+ pos_order_items;臨時指定時格另寫 guard_slot_bookings。金額單位:萬。
-const PRICE = { signup: 20, supervise: 10, visit: 5, polaroid: 5, sign: 3, portrait: 80, nominate: 15, entry: 1 }   // visit 試營運限定 5 萬(獄卒實拿 5、監獄不抽)
+// 價格來自 price_items 價目表(定價/優惠價;未建表退回內建預設):
+//   有優惠價的品項可於細節選「以定價結帳」;購物車內金額可手動調整,低於定價即記錄為優惠(list_amount=定價金額)。
 const ITEM_LABEL = { signup: '臨時報名', visit: '互動探監', polaroid: '拍立得', portrait: '肖像畫', nominate: '臨時指定', entry: '無指名入場' }
 const arr = v => Array.isArray(v) ? v : []
 const money = n => `${n} 萬`
 
-const EMPTY_D = { person_name: '', target_guard_id: '', qty: 1, with_signature: false, visitor_name: '', message: '', interaction_note: '', supervise: false, slot_times: [], assign_guard_id: '' }
+const EMPTY_D = { person_name: '', target_guard_id: '', qty: 1, with_signature: false, visitor_name: '', message: '', interaction_note: '', supervise: false, slot_times: [], assign_guard_id: '', useList: false }
 
 export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
   const sid = session?.id
@@ -36,8 +38,15 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
   const [sortKey, setSortKey] = useState(null)       // 今日營業總表排序欄(null=依結帳時間)
   const [sortDir, setSortDir] = useState('desc')
   const [onlyUndone, setOnlyUndone] = useState(false) // 只顯示未完成
+  const [priceRows, setPriceRows] = useState(null)    // 價目表(定價/優惠價;未建表退回內建預設)
 
   const guardName = id => guards.find(g => g.id === id)?.name ?? '獄卒'
+
+  // 查價:P(key)=生效價(優惠價優先)、P(key, true)=定價。品項依本場類型取價。
+  useEffect(() => { fetchPriceRows().then(setPriceRows) }, [])
+  const pm = useMemo(() => priceMap(priceRows ?? DEFAULT_PRICES), [priceRows])
+  const prow = (key) => pm[`${kind}|${key}`]
+  const P = (key, useList = false) => effPrice(prow(key), useList)
 
   async function load() {
     if (!sid) return
@@ -57,9 +66,15 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
     const { data: gsb } = await supabase.from('guard_slot_bookings').select('guard_id, slot_index').eq('session_id', sid)
     for (const r of gsb ?? []) occ.add(`${r.guard_id}|${r.slot_index}`)
     setOccupied(occ)
-    const { data: it } = await supabase.from('pos_order_items')
-      .select('id, order_id, item_type, person_name, target_guard_id, qty, with_signature, amount, visitor_name, message, interaction_note, supervise, slot_times, status_interact, status_photo, status_polaroid, created_at')
+    let { data: it, error: itErr } = await supabase.from('pos_order_items')
+      .select('id, order_id, item_type, person_name, target_guard_id, qty, with_signature, amount, list_amount, visitor_name, message, interaction_note, supervise, slot_times, status_interact, status_photo, status_polaroid, created_at')
       .eq('session_id', sid).order('created_at', { ascending: false })
+    // 相容:尚未跑 add_price_items_and_pos_list_amount.sql(無 list_amount 欄)時退回舊欄位
+    if (itErr) {
+      ;({ data: it } = await supabase.from('pos_order_items')
+        .select('id, order_id, item_type, person_name, target_guard_id, qty, with_signature, amount, visitor_name, message, interaction_note, supervise, slot_times, status_interact, status_photo, status_polaroid, created_at')
+        .eq('session_id', sid).order('created_at', { ascending: false }))
+    }
     setItems(it ?? [])
     const { data: ords } = await supabase.from('pos_orders').select('id, customer_name, note').eq('session_id', sid)
     const om = {}; for (const o of ords ?? []) om[o.id] = { customer_name: o.customer_name, note: o.note }
@@ -87,40 +102,52 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
     setPick(key); setD({ ...EMPTY_D })
   }
 
-  // 目前細節能否加入 + 金額
+  // 各品項牽涉的價目鍵(判斷是否出現「以定價結帳」選項)
+  const PICK_KEYS = {
+    signup: ['signup', 'supervise'], visit: ['visit'], polaroid: ['polaroid', 'sign'],
+    portrait: ['portrait'], nominate: ['nominate'], entry: ['entry'],
+  }
+  const pickHasSale = pick ? (PICK_KEYS[pick] ?? []).some(k => hasSale(prow(k))) : false
+
+  // 目前細節能否加入 + 金額(amount=生效價/選定價;list_amount=定價,結帳寫入供優惠判定)
   function currentLine() {
     const cust = customer.trim()   // 加購頂端「犯人名稱」= 本單對象(肖像畫/拍立得可留空)
+    const u = d.useList   // 以定價結帳(僅品項有優惠價時出現此選項)
     switch (pick) {
       case 'signup': {
         if (!cust) return { err: '請先填犯人名稱' }
         if (d.supervise && !d.target_guard_id) return { err: '請選監督獄卒' }
         // assign_guard_id:典獄長免費分配的專屬看守(不入 POS,結帳後寫 inmate_guards);與付費指名監督各自獨立
-        return { line: { item_type: 'signup', person_name: cust, supervise: d.supervise, target_guard_id: d.supervise ? d.target_guard_id : null, assign_guard_id: d.assign_guard_id || null, amount: PRICE.signup + (d.supervise ? PRICE.supervise : 0) } }
+        return { line: { item_type: 'signup', person_name: cust, supervise: d.supervise, target_guard_id: d.supervise ? d.target_guard_id : null, assign_guard_id: d.assign_guard_id || null,
+          amount: P('signup', u) + (d.supervise ? P('supervise', u) : 0), list_amount: P('signup', true) + (d.supervise ? P('supervise', true) : 0) } }
       }
       case 'visit': {
         if (!cust) return { err: '請先填犯人名稱（探監對象）' }
         if (!d.visitor_name.trim()) return { err: '請填探監人名稱' }
         if (!d.target_guard_id) return { err: '請選執行獄卒' }
-        return { line: { item_type: 'visit', visitor_name: d.visitor_name.trim(), person_name: cust, target_guard_id: d.target_guard_id, message: d.message.trim(), interaction_note: d.interaction_note.trim(), amount: PRICE.visit } }
+        return { line: { item_type: 'visit', visitor_name: d.visitor_name.trim(), person_name: cust, target_guard_id: d.target_guard_id, message: d.message.trim(), interaction_note: d.interaction_note.trim(),
+          amount: P('visit', u), list_amount: P('visit', true) } }
       }
       case 'polaroid': {
         if (!d.target_guard_id) return { err: '請選對象獄卒' }
         const qty = Math.max(1, Math.min(99, parseInt(d.qty) || 1))
-        return { line: { item_type: 'polaroid', person_name: cust || null, target_guard_id: d.target_guard_id, qty, with_signature: d.with_signature, amount: (PRICE.polaroid + (d.with_signature ? PRICE.sign : 0)) * qty } }
+        return { line: { item_type: 'polaroid', person_name: cust || null, target_guard_id: d.target_guard_id, qty, with_signature: d.with_signature,
+          amount: (P('polaroid', u) + (d.with_signature ? P('sign', u) : 0)) * qty, list_amount: (P('polaroid', true) + (d.with_signature ? P('sign', true) : 0)) * qty } }
       }
       case 'portrait': {
         if (!d.target_guard_id) return { err: '請選負責獄卒' }
-        return { line: { item_type: 'portrait', person_name: cust || null, target_guard_id: d.target_guard_id, amount: PRICE.portrait } }
+        return { line: { item_type: 'portrait', person_name: cust || null, target_guard_id: d.target_guard_id, amount: P('portrait', u), list_amount: P('portrait', true) } }
       }
       case 'nominate': {
         if (!cust) return { err: '請先填犯人名稱' }
         if (!d.target_guard_id) return { err: '請選指名獄卒' }
         if (!d.slot_times.length) return { err: '請選至少一個時段' }
-        return { line: { item_type: 'nominate', person_name: cust, target_guard_id: d.target_guard_id, slot_times: [...d.slot_times].sort((a, b) => a - b), amount: PRICE.nominate * d.slot_times.length } }
+        return { line: { item_type: 'nominate', person_name: cust, target_guard_id: d.target_guard_id, slot_times: [...d.slot_times].sort((a, b) => a - b),
+          amount: P('nominate', u) * d.slot_times.length, list_amount: P('nominate', true) * d.slot_times.length } }
       }
       case 'entry':
         if (!cust) return { err: '請先填犯人名稱' }
-        return { line: { item_type: 'entry', person_name: cust, amount: PRICE.entry } }
+        return { line: { item_type: 'entry', person_name: cust, amount: P('entry', u), list_amount: P('entry', true) } }
       default:
         return { err: '' }
     }
@@ -145,11 +172,18 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
       order_id: order.id, session_id: sid, item_type: c.item_type,
       person_name: c.person_name ?? null, target_guard_id: c.target_guard_id ?? null,
       qty: c.qty ?? null, with_signature: !!c.with_signature, amount: c.amount || 0,
+      list_amount: c.list_amount ?? c.amount ?? 0,   // 定價金額(實收低於此即為優惠)
       visitor_name: c.visitor_name ?? null, message: c.message ?? null, interaction_note: c.interaction_note ?? null,
       supervise: !!c.supervise, slot_times: arr(c.slot_times),
     }))
-    const { data: inserted, error: iErr } = await supabase.from('pos_order_items')
-      .insert(rows).select('id, order_id, item_type, person_name, target_guard_id, qty, with_signature, amount, visitor_name, message, interaction_note, supervise, slot_times, status_interact, status_photo, status_polaroid')
+    let { data: inserted, error: iErr } = await supabase.from('pos_order_items')
+      .insert(rows).select('id, order_id, item_type, person_name, target_guard_id, qty, with_signature, amount, list_amount, visitor_name, message, interaction_note, supervise, slot_times, status_interact, status_photo, status_polaroid')
+    // 相容:尚未跑 add_price_items_and_pos_list_amount.sql(無 list_amount 欄)時,退回不帶定價欄寫入
+    if (iErr && /list_amount/.test(iErr.message ?? '')) {
+      ;({ data: inserted, error: iErr } = await supabase.from('pos_order_items')
+        .insert(rows.map(({ list_amount, ...r }) => r))
+        .select('id, order_id, item_type, person_name, target_guard_id, qty, with_signature, amount, visitor_name, message, interaction_note, supervise, slot_times, status_interact, status_photo, status_polaroid'))
+    }
     if (iErr) { setBusy(false); setMsg('結帳失敗：' + iErr.message); return }
     // 臨時指定時格 → guard_slot_bookings(占位)
     const gsb = []
@@ -172,9 +206,9 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
         setRosterNames(prev => [...new Set([...prev, cust])])
         if (resp.booking_id && signupItem.assign_guard_id) {
           const { error: aErr } = await supabase.from('inmate_guards').insert({ booking_id: resp.booking_id, guard_id: signupItem.assign_guard_id })
-          if (aErr) setMsg('已結帳、已追加,但分配專屬獄卒失敗：' + aErr.message)
+          if (aErr) setMsg('已結帳、已追加，但分配專屬獄卒失敗：' + aErr.message)
         }
-      } else setMsg('已結帳,但臨時報名建號失敗：' + (resp.error || ''))
+      } else setMsg('已結帳，但臨時報名建號失敗：' + (resp.error || ''))
     }
     // 樂觀更新本地(不整頁刷新):新品項插到今日總表頂端、訂單備註/占用一併更新
     setItems(prev => [...(inserted ?? []), ...prev])
@@ -258,7 +292,7 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
                 <div className="pos-fld"><span>犯人伺服器</span>
                   <input className="inp" style={{ maxWidth: 200 }} value={customerServer} onChange={e => setCustomerServer(e.target.value)} placeholder="被報名犯人的伺服器" /></div>
                 {/* 指名獄卒(付費指定監督) */}
-                <label className="pos-chk"><input type="checkbox" checked={d.supervise} onChange={e => setD({ ...d, supervise: e.target.checked, target_guard_id: '' })} />指名監督獄卒 +10 萬</label>
+                <label className="pos-chk"><input type="checkbox" checked={d.supervise} onChange={e => setD({ ...d, supervise: e.target.checked, target_guard_id: '' })} />指名監督獄卒 +{P('supervise', d.useList)} 萬</label>
                 {d.supervise && (
                   <div className="pos-fld"><span>監督獄卒</span>
                     <select className="sel" value={d.target_guard_id} onChange={e => setD({ ...d, target_guard_id: e.target.value })}>
@@ -284,7 +318,7 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
                   <select className="sel" value={d.target_guard_id} onChange={e => setD({ ...d, target_guard_id: e.target.value })}>
                     <option value="">— 上班獄卒 —</option>{onDuty.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
                 <div className="pos-fld"><span>數量</span><input className="inp" type="number" min="1" max="99" style={{ width: 80 }} value={d.qty} onChange={e => setD({ ...d, qty: e.target.value })} /></div>
-                <label className="pos-chk"><input type="checkbox" checked={d.with_signature} onChange={e => setD({ ...d, with_signature: e.target.checked })} />加購簽繪 +3 萬/張</label>
+                <label className="pos-chk"><input type="checkbox" checked={d.with_signature} onChange={e => setD({ ...d, with_signature: e.target.checked })} />加購簽繪 +{P('sign', d.useList)} 萬/張</label>
               </>)}
               {pick === 'portrait' && (<>
                 <div className="pos-fld"><span>負責獄卒</span>
@@ -314,10 +348,24 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
                     </div></div>
                 )}
               </>)}
-              {pick === 'entry' && <p className="muted">無額外欄位，直接加入本單(1 萬)。</p>}
+              {pick === 'entry' && <p className="muted">無額外欄位，直接加入本單（{P('entry', d.useList)} 萬）。</p>}
 
+              {/* 品項有優惠價時可選以優惠價或定價結帳(預設優惠價) */}
+              {pickHasSale && (
+                <div className="pos-fld"><span>結帳價格</span>
+                  <label className="pos-chk" style={{ marginRight: 12 }}>
+                    <input type="radio" name="pos-price-mode" checked={!d.useList} onChange={() => setD({ ...d, useList: false })} />優惠價
+                  </label>
+                  <label className="pos-chk">
+                    <input type="radio" name="pos-price-mode" checked={d.useList} onChange={() => setD({ ...d, useList: true })} />定價
+                  </label>
+                </div>
+              )}
               <div className="pos-detail-foot">
-                <span className="pos-line-amt">小計 {cur.line ? money(cur.line.amount) : '—'}</span>
+                <span className="pos-line-amt">小計 {cur.line ? money(cur.line.amount) : '—'}
+                  {cur.line && cur.line.list_amount > cur.line.amount &&
+                    <span className="faint" style={{ marginLeft: 6 }}>（定價 {money(cur.line.list_amount)}）</span>}
+                </span>
                 <button className="btn-pri" disabled={!cur.line} onClick={addToCart}>加入本單</button>
               </div>
             </div>
@@ -333,13 +381,21 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
                 {c.item_type === 'nominate' && <span className="muted">{c.slot_times.map(s => slotLabel(session.start_time, s)).join('、')}</span>}
                 {c.person_name && <span className="muted">{c.person_name}</span>}
                 {c.target_guard_id && <span className="faint">{guardName(c.target_guard_id)}</span>}
-                <span className="muted">{money(c.amount)}</span>
+                {/* 每項金額可手動調整;低於定價即記錄為優惠 */}
+                <span className="pos-cart-amt">
+                  <input className="inp" type="number" min="0" style={{ width: 72 }} value={c.amount}
+                    onChange={e => {
+                      const v = Math.max(0, Number(e.target.value) || 0)
+                      setCart(x => x.map(y => y._k === c._k ? { ...y, amount: v } : y))
+                    }} /> 萬
+                  {c.list_amount > c.amount && <span className="pos-off-tag">優惠 −{c.list_amount - c.amount}</span>}
+                </span>
                 <span className="spacer" />
                 <button className="btn-sm btn-danger" onClick={() => setCart(x => x.filter(y => y._k !== c._k))}>移除</button>
               </div>
             ))}
             <div className="pos-checkout">
-              <input className="inp" style={{ flex: 1, minWidth: 140 }} value={orderNote} onChange={e => setOrderNote(e.target.value)} placeholder="本單備註(選填)" />
+              <input className="inp" style={{ flex: 1, minWidth: 140 }} value={orderNote} onChange={e => setOrderNote(e.target.value)} placeholder="本單備註（選填）" />
               <span className="pos-cart-total">本單小計 <b>{money(cartTotal)}</b></span>
               <button className="btn-pri" disabled={busy} onClick={checkout}>{busy ? '結帳中…' : '結帳並寫入營業額'}</button>
             </div>
@@ -386,7 +442,9 @@ export default function SessionPOS({ session, inmates, setMsg, onPosChange }) {
                       <td className="g-name">{ITEM_LABEL[it.item_type] ?? it.item_type}</td>
                       <td>{detail}</td>
                       <td>{it.target_guard_id ? guardName(it.target_guard_id) : '—'}</td>
-                      <td>{money(it.amount)}</td>
+                      <td>{money(it.amount)}
+                        {it.list_amount != null && Number(it.list_amount) > (it.amount || 0) &&
+                          <div className="pos-off-tag">優惠（定價 {money(Number(it.list_amount))}）</div>}</td>
                       <td>{cell(appInteract, 'status_interact')}</td>
                       <td>{cell(appPhoto, 'status_photo')}</td>
                       <td>{cell(appPolaroid, 'status_polaroid')}</td>

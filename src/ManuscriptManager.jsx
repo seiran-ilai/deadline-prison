@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import MessageBanner from './MessageBanner'
 import { computeProgress } from './progress'
+import { askConfirm } from './ConfirmDialog'
 
-// 優先序設定:1高 2中 3低
-const PRIORITY = {
+// 優先序設定:1高 2中 3低(SessionGoals 與導覽示範頁共用)
+export const PRIORITY = {
   1: { label: '高', color: '#fff', bg: '#d9534f' },
   2: { label: '中', color: '#fff', bg: '#e08e0b' },
   3: { label: '低', color: '#fff', bg: '#888' },
@@ -130,7 +131,7 @@ export default function ManuscriptManager({ userId }) {
   }
 
   async function deleteManuscript(id) {
-    if (!window.confirm('確定刪除這本稿件嗎？子項目也會一起刪除')) return
+    if (!await askConfirm({ title: '刪除稿件', message: '確定刪除這本稿件嗎？子項目也會一起刪除。', confirmLabel: '刪除', danger: true })) return
     // 先刪子項目,再刪稿件(避免外鍵殘留)
     await supabase.from('manuscript_steps').delete().eq('manuscript_id', id)
     const { error } = await supabase.from('manuscripts').delete().eq('id', id)
@@ -164,7 +165,7 @@ export default function ManuscriptManager({ userId }) {
   }
 
   async function deleteStep(stepId) {
-    if (!window.confirm('確定刪除這個子項目嗎？')) return
+    if (!await askConfirm({ title: '刪除子項目', message: '確定刪除這個子項目嗎？', confirmLabel: '刪除', danger: true })) return
     const { error } = await supabase.from('manuscript_steps').delete().eq('id', stepId)
     if (error) { setMsg('刪除失敗：' + error.message); return }
     load()

@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
 import { cancelBooking } from './bookingApi'
 import MessageBanner from './MessageBanner'
+import { askConfirm } from './ConfirmDialog'
 
 // 已預約場次（犯人/獄卒自己的視角）。全程樂觀更新,不整頁重抓。
 //  - 我的預約：我預約且未結束的場次（public_sessions 已排除 ended），可預排任務、可取消。
 //  - 不提供站內預約入口，要預約新場次一律導往官網（href="/"）。
-const STATUS_PILL = {
+export const STATUS_PILL = {
   booking: { label: '預約中', bg: 'rgba(63,179,107,.15)', color: 'var(--ok)' },
   booking_paused: { label: '停止預約', bg: 'rgba(255,255,255,.08)', color: 'var(--dim)' },
-  intake: { label: '開始入場', bg: 'rgba(255,255,255,.08)', color: 'var(--dim)' },
+  intake: { label: '準備服刑', bg: 'rgba(255,255,255,.08)', color: 'var(--dim)' },   // 對外流程已無「開始入場」;僅鏈中斷殘留時可見
   serving: { label: '服刑中', bg: 'rgba(216,65,47,.15)', color: '#f0a99c' },
 }
 
@@ -49,7 +50,8 @@ export default function MyBookings({ userId, onGoToManuscripts }) {
 
   async function cancel(s) {
     const b = myBookings.find(x => x.session_id === s.id)
-    if (!b || !window.confirm(`確定取消「${s.title}」的預約？`)) return
+    if (!b) return
+    if (!await askConfirm({ title: '取消預約', message: `確定取消「${s.title}」的預約？`, confirmLabel: '取消預約', danger: true })) return
     const snapshot = myBookings
     setMyBookings(prev => prev.filter(x => x.session_id !== s.id))   // 樂觀移除
     const r = await cancelBooking(b.id)

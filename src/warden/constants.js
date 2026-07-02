@@ -24,7 +24,7 @@ export function normalizeStatus(s) {
 export const SESSION_STATUS_LABEL = {
   booking: '預約中',
   booking_paused: '停止預約',
-  intake: '開始入場',
+  intake: '準備服刑',   // 對外流程已移除「開始入場」;intake 僅為「開始服刑」鏈中的瞬時狀態,中斷殘留時才會看到
   serving: '服刑中',
   ended: '已結束',
 }

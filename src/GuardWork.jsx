@@ -5,13 +5,14 @@ import { computeProgress, goalStatusLabel } from './progress'
 import SessionStatus from './SessionStatus'
 import SessionMemoPanel from './SessionMemoPanel'
 import ProfileCard from './ProfileCard'
-import { normalizeStatus } from './warden/constants'
+import { normalizeStatus, SESSION_STATUS_LABEL } from './warden/constants'
 import { SESSION_KIND_LABEL } from './sessionKind'
 import { slotLabel } from './slots'
 import { calcSettlement, money } from './warden/salaryRules'
+import { fetchPriceRows, settlementRates } from './prices'
 
-// 犯人列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。
-const PRESENCE_STYLE = {
+// 犯人列狀態 chip 樣式:只承載「目標完成度」三態,不再呈現番茄鐘(專注/放風)。(導覽示範頁共用)
+export const PRESENCE_STYLE = {
   '服刑完畢': { bg: '#666', color: '#fff' },                       // 完成:深灰
   '服刑中': { bg: '#d9534f', color: '#fff' },                      // 進行中:警示紅
   '尚未挑稿': { bg: 'rgba(255,255,255,.08)', color: '#9298a2' },   // 沒挑目標:次要灰
@@ -51,7 +52,10 @@ export default function GuardWork({ userId }) {
   const [expanded, setExpanded] = useState([])      // 展開中的目標(session_goals.id)
   const [posItems, setPosItems] = useState([])       // 指名互動:本場 POS 購入(含本單犯人名)
   const [bookingByMember, setBookingByMember] = useState({}) // 指名互動:member_id → 預約內容
+  const [priceRows, setPriceRows] = useState(null)   // 價目表(guard_cut 拆帳;即時收入估算用)
   const [msg, setMsg] = useState('')
+
+  useEffect(() => { fetchPriceRows().then(setPriceRows) }, [])
 
   // 我可看守的未結束場次:以獄卒身分報到(session_inmates)∪ 當日排班(session_guards)
   async function loadList() {
@@ -65,7 +69,7 @@ export default function GuardWork({ userId }) {
     ])
     if (!sids.size) { setLiveSessions([]); return [] }
     const { data: rows } = await supabase.from('sessions')
-      .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind, start_time').in('id', [...sids])
+      .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind, start_time, session_date').in('id', [...sids])
     const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended').sort((a, b) => (a.title > b.title ? 1 : -1))
     setLiveSessions(live)
     return live
@@ -252,15 +256,18 @@ export default function GuardWork({ userId }) {
   }
 
   // 即時收入(估算):以本場全部 POS + 上班獄卒名冊重算結算,取本人結果(個人薪資 + 均分獎金)。
+  // 指名互動/集體趕稿都算;開場即顯示(尚無消費也有底薪起算)。
+  // 我不在排班名冊(如典獄長臨時看守)也把自己補進名冊計算,不會看不到薪資欄。
   const myIncome = (() => {
-    if (!session || (session.kind !== 'named' && session.kind !== 'crunch') || !dutyGuards.length) return null
+    if (!session || (session.kind !== 'named' && session.kind !== 'crunch')) return null
     const items = posItems.map(it => ({
       target_guard_id: it.guard_id, item_type: it.item_type, qty: it.qty,
       with_signature: it.with_signature, amount: it.amount, slot_times: it.slot_times,
       supervise: it.item_type === 'signup',   // 指派給獄卒的 signup 即指定監督
       _customer: it.customer_name || it.person_name, person_name: it.person_name, visitor_name: it.visitor_name,
     }))
-    return calcSettlement({ kind: session.kind, guards: dutyGuards, items }).guards.find(g => g.id === userId) ?? null
+    const roster = dutyGuards.some(g => g.id === userId) ? dutyGuards : [...dutyGuards, { id: userId, name: '我' }]
+    return calcSettlement({ kind: session.kind, guards: roster, items, rates: priceRows ? settlementRates(priceRows, session.kind) : null }).guards.find(g => g.id === userId) ?? null
   })()
 
   // 即時收入卡:各項薪資明細 + 個人薪資 + 獎金薪資 = 總金額
@@ -318,16 +325,22 @@ export default function GuardWork({ userId }) {
       <>
       {msg && <div className="banner err">{msg}</div>}
 
-      {/* 場次切換:同時在多個未結束場次看守時可切換(不只集體趕稿,指名互動亦適用) */}
+      {/* 場次切換:同時在多個未結束場次看守時可切換(不只集體趕稿,指名互動亦適用)。
+          每鈕帶狀態徽章(預約中/服刑中)與日期,一眼看出每場狀態。 */}
       {liveSessions.length > 1 && (
         <div className="gw-switch">
           <span className="gw-switch-lbl">切換場次</span>
-          {liveSessions.map(s => (
-            <button key={s.id} type="button" className={`gw-switch-btn k-${s.kind || 'crunch'}${s.id === selSid ? ' on' : ''}`} onClick={() => pickSession(s.id)}>
-              <span className="gw-kind">{SESSION_KIND_LABEL[s.kind] ?? '集體趕稿'}</span>
-              <span className="gw-title">{s.title}</span>
-            </button>
-          ))}
+          {liveSessions.map(s => {
+            const st = normalizeStatus(s)
+            return (
+              <button key={s.id} type="button" className={`gw-switch-btn k-${s.kind || 'crunch'}${s.id === selSid ? ' on' : ''}`} onClick={() => pickSession(s.id)}>
+                <span className="gw-kind">{SESSION_KIND_LABEL[s.kind] ?? '集體趕稿'}</span>
+                <span className="gw-title">{s.title}</span>
+                <span className={`gw-st ${st}`}>{SESSION_STATUS_LABEL[st] ?? st}</span>
+                {s.session_date && <span className="gw-date">{s.session_date}</span>}
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -348,13 +361,13 @@ export default function GuardWork({ userId }) {
 
       {!myInmate ? (
         <div className="card-panel"><div className="body">
-          <p className="empty" style={{ textAlign: 'center' }}>你目前不在任何進行中的場次，請等待典獄長將你加入為本場獄卒</p>
+          <p className="empty" style={{ textAlign: 'center' }}>不在任何未結束場次，等待典獄長排班</p>
         </div></div>
       ) : (
         <>
           {/* 指名互動:我的服務對象(全寬主體,MEMO 已移到上排);其餘場次:MEMO + 本場囚犯兩欄 */}
           {session.kind === 'named' ? (
-            <div className="card-panel">
+            <div className="card-panel sg-section">
               <div className="head"><h2>我的服務對象</h2><span className="count">指名 {serveTargets.length} 位</span></div>
               <div className="body">
                 {serveTargets.length === 0 ? <p className="empty">目前沒有指名你的犯人</p> : (
@@ -415,7 +428,7 @@ export default function GuardWork({ userId }) {
                 {/* 我看守的(綠框高亮、指派給我;保留目標代勾) */}
                 <div className="subgroup mine first">我看守的犯人 ({myInmates.length + myWardBookings.length})<span className="ln" /></div>
                 {myInmates.length === 0 && myWardBookings.length === 0 ? (
-                  <p className="empty">目前沒有指派給你的犯人（等典獄長指派專屬獄卒）</p>
+                  <p className="empty">尚無指派給你的犯人</p>
                 ) : myInmates.map(c => {
                   const status = presence(c)
                   const ps = PRESENCE_STYLE[status] ?? PRESENCE_STYLE['等待中']
@@ -524,12 +537,12 @@ export default function GuardWork({ userId }) {
             }
             const descOf = (it) => it.item_type === 'signup' ? '指定監督' : posItemDesc(it)
             return (
-              <div className="card-panel">
+              <div className="card-panel sg-section">
                 <div className="head"><h2>本場工作</h2>{mine.length > 0 && <span className="count">{mine.length} 項</span>}
                   <span className="muted" style={{ fontSize: 12 }}>指派給你的被指名 / 拍立得 / 互動探監</span>
                 </div>
                 <div className="body">
-                  {mine.length === 0 ? <p className="empty">目前沒有指派給你的工作項目</p> : (
+                  {mine.length === 0 ? <p className="empty">尚無工作項目</p> : (
                     <div className="wk-grid">
                       {mine.map(it => {
                         const fields = fieldsFor(it)

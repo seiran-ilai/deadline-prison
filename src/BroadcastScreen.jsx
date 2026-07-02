@@ -11,7 +11,7 @@ const C = {
   text: '#e4e5e7', dim: '#9298a2', faint: '#5a606a',
   hazard: '#f5c518', hazardDeep: '#caa00f', alarm: '#d8412f', ok: '#3fb36b',
 }
-const MONO = "'Space Mono', monospace"
+const MONO = "'Space Mono', 'Noto Sans TC', monospace"   // 中文需先命中 Noto,否則被通用 monospace 攔走變新細明體
 const CJK = "'Noto Sans TC', sans-serif"
 
 // 階段配色(底淡字濃,與主控台計時器一致)+ 各階段總秒數(算進度條)
@@ -292,7 +292,7 @@ export default function BroadcastScreen({ sessionId }) {
         <span style={{ fontSize: 24, color: C.dim }}>｜ {session.title}</span>
         <span style={{ flex: 1 }} />
         {/* 鈴聲開關:瀏覽器需先點一次才能自動播放;armed 後顯示已啟用 */}
-        <button onClick={armBell} disabled={bellArmed} title="番茄鐘切換階段時響鈴(需先點一次解鎖)"
+        <button onClick={armBell} disabled={bellArmed} title="番茄鐘切換階段時響鈴（需先點一次解鎖）"
           style={{
             cursor: bellArmed ? 'default' : 'pointer', fontFamily: CJK, fontSize: 15, letterSpacing: 1,
             borderRadius: 6, padding: '6px 14px', whiteSpace: 'nowrap',

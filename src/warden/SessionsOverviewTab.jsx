@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { normalizeStatus, SESSION_STATUS_LABEL, materializeResultMsg } from './constants'
+import { normalizeStatus, SESSION_STATUS_LABEL } from './constants'
+import { startServingChain, revertToBookingChain, REVERT_CONFIRM } from './sessionActions'
+import { askConfirm } from '../ConfirmDialog'
 import { SESSION_KINDS, SESSION_KIND_LABEL, DEFAULT_SESSION_KIND } from '../sessionKind'
 import GuardAssign from './GuardAssign'
 import SessionGuardPlan from './SessionGuardPlan'
@@ -168,10 +170,10 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
     reloadShared()
   }
 
-  // 場次五態狀態機:樂觀切換狀態,不重排;成功後背景同步共用資料。
-  // confirmText 有值時先二次確認(結束服刑、退回入場用)。
-  async function setStatus(s, newStatus, okMsg, confirmText) {
-    if (confirmText && !window.confirm(confirmText)) return
+  // 場次狀態機:樂觀切換狀態,不重排;成功後背景同步共用資料。
+  // confirmOpts 有值時先二次確認(結束服刑用;askConfirm 彈窗標題=流程名)。
+  async function setStatus(s, newStatus, okMsg, confirmOpts) {
+    if (confirmOpts && !await askConfirm(confirmOpts)) return
     const snapshot = sessions
     // 樂觀更新:就地把該場 status 改成目標值(不重排,卡片留原位)。
     // 本元件的標籤/按鈕都靠 normalizeStatus(s) 判斷,新值會直接反映;
@@ -184,39 +186,37 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
       setMsg('狀態更新失敗，已還原：' + error.message)
       return
     }
-    // 「開始入場」成功後自動帶入預約名單(bookings → session_inmates / booking_goals → session_goals)。
-    // 一律靠 RPC,不自行 insert;在別場未結束者會被跳過並回傳,逐筆提示。
-    if (newStatus === 'intake') {
-      const { data: skipped } = await supabase.rpc('materialize_session_bookings', { p_session: s.id })
-      setMsg(materializeResultMsg(skipped))
-      setRosterById(prev => { const n = { ...prev }; delete n[s.id]; return n })   // 失效快取,重新展開時重抓
-    }
     reloadShared()   // 背景同步共用 sessions(ended 會從 SessionTab 下拉消失),不重抓本頁
   }
 
-  // 自由入場 / 指名互動:開始入場即開始服刑(免第二次點)。依序 intake(帶入名單)→ serving,只用已知合法轉移。
-  async function startServingDirect(s) {
+  // 開始服刑(所有類型一鈕):鏈式 帶入預約名單 + 進 serving(對外已無「開始入場」中繼步驟)。
+  async function startServing(s) {
     const snapshot = sessions
     setSessions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'serving' } : x))
     setMsg('已開始服刑')
-    const r1 = await supabase.rpc('set_session_status', { p_session: s.id, p_new_status: 'intake' })
-    if (r1.error) { setSessions(snapshot); setMsg('開始失敗，已還原：' + r1.error.message); return }
-    const { data: skipped } = await supabase.rpc('materialize_session_bookings', { p_session: s.id })
-    const r2 = await supabase.rpc('set_session_status', { p_session: s.id, p_new_status: 'serving' })
-    if (r2.error) { setSessions(snapshot); setMsg('開始服刑失敗，已還原：' + r2.error.message); return }
-    setRosterById(prev => { const n = { ...prev }; delete n[s.id]; return n })   // 失效快取
-    const skipMsg = materializeResultMsg(skipped)
-    setMsg(skipMsg && skipMsg !== '已帶入預約名單' ? skipMsg : '已開始服刑')
+    const r = await startServingChain(s)
+    if (r.error) { setSessions(snapshot); setMsg(r.error); reloadShared(); return }   // 可能停在「準備服刑」,同步取回實際狀態
+    setRosterById(prev => { const n = { ...prev }; delete n[s.id]; return n })   // 失效快取,重新展開時重抓
+    setMsg(r.msg)
     reloadShared()
   }
 
-  // 依 normalizeStatus(s) 顯示對應狀態機按鈕(退回類用次要/危險色與正向鈕區隔)
+  // 退回預約中(serving/intake → booking):鏈式 清番茄鐘 + 清本場名單(觸發器)。
+  async function revertToBooking(s) {
+    if (!await askConfirm({ title: '退回預約中', message: REVERT_CONFIRM, confirmLabel: '退回預約中', danger: true })) return
+    const snapshot = sessions
+    setSessions(prev => prev.map(x => x.id === s.id ? { ...x, status: 'booking' } : x))
+    const r = await revertToBookingChain(s)
+    if (r.error) { setSessions(snapshot); setMsg(r.error); reloadShared(); return }
+    setRosterById(prev => { const n = { ...prev }; delete n[s.id]; return n })
+    setMsg(r.msg)
+    reloadShared()
+  }
+
+  // 依 normalizeStatus(s) 顯示對應狀態機按鈕(退回類用次要/危險色與正向鈕區隔)。
+  // 對外流程:預約中/停止預約 →(開始服刑)→ 服刑中 →(結束)→ 已結束;intake 僅為鏈中斷殘留的防呆分支。
   function statusButtons(s) {
-    // 自由入場 / 指名互動無番茄鐘,開始入場即開始服刑(直接進 serving);集體維持 入場→服刑 兩段。
-    const directServe = s.kind === 'free' || s.kind === 'named'
-    const startBtn = directServe
-      ? <button className="btn-sm btn-pri" onClick={() => startServingDirect(s)}>開始入場</button>
-      : <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'intake', '已開始入場')}>開始入場</button>
+    const startBtn = <button className="btn-sm btn-pri" onClick={() => startServing(s)}>開始服刑</button>
     switch (normalizeStatus(s)) {
       case 'booking':
         return (<>
@@ -228,18 +228,15 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
           <button className="btn-sm" onClick={() => setStatus(s, 'booking', '已恢復報名')}>恢復報名</button>
           {startBtn}
         </>)
-      case 'intake':   // 一般只有集體場會停在此;free/named 若因舊資料落此也給開始服刑
+      case 'intake':   // 防呆:僅「開始服刑」鏈中斷/舊資料會停在此(標籤顯示「準備服刑」)
         return (<>
-          <button className="btn-sm btn-pri" onClick={() => setStatus(s, 'serving', '已開始服刑')}>開始服刑</button>
-          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'booking_paused', '已退回停止預約')}>退回停止預約</button>
-          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'booking', '已退回預約中')}>退回預約中</button>
+          {startBtn}
+          <button className="btn-sm btn-danger" onClick={() => revertToBooking(s)}>退回預約中</button>
         </>)
       case 'serving':
         return (<>
-          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'ended', '已結束服刑', '確定結束本場服刑？結束後不可重開')}>結束服刑</button>
-          {directServe
-            ? <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'booking', '已退回預約中', '將退回預約中，全場回到等待')}>退回預約中</button>
-            : <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'intake', '已退回入場', '將清掉番茄鐘計時、退回入場狀態，全場回到等待')}>退回入場（清番茄鐘）</button>}
+          <button className="btn-sm btn-danger" onClick={() => setStatus(s, 'ended', '已結束服刑', { title: '結束服刑', message: `確定結束「${s.title}」的服刑？結束後不可重開。`, confirmLabel: '結束服刑', danger: true })}>結束服刑</button>
+          <button className="btn-sm btn-danger" onClick={() => revertToBooking(s)}>退回預約中</button>
         </>)
       default:   // ended:不顯示狀態機按鈕
         return <span className="muted">已結束</span>
@@ -247,7 +244,7 @@ export default function SessionsOverviewTab({ setMsg, reloadShared, inmates = []
   }
 
   async function deleteSession(s) {
-    if (!window.confirm(`確定刪除場次「${s.title}」？此動作無法復原，本場名單與目標也會一併移除`)) return
+    if (!await askConfirm({ title: '刪除場次', message: `場次「${s.title}」將永久刪除，本場名單與目標也會一併移除，無法復原。`, confirmLabel: '刪除場次', danger: true })) return
     const snapshot = sessions
     setSessions(prev => prev.filter(x => x.id !== s.id))   // 樂觀移除
     if (expandedId === s.id) setExpandedId(null)           // 收掉可能展開中的該場

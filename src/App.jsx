@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { zhAuthError } from './authText'
 import { INTERNAL_ACCOUNT_DOMAIN } from './authConfig'
@@ -14,6 +14,8 @@ import MyBookings from './MyBookings'
 import MessageBanner from './MessageBanner'
 import DeadlinePrisonLoader from './DeadlinePrisonLoader'
 import Tour from './Tour'
+import TourDemoPage from './demo/TourDemoPage'
+import { ConfirmHost } from './ConfirmDialog'
 import { GUARD_TOUR, INMATE_TOUR } from './tourSteps'
 import { normalizeStatus } from './warden/constants'
 import './styles/admin.css'
@@ -59,15 +61,6 @@ function LockedSessionNote({ text, onGoToBooking }) {
   )
 }
 
-// ⚠️ 測試專用：開發測試帳號（只在 import.meta.env.DEV 時使用）
-// 這些是 Supabase 上真實的 Email 測試帳號，profiles 已建好（role=guard/member）
-// TODO: 把密碼填進來（測試帳號，明碼放前端沒關係，反正只在 npm run dev 出現）
-const TEST_ACCOUNT_PASSWORD = 'test123'
-const TEST_ACCOUNTS = [
-  { label: '以獄卒測試登入（T001）', email: 'test001@test.com', password: TEST_ACCOUNT_PASSWORD },
-  { label: '以犯人測試登入（T002）', email: 'test002@test.com', password: TEST_ACCOUNT_PASSWORD },
-]
-
 // 忘記密碼:不提供站內重設(寄信流程已移除),一律由本人透過 Discord 聯繫典獄長,
 // 由典獄長後台「重設密碼」核發一次性新密碼。
 const DISCORD_CONTACT_URL = 'https://discord.gg/tpRn7En9mk'
@@ -79,6 +72,12 @@ function App() {
   const [tab, setTab] = useState('session')
   const [tabResolved, setTabResolved] = useState(false) // 落地分頁是否已決定:決定前遮 loading,避免用初始 tab 先渲染一次(閃過 session/booking)
   const [tourQueue, setTourQueue] = useState([])        // 教學導覽佇列(依序播放:獄卒→犯人 / 僅犯人)
+  const [tourDemo, setTourDemo] = useState(null)        // 導覽中要示範的頁面 { tab, kind } | null
+  const tourActive = tourQueue.length > 0               // 導覽進行中:解鎖分頁、以假資料示範頁取代真實頁
+  const tourActiveRef = useRef(tourActive)              // 落地分頁 effect 用(避免 tourActive 進 deps 造成導覽結束時重跑搶分頁)
+  tourActiveRef.current = tourActive
+  // 導覽結束(佇列清空)才收回示範,回到真實頁面;不在 setTourQueue 的 updater 內做(updater 必須純粹)
+  useEffect(() => { if (!tourActive) setTourDemo(null) }, [tourActive])
 
   // 依角色組導覽佇列:獄卒先獄卒導覽再犯人導覽;犯人只犯人導覽。
   const tourFor = (role) => (role === 'guard' || role === 'warden')
@@ -86,8 +85,6 @@ function App() {
     : [{ steps: INMATE_TOUR, label: '犯人導覽' }]
   const [msg, setMsg] = useState('')
   const [myLive, setMyLive] = useState(null) // { sessionId, roleInSession, status } | null:我所在「未結束」場次(0 或 1)
-  const [testError, setTestError] = useState(null)
-  const [testBusy, setTestBusy] = useState(false)
   // ---- 信箱／帳號登入(站內唯一登入通道;註冊與忘記密碼已移除,帳號/密碼由典獄長管理) ----
   const [emailVal, setEmailVal] = useState('')
   const [pwVal, setPwVal] = useState('')
@@ -201,6 +198,19 @@ function App() {
           if (liveRow) live = { sessionId: liveRow.id, roleInSession: 'guard', status: normalizeStatus(liveRow) }
         }
       }
+      // 路徑 C:未在場、未排班 → 有未取消預約的未結束場次即視為犯人。
+      // 報名後不用等開始服刑就能進「犯人服刑」頁挑目標(頁內 self_check_in 會自助建立本場身分)。
+      if (!live) {
+        const { data: bk } = await supabase.from('bookings')
+          .select('session_id').eq('user_id', user.id).neq('status', 'cancelled')
+        const bookedIds = [...new Set((bk ?? []).map(b => b.session_id))]
+        if (bookedIds.length) {
+          const { data: rows } = await supabase.from('sessions')
+            .select('id, status, timer_started_at').in('id', bookedIds)
+          const liveRow = (rows ?? []).find(s => normalizeStatus(s) !== 'ended')
+          if (liveRow) live = { sessionId: liveRow.id, roleInSession: 'inmate', status: normalizeStatus(liveRow) }
+        }
+      }
       if (alive) setMyLive(live)
     }
     pull()
@@ -221,6 +231,9 @@ function App() {
   // 依賴 myLive:首次 null 會先落 booking,輪詢抓到在場後自動帶到對的分頁 —— 即「不用重登就解鎖」。
   useEffect(() => {
     if (!profile) return
+    // 導覽中不讓輪詢/落地重算搶走分頁;用 ref 判斷,避免 tourActive 進 deps
+    // (否則導覽一結束 effect 重跑,會把使用者從正在看的分頁拉回落地分頁)
+    if (tourActiveRef.current) return
     let alive = true
     setTabResolved(false)
     if (profile.role === 'warden') {
@@ -237,15 +250,6 @@ function App() {
   async function signOut() {
     await supabase.auth.signOut({ scope: 'local' })   // 先確實清掉本地 session 再導頁(避免跳太快、新頁面讀到殘留 session)
     window.location.replace('/')                       // replace 不留 /app 在瀏覽歷史
-  }
-
-  // ⚠️ 測試專用：用 Email/密碼登入測試帳號（真實登入＝真實 RLS 權限）
-  async function testSignIn(account) {
-    setTestError(null)
-    setTestBusy(true)
-    const { error } = await supabase.auth.signInWithPassword({ email: account.email, password: account.password })
-    if (error) setTestError(error.message)
-    setTestBusy(false)
   }
 
   // ---- 帳號登入(信箱登入已移除,僅收帳號名,後綴由程式補) ----
@@ -303,20 +307,6 @@ function App() {
 
         <a className="dpl-back" href="/">← 回到監獄入口</a>
       </div>
-      {import.meta.env.DEV && (
-        <div className="test-box">
-          <p className="t-title">⚠️ 測試專用（僅開發模式）</p>
-          <p className="t-sub">正式上線（production build）不會出現此區塊</p>
-          <div className="t-list">
-            {TEST_ACCOUNTS.map((acc) => (
-              <button key={acc.email} onClick={() => testSignIn(acc)} disabled={testBusy}>
-                {acc.label}
-              </button>
-            ))}
-          </div>
-          {testError && <p className="banner err" style={{ marginTop: 12 }}>登入失敗：{testError}</p>}
-        </div>
-      )}
     </DeadlinePrisonLoader>
   )
   // 首次登入強制改密碼(典獄長代開帳號):在 auth 確立之後、主畫面之前全畫面攔截,
@@ -362,8 +352,8 @@ function App() {
   const tabs = profile.role === 'warden'
     ? [
         { k: 'warden', label: '典獄長主控台' },
-        { k: 'session', label: '犯人服刑', disabled: !inmateOK },
-        { k: 'guardwork', label: '獄卒作業', disabled: !guardOK },
+        { k: 'session', label: '犯人服刑', disabled: tourActive ? false : !inmateOK },
+        { k: 'guardwork', label: '獄卒作業', disabled: tourActive ? false : !guardOK },
         { k: 'memos', label: 'MEMO / 確認項' },
         { k: 'booking', label: '已預約場次' },
         { k: 'me', label: '我的稿件' },
@@ -373,8 +363,8 @@ function App() {
       ]
     : profile.role === 'guard'
       ? [
-          { k: 'session', label: '犯人服刑', disabled: !inmateOK },
-          { k: 'guardwork', label: '獄卒作業', disabled: !guardOK },
+          { k: 'session', label: '犯人服刑', disabled: tourActive ? false : !inmateOK },
+          { k: 'guardwork', label: '獄卒作業', disabled: tourActive ? false : !guardOK },
           { k: 'memos', label: 'MEMO / 確認項' },
           { k: 'booking', label: '已預約場次' },
           { k: 'me', label: '我的稿件' },
@@ -383,14 +373,14 @@ function App() {
           { k: 'profile', label: '個人資料' },
         ]
       : [
-          { k: 'session', label: '犯人服刑', disabled: !inmateOK },
+          { k: 'session', label: '犯人服刑', disabled: tourActive ? false : !inmateOK },
           { k: 'booking', label: '已預約場次' },
           { k: 'me', label: '我的稿件' },
           { k: 'records', label: '服刑紀錄' },
           { k: 'profile', label: '個人資料' },
         ]
   // disabled 分頁的點擊提示(hover title 同字)
-  const lockedHint = { session: '你目前不在任何進行中場次，或本場身分不是犯人', guardwork: '你目前不在任何進行中場次，或本場身分不是獄卒' }
+  const lockedHint = { session: '報名場次後即可進入本頁（目前沒有未結束的預約場次）', guardwork: '排班進場次後即可進入本頁（目前沒有未結束的看守場次）' }
   // 防呆:tab 不在當前身分的分頁清單時,落回第一個
   const activeTab = tabs.some(t => t.k === tab) ? tab : tabs[0].k
   return (
@@ -405,15 +395,15 @@ function App() {
           <button className="btn-ghost" onClick={signOut}>登出</button>
         </div>
       </div>
-      {tourQueue.length > 0 && (
-        <Tour steps={tourQueue[0].steps} label={tourQueue[0].label}
-          onNavigate={(t) => { if (t) setTab(t) }}
+      {tourActive && (
+        <Tour key={tourQueue[0].label} steps={tourQueue[0].steps} label={tourQueue[0].label}
+          onStepChange={(s) => { if (s.tab) setTab(s.tab); setTourDemo({ tab: s.tab, kind: s.kind }) }}
           onClose={() => setTourQueue(q => q.slice(1))} />
       )}
       <div className="tabs">
         {tabs.map(t => (
           // disabled 分頁不用 native disabled(否則點不到):用 tab-disabled 灰樣式 + 點擊跳 setMsg 提示
-          <button key={t.k} aria-disabled={t.disabled || undefined}
+          <button key={t.k} data-tour={`tab:${t.k}`} aria-disabled={t.disabled || undefined}
             title={t.disabled ? lockedHint[t.k] : undefined}
             className={`${activeTab === t.k ? 'on' : ''}${t.disabled ? ' tab-disabled' : ''}`}
             onClick={() => t.disabled ? setMsg(lockedHint[t.k]) : setTab(t.k)}>{t.label}</button>
@@ -421,15 +411,20 @@ function App() {
       </div>
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
       <div className="page">
+        {/* 導覽中一律以示範頁呈現當前分頁(典獄長主控台除外,示範不涵蓋):
+            即使使用者中途自行點別的分頁,也看示範假資料,不會看到真實/鎖定頁與導覽說明矛盾 */}
+        {tourActive && tourDemo && activeTab !== 'warden' ? (
+          <TourDemoPage tab={activeTab} kind={tourDemo.kind} />
+        ) : (<>
         {activeTab === 'session' && (
           inmateOK
             ? <SessionView userId={user.id} forceView="inmate" onGoToManuscripts={() => setTab('me')} />
-            : <LockedSessionNote text="目前不在任何進行中場次（犯人），可至『已預約場次』報名或等待典獄長收監。" onGoToBooking={() => setTab('booking')} />
+            : <LockedSessionNote text="報名場次後即可進入本頁挑選本場目標（前往官網報名，報名紀錄見『已預約場次』）。" onGoToBooking={() => setTab('booking')} />
         )}
         {activeTab === 'guardwork' && (
           guardOK
             ? <SessionView userId={user.id} forceView="guard" onGoToManuscripts={() => setTab('me')} />
-            : <LockedSessionNote text="目前不在任何進行中場次（獄卒），等待典獄長指派。" onGoToBooking={() => setTab('booking')} />
+            : <LockedSessionNote text="目前沒有未結束的看守場次，等待典獄長排班。" onGoToBooking={() => setTab('booking')} />
         )}
         {activeTab === 'memos' && isStaff && <GuardMemosTab userId={user.id} />}
         {activeTab === 'booking' && <MyBookings userId={user.id} onGoToManuscripts={() => setTab('me')} />}
@@ -447,7 +442,10 @@ function App() {
           <ProfilePage userId={user.id} role={profile.role}
             onSaved={(patch) => setProfile(p => ({ ...p, ...patch }))} />
         )}
+        </>)}
       </div>
+      {/* 共用確認彈窗(取代原生 window.confirm) */}
+      <ConfirmHost />
     </div>
   )
 }

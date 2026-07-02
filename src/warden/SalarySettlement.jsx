@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { SESSION_KIND_LABEL, DEFAULT_SESSION_KIND } from '../sessionKind'
 import { calcSettlement, money, formatElaiAndPrisonPayout } from './salaryRules'
+import { fetchPriceRows, settlementRates } from '../prices'
 import { sendSalaryBroadcast, zhSalaryError } from '../salaryApi'
 
 // 伊萊諾斯(典獄長本人)以收監編號 0001 辨識;其薪資與監獄留存皆留在身上,不對外發放。
@@ -27,6 +28,9 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
   const [gil, setGil] = useState('')          // 費用驗算:典獄長身上原有金額(萬)
   const [sending, setSending] = useState(false)
   const [sendMsg, setSendMsg] = useState(null)
+  const [priceRows, setPriceRows] = useState(null)   // 價目表(guard_cut 拆帳設定;未載/未建表落回內建預設)
+
+  useEffect(() => { fetchPriceRows().then(setPriceRows) }, [posVersion])   // POS 異動時一併刷新拆帳設定
 
   useEffect(() => {
     (async () => {
@@ -68,7 +72,8 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
   }
   useEffect(() => { loadSession(sid) }, [sid, posVersion])   // sid 或 POS 異動(結帳/刪項)時重算
 
-  const result = calcSettlement({ kind, guards, items })   // React Compiler 自動記憶化(手動 useMemo 會被跳過優化)
+  // 拆帳率來自價目表 guard_cut(典獄長可在「品項價目表」調整);未設定的鍵落回內建預設
+  const result = calcSettlement({ kind, guards, items, rates: priceRows ? settlementRates(priceRows, kind) : null })   // React Compiler 自動記憶化(手動 useMemo 會被跳過優化)
   const isFree = kind === 'free'
 
   // 費用驗算(集體/指名場):原GIL + 當日營業額 = 發薪前總額;發薪後只留伊萊諾斯薪資與監獄留存。
@@ -180,7 +185,7 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
                     <div className="prison-row hl"><span>監獄留存（淨收 50%，用於後續活動經費）</span><Amt v={result.retain} neg={result.retain < 0} strong /></div>
                   </div>
                 </div>
-                <p className="settle-note">資料來源 POS 結帳(pos_order_items)。金額單位「萬」。此頁僅計算顯示，不寫入。</p>
+                <p className="settle-note">資料來源 POS 結帳（pos_order_items）。金額單位「萬」。此頁僅計算顯示，不寫入。</p>
               </div>
 
               {/* C. 費用驗算(僅計算,不寫入;單位為原始 Gil):原GIL + 當日營業額 → 發薪前總額;發薪後只留伊萊諾斯薪資與監獄留存。 */}
@@ -208,7 +213,7 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
                     )}
                   </div>
                 </div>
-                <p className="settle-note">單位為原始 Gil（結算「萬」自動 ×10000）。發薪後餘額 = 原有金額 + 當日營業額 − 伊萊諾斯以外獄卒薪資;剩下的即伊萊諾斯薪資與監獄留存。</p>
+                <p className="settle-note">單位為原始 Gil（結算「萬」自動 ×10000）。發薪後餘額 = 原有金額 + 當日營業額 − 伊萊諾斯以外獄卒薪資；剩下的即伊萊諾斯薪資與監獄留存。</p>
               </div>
             </div>
 

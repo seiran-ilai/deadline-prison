@@ -12,7 +12,7 @@
   --bar:rgba(255,255,255,.045);
   --stamp:'Saira Stencil One',sans-serif;
   --cond:'Bebas Neue',sans-serif;
-  --mono:'Space Mono',monospace;
+  --mono:'Space Mono','Noto Sans TC',monospace;   /* 中文需先命中 Noto,否則被通用 monospace 攔走變新細明體 */
   --cjk:'Noto Sans TC',sans-serif;
 }
 /* 形象站需滿版:中和 index.css 對 #root 的 1126px 置中、邊框、置中對齊(只在本站套用) */
@@ -27,6 +27,9 @@
   -webkit-font-smoothing:antialiased; overflow-x:clip;
   min-height:100dvh; position:relative; scroll-behavior:smooth;
 }
+/* 表單控件不繼承字體(瀏覽器預設,中文會變細明體),一律跟隨頁面字體;後方特定規則(--cond/--mono)照常覆蓋 */
+.dp-site button,.dp-site input,.dp-site select,.dp-site textarea,
+.dp-modal button,.dp-modal input,.dp-modal select,.dp-modal textarea{font-family:inherit}
 /* 鍵盤導覽:可聚焦元素的可見焦點環(滑鼠點擊不顯示) */
 .dp-site a:focus-visible,.dp-site button:focus-visible,.dp-modal button:focus-visible,.dp-modal input:focus-visible{outline:2px solid var(--hazard); outline-offset:2px}
 /* 水泥噪點 + 垂直鋼欄杆 */

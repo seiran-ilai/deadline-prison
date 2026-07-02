@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../supabaseClient'
-import { zhAuthError } from '../authText'
-import { SHOW_APP_ACCESS, INTERNAL_ACCOUNT_DOMAIN } from '../authConfig'
+import { SHOW_APP_ACCESS } from '../authConfig'
 import { createBooking, createGuestBooking, cancelBooking } from '../bookingApi'
 import { toSessionView, splitDate } from '../prison'
 import { sessionKindLabel } from '../sessionKind'
+import { fetchPriceRows, priceMap, effPrice, hasSale, DEFAULT_PRICES } from '../prices'
+import { askConfirm, ConfirmHost } from '../ConfirmDialog'
 import AvatarInput from '../AvatarInput'
 import { SITE_INMATE_GUIDE } from '../tourSteps'
 import './prison-site.css'
@@ -104,36 +105,33 @@ const BOOKING_NOTICE = [
   ['四', '關於演繹的共同語言', '死線監獄的演繹，建立在「監獄」這項元素之上，並保留大量空白。這是本店刻意為之的設計，為的是讓每一位不同帶入程度的犯人都能立刻入戲，這個空間裡的每一句話，在場的每個人都能一起參與。演繹時請以監獄設定和遊戲內相關世界觀為主。若想帶入外部作品或圈外的梗也很歡迎，但請考量到在場獄卒、犯人能理解的程度不同，若無法接續演繹，還請見諒。'],
 ]
 
-// 官網預約即時報價(單位:萬;顧客端估算,與後台結算 salaryRules.RATES 分開)。
-//   crunch:入場 20 + 指定監督 10/位;named:指名 15/時段、無指名入場 1;拍立得 5/張、簽繪張 8/張;抓捕 30 起(委託人付)。
-const PRICE = { crunchEntry: 20, supervise: 10, namedSlot: 15, namedEntry: 1, polaroid: 5, signAdd: 3, portrait: 80, captureBase: 30, captureAdd: 15 }
-
-
-// 場次介紹:三種場次類型的「場次類型 / 場次介紹 / 場次品項」。文字照抄不改寫;品項以物件 { n,p,u,note,hot } 呈現。
+// 場次介紹:三種場次類型的「場次類型 / 場次介紹 / 場次品項」。文字照抄不改寫;品項以物件 { n,k,kind,plus,u,note,hot } 呈現。
+// 價格改由價目表(price_items)帶入:k=價目鍵(有優惠價 → 顯示定價劃線+優惠價;無 → 顯示一般定價);
+// 無 k 的品項(免費等)沿用固定文字 p。
 const SESSION_TYPES = [
   {
     code: '01', kind: '集體趕稿', tagline: '番茄鐘團體趕稿',
     intro: '以番茄鐘節奏進行的團體監督趕稿，25 分鐘 × 4 循環，約 2 小時，獄卒在場監督記錄。人數上限 5 人／場。適合需要有人盯、喜歡一起衝節奏的囚犯。',
     items: [
-      { n: '入場費', p: '20', u: '萬' },
-      { n: '指定監督獄卒', p: '+10', u: '萬', note: '入場＋監督＝30 萬', hot: true },
-      { n: '互動探監', p: '5', u: '萬', was: '10 萬', hot: true, note: '試營運限定・由探監者支付' },
+      { n: '入場費', k: 'crunch|signup', u: '萬' },
+      { n: '指定監督獄卒', k: 'crunch|supervise', plus: true, u: '萬', note: '入場＋監督＝30 萬', hot: true },
+      { n: '互動探監', k: 'crunch|visit', u: '萬', hot: true, note: '試營運限定・由探監者支付' },
       { n: '無互動探監', p: '免費', note: '純參觀' },
-      { n: '拍立得（空白）', p: '5', u: '萬／張', note: '不限定當場獄卒，請等休息時間拍攝' },
-      { n: '拍立得加購簽繪', p: '+3', u: '萬／張', note: '於空白拍立得加購', hot: true },
-      { n: '監獄外抓捕', p: '30', u: '萬起', note: '最少 2 名獄卒抓捕' },
-      { n: '肖像畫', p: '80', u: '萬', note: '限定負責獄卒上班日，無須入場即可繪製' },
+      { n: '拍立得（空白）', k: 'crunch|polaroid', u: '萬／張', note: '不限定當場獄卒，請等休息時間拍攝' },
+      { n: '拍立得加購簽繪', k: 'crunch|sign', plus: true, u: '萬／張', note: '於空白拍立得加購', hot: true },
+      { n: '監獄外抓捕', k: 'crunch|capture', u: '萬起', note: '最少 2 名獄卒抓捕' },
+      { n: '肖像畫', k: 'crunch|portrait', u: '萬', note: '限定負責獄卒上班日，無須入場即可繪製' },
     ],
   },
   {
     code: '02', kind: '指名互動', tagline: '獄卒 × 囚犯',
     intro: '指定一位獄卒的一對一互動時段，30 分鐘為一個時段，最少一個時段，可視情況延長。可聊天、演繹、討論進度，內容依需求安排。適合想要專屬陪伴、有特定指名對象的囚犯。',
     items: [
-      { n: '指名費', p: '15', u: '萬／30 分鐘', note: '最少一個時段' },
-      { n: '無指名入場', p: '1', u: '萬' },
-      { n: '拍立得（空白）', p: '5', u: '萬／張', note: '不限定當場獄卒，請等休息時間拍攝' },
-      { n: '拍立得加購簽繪', p: '+3', u: '萬／張', note: '於空白拍立得加購', hot: true },
-      { n: '肖像畫', p: '80', u: '萬', note: '限定負責獄卒上班日，無須指名即可繪製' },
+      { n: '指名費', k: 'named|nominate', u: '萬／30 分鐘', note: '最少一個時段' },
+      { n: '無指名入場', k: 'named|entry', u: '萬' },
+      { n: '拍立得（空白）', k: 'named|polaroid', u: '萬／張', note: '不限定當場獄卒，請等休息時間拍攝' },
+      { n: '拍立得加購簽繪', k: 'named|sign', plus: true, u: '萬／張', note: '於空白拍立得加購', hot: true },
+      { n: '肖像畫', k: 'named|portrait', u: '萬', note: '限定負責獄卒上班日，無須指名即可繪製' },
     ],
   },
   {
@@ -149,7 +147,7 @@ const SESSION_TYPES = [
 const SESS_STATUS = {
   booking:        { label: '預約中',   cls: 'booking' },  // 預約中(正向綠)
   booking_paused: { label: '報名暫停', cls: 'paused' },   // 報名暫停(中性灰)
-  intake:         { label: '入場中',   cls: 'intake' },   // 入場中(中性灰)
+  intake:         { label: '準備服刑', cls: 'intake' },   // 準備服刑(中性灰;對外流程已無「開始入場」,僅殘留時可見)
   serving:        { label: '服刑中',   cls: 'serving' },  // 服刑中(強調色)
 }
 
@@ -176,24 +174,27 @@ export default function PrisonSite() {
   const [pwOk, setPwOk] = useState(false)            // 密鑰場:本次 modal 是否已通過核對
   const [pwChecking, setPwChecking] = useState(false)
   const [pwErr, setPwErr] = useState(null)           // 密鑰核對錯誤(留在關卡內顯示,可重試)
-  const [mEmail, setMEmail] = useState('')            // modal 內登入:帳號名
-  const [mPw, setMPw] = useState('')
-  const [mAuthBusy, setMAuthBusy] = useState(false)
-  const [mAuthErr, setMAuthErr] = useState(null)
   const [gName, setGName] = useState('')              // 不登入直接預約:遊戲暱稱
   const [gServer, setGServer] = useState('')          // 不登入直接預約:伺服器(與暱稱分兩欄)
   const [gPw, setGPw] = useState('')                  // 不註冊預約:密鑰場通行密鑰
   const [gBusy, setGBusy] = useState(false)
   const [gErr, setGErr] = useState(null)
+  const [priceRows, setPriceRows] = useState(DEFAULT_PRICES) // 價目表(定價/優惠價;未建表用內建預設)
   const rootRef = useRef(null)
+
+  // 查價:pm['kind|key'];SP=生效價(優惠價優先)。有優惠價時品項卡顯示定價劃線+優惠價。
+  const pm = priceMap(priceRows)
+  const SP = (kind, key) => effPrice(pm[`${kind}|${key}`])
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     setUser(session?.user ?? null)
-    const [{ data: sess }, { data: st }] = await Promise.all([
+    const [{ data: sess }, { data: st }, prices] = await Promise.all([
       supabase.rpc('public_sessions'),
       supabase.rpc('public_staff'),
+      fetchPriceRows(),
     ])
+    setPriceRows(prices)
     setSessions((sess ?? []).map(toSessionView))
     setStaff((st ?? []).map(r => ({
       role: r.role === 'warden' ? '典獄長' : '獄卒',
@@ -269,7 +270,6 @@ export default function PrisonSite() {
 
   const scrollTo = id => rootRef.current?.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' })
   const resetModalAuth = () => {
-    setMPw(''); setMAuthBusy(false); setMAuthErr(null)
     setGName(''); setGPw(''); setGBusy(false); setGErr(null)
   }
   const resetPicks = () => { setReqSel(new Set()); setAddonsByGuard({}); setCapture({ on: false, client: '', target: '', targetServer: '', guards: 2 }) }
@@ -323,41 +323,23 @@ export default function PrisonSite() {
     const picks = buildPicks()
     const lines = []; let total = 0
     const add = (lbl, det, amt) => { lines.push([lbl, det, amt]); total += amt }
+    const kind = sel?.kind === 'named' ? 'named' : 'crunch'
     if (sel?.kind === 'named') {
       const slots = picks.requested_slots.filter(x => x.s !== null).length
-      if (slots > 0) add('指名費', `15 × ${slots}`, PRICE.namedSlot * slots)
-      else add('無指名入場', '', PRICE.namedEntry)
+      if (slots > 0) add('指名費', `${SP('named', 'nominate')} × ${slots}`, SP('named', 'nominate') * slots)
+      else add('無指名入場', '', SP('named', 'entry'))
     } else if (sel?.kind === 'crunch') {
-      add('入場費', '', PRICE.crunchEntry)
+      add('入場費', '', SP('crunch', 'signup'))
       const sup = picks.requested_slots.length
-      if (sup > 0) add('指定監督', `10 × ${sup}`, PRICE.supervise * sup)
+      if (sup > 0) add('指定監督', `${SP('crunch', 'supervise')} × ${sup}`, SP('crunch', 'supervise') * sup)
     }
     const pol = picks.addons.reduce((s, a) => s + a.polaroid, 0)
     const sgn = picks.addons.reduce((s, a) => s + (a.sign ? a.polaroid : 0), 0)
     const por = picks.addons.reduce((s, a) => s + (a.portrait || 0), 0)
-    if (pol > 0) add('拍立得（空白）', `5 × ${pol}`, PRICE.polaroid * pol)
-    if (sgn > 0) add('拍立得加購簽繪', `3 × ${sgn}`, PRICE.signAdd * sgn)
-    if (por > 0) add('肖像畫', `80 × ${por}`, PRICE.portrait * por)
+    if (pol > 0) add('拍立得（空白）', `${SP(kind, 'polaroid')} × ${pol}`, SP(kind, 'polaroid') * pol)
+    if (sgn > 0) add('拍立得加購簽繪', `${SP(kind, 'sign')} × ${sgn}`, SP(kind, 'sign') * sgn)
+    if (por > 0) add('肖像畫', `${SP(kind, 'portrait')} × ${por}`, SP(kind, 'portrait') * por)
     return { lines, total, capture: picks.capture }
-  }
-
-  // modal 內帳號登入:成功後不換頁,直接刷新 user / 資料,留在同一個 modal 繼續報名流程。
-  // 僅收帳號名(信箱登入已移除),後綴由程式補。
-  async function modalEmailSignIn(e) {
-    e.preventDefault()
-    setMAuthErr(null)
-    const raw = mEmail.trim()
-    if (!raw || !mPw) { setMAuthErr('請輸入帳號與密碼'); return }
-    if (raw.includes('@')) { setMAuthErr('請輸入帳號名（不含 @）；原以信箱註冊者請聯繫典獄長換發帳號'); return }
-    setMAuthBusy(true)
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: `${raw.toLowerCase()}@${INTERNAL_ACCOUNT_DOMAIN}`,
-      password: mPw,
-    })
-    setMAuthBusy(false)
-    if (error) { setMAuthErr(zhAuthError(error.message)); return }
-    setUser(data.user)
-    loadData()
   }
 
   // 不註冊預約:免登入送出,只記錄遊戲暱稱(無帳號、無法登入系統、無法自行取消)。
@@ -382,7 +364,7 @@ export default function PrisonSite() {
     else if (r.error === 'full') setGErr('此梯次已停止收監。')
     else if (r.error === 'wrong_password') setGErr('通行密鑰不正確，請確認後重試。')
     else if (r.error === 'slot_taken') { setGErr('有指名時段/監督剛被別人選走了，請重新選擇。'); setReqSel(new Set()); loadNamedSlots(sel.id) }
-    else if (r.error === 'guard_not_nameable') setGErr('指名的獄卒/時段已不開放,請重新選擇。')
+    else if (r.error === 'guard_not_nameable') setGErr('指名的獄卒／時段已不開放，請重新選擇。')
     else setGErr('收監失敗，請稍後再試。')
   }
 
@@ -422,7 +404,7 @@ export default function PrisonSite() {
     else if (r.error === 'wrong_password') setMsg('通行密鑰不正確，請重新開啟報名並輸入密鑰。')
     else if (r.error === 'not_authenticated') setMsg('請先登入。')
     else if (r.error === 'slot_taken') setMsg('這個時段剛被別人選走了，請改選其他時段。')
-    else if (r.error === 'guard_not_nameable') setMsg('指名的獄卒/時段已不開放,請重新選擇。')
+    else if (r.error === 'guard_not_nameable') setMsg('指名的獄卒／時段已不開放，請重新選擇。')
     else setMsg('收監失敗，請稍後再試。')
     loadData()
     if (user) {
@@ -432,7 +414,7 @@ export default function PrisonSite() {
   }
 
   async function cancel() {
-    if (!window.confirm('確定取消本梯次預約？')) return
+    if (!await askConfirm({ title: '取消預約', message: `確定取消「${sel?.title ?? '本梯次'}」的預約？`, confirmLabel: '取消預約', danger: true })) return
     setSubmitting(true)
     const r = await cancelBooking(selBooking.id)
     setSubmitting(false)
@@ -462,6 +444,8 @@ export default function PrisonSite() {
 
   return (
     <div className="dp-site" ref={rootRef}>
+      {/* 共用確認彈窗(取代原生 window.confirm) */}
+      <ConfirmHost />
       <div className="wrap">
         {/* 導覽列 */}
         <nav>
@@ -581,17 +565,24 @@ export default function PrisonSite() {
                 <p className="stype-intro">{t.intro}</p>
                 <div className="stype-seclbl items">場次品項 <span className="stype-en">// ITEMS</span></div>
                 <ul className="stype-items">
-                  {t.items.map((it, i) => (
-                    <li key={i}>
-                      <div className="it-main">
-                        <span className="it-name">{it.n}</span>
-                        <span className={`it-price${it.hot ? ' hot' : ''}${it.p === '免費' ? ' free' : ''}`}>
-                          {it.was && <s className="it-was">{it.was}</s>}<b>{it.p}</b>{it.u && <em>{it.u}</em>}
-                        </span>
-                      </div>
-                      {it.note && <div className="it-note">{it.note}</div>}
-                    </li>
-                  ))}
+                  {t.items.map((it, i) => {
+                    // 價目表帶價:有優惠價 → 定價劃線 + 優惠價;無 → 一般定價。無價目鍵(免費等)沿用固定文字。
+                    const row = it.k ? pm[it.k] : null
+                    const sale = hasSale(row)
+                    const priceTxt = row ? `${it.plus ? '+' : ''}${effPrice(row)}` : it.p
+                    return (
+                      <li key={i}>
+                        <div className="it-main">
+                          <span className="it-name">{it.n}</span>
+                          <span className={`it-price${it.hot || sale ? ' hot' : ''}${priceTxt === '免費' ? ' free' : ''}`}>
+                            {sale && <s className="it-was">{`${it.plus ? '+' : ''}${row.list_price} 萬`}</s>}
+                            <b>{priceTxt}</b>{priceTxt !== '免費' && it.u && <em>{it.u}</em>}
+                          </span>
+                        </div>
+                        {it.note && <div className="it-note">{it.note}</div>}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             ))}
@@ -625,7 +616,7 @@ export default function PrisonSite() {
         <section id="guide">
           <div className="eyebrow reveal">後台系統教學 <span className="blk">// SYSTEM GUIDE</span></div>
           <h2 className="title reveal">怎麼服刑</h2>
-          <p className="subline reveal">從報名到服刑,四步驟帶你認識死線監獄後台系統。</p>
+          <p className="subline reveal">從報名到服刑，四步驟帶你認識死線監獄後台系統。</p>
           <div className="notice reveal">
             {SITE_INMATE_GUIDE.map(s => (
               <div className="notice-item" key={s.n}>
@@ -835,7 +826,7 @@ export default function PrisonSite() {
                         {sum.lines.map(([lbl, det, amt], i) => (
                           <div className="m-total-row" key={i}><span>{lbl}{det ? ` · ${det}` : ''}</span><b>{amt} 萬</b></div>
                         ))}
-                        {sum.capture && <div className="m-total-row"><span>監獄外抓捕 · {sum.capture.guards} 位（委託人另付）</span><b>{PRICE.captureBase + PRICE.captureAdd * (sum.capture.guards - 2)} 萬起</b></div>}
+                        {sum.capture && <div className="m-total-row"><span>監獄外抓捕 · {sum.capture.guards} 位（委託人另付）</span><b>{SP('crunch', 'capture') + SP('crunch', 'capture_add') * (sum.capture.guards - 2)} 萬起</b></div>}
                         <div className="m-total-row sum"><span>預估總額</span><b>{sum.total} 萬</b></div>
                       </div>
                     )
@@ -846,14 +837,14 @@ export default function PrisonSite() {
               {receipt ? (
                 <div className="m-receipt">
                   <div className="m-receipt-hd">{receipt.inmateNo != null ? `【犯人編號 ${String(receipt.inmateNo).padStart(4, '0')}】` : ''}預約成功</div>
-                  <div className="m-receipt-sub">本次預約清單(可複製留存):</div>
+                  <div className="m-receipt-sub">本次預約清單（可複製留存）：</div>
                   <pre className="m-receipt-text">{receipt.text}</pre>
                   <button className="m-dc" type="button" onClick={() => copyText(receipt.text, 'receipt')}>
                     {copied === 'receipt' ? '已複製 ✓' : '複製預約明細'}
                   </button>
                   {receipt.account && (
                     <div className="m-receipt-cred">
-                      <div className="m-receipt-sub">你的登入帳密(僅顯示這一次,請務必截圖/複製留存):</div>
+                      <div className="m-receipt-sub">你的登入帳密（僅顯示這一次，請務必截圖／複製留存）：</div>
                       <div className="m-cred-row"><span>帳號</span><b>{receipt.account}</b></div>
                       <div className="m-cred-row"><span>密碼</span><b>{receipt.password}</b></div>
                       <button className="m-dc" type="button" onClick={() => copyText(`帳號 ${receipt.account}\n密碼 ${receipt.password}`, 'cred')}>
@@ -867,8 +858,9 @@ export default function PrisonSite() {
                 <p className="m-note" style={{ color: 'var(--text)' }}>{msg}</p>
               ) : user === null ? (
                 <>
-                  {/* 先顯示:不登入直接預約(暱稱 + 伺服器兩欄) */}
-                  <p className="m-note">不登入直接預約：名冊記錄你的<b style={{ color: 'var(--text)' }}>暱稱與伺服器</b>；同暱稱+伺服器會累積到同一份犯人資料。如需取消請至 Discord 聯繫典獄長。</p>
+                  {/* 暱稱 + 伺服器即可報名(登入報名已移除;報名即自動建檔發號) */}
+                  <p className="m-note">以<b style={{ color: 'var(--text)' }}>遊戲暱稱與伺服器</b>直接報名；同暱稱＋伺服器會累積到同一份犯人資料。如需取消請至 Discord 聯繫典獄長。</p>
+                  <p className="m-note">備註：如果尚未註冊，將於報名後<b style={{ color: 'var(--text)' }}>發放帳號密碼</b>，登入後可修改帳號密碼。</p>
                   <form onSubmit={submitGuestBooking}>
                     <div className="m-field-row" style={{ display: 'flex', gap: 10 }}>
                       <div className="m-field" style={{ flex: 1 }}>
@@ -891,31 +883,9 @@ export default function PrisonSite() {
                     )}
                     {gErr && <p className="m-note" style={{ color: 'var(--alarm)', margin: '10px 0' }}>{gErr}</p>}
                     <button className="m-dc m-confirm" type="submit" disabled={gBusy}>
-                      {gBusy ? '收監中…' : '確認入監（不註冊）'}
+                      {gBusy ? '收監中…' : '入監服刑'}
                     </button>
                   </form>
-
-                  <div className="m-or"><span /><em>或</em><span /></div>
-
-                  {/* 後顯示:帳號密碼登入報名 */}
-                  <p className="m-note">登入報名：請以<b style={{ color: 'var(--text)' }}>帳號密碼</b>登入；尚無帳密請向典獄長索取。</p>
-                  <form onSubmit={modalEmailSignIn}>
-                    <div className="m-field">
-                      <span className="m-field-lbl">帳號</span>
-                      <input className="m-input" type="text" autoComplete="username" placeholder="帳號"
-                        value={mEmail} onChange={e => setMEmail(e.target.value)} />
-                    </div>
-                    <div className="m-field">
-                      <span className="m-field-lbl">密碼</span>
-                      <input className="m-input" type="password" autoComplete="current-password" placeholder="密碼"
-                        value={mPw} onChange={e => setMPw(e.target.value)} />
-                    </div>
-                    {mAuthErr && <p className="m-note" style={{ color: 'var(--alarm)', margin: '10px 0' }}>{mAuthErr}</p>}
-                    <button className="m-dc m-confirm" type="submit" disabled={mAuthBusy}>
-                      {mAuthBusy ? '登入中…' : '登入'}
-                    </button>
-                  </form>
-                  <p className="m-choose">本系統不開放自行註冊，請向典獄長索取帳號密碼。</p>
                 </>
               ) : active ? (
                 <>

@@ -15,9 +15,8 @@
     <meta name="twitter:title" content="死線監獄 ｜ DEADLINE PRISON" />
     <meta name="twitter:description" content="把自己關進來，服完這一頁死線。沒有逃獄，只有交稿。以番茄鐘執行的趕稿收容所。" />
     <meta name="twitter:image" content="/og.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Saira+Stencil+One&family=Space+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+    <!-- 字體自架(public/fonts;由 Google Fonts 匯出):不再依賴 CDN,離線/擋連線也不會跑版 -->
+    <link href="/fonts/fonts.css" rel="stylesheet" />
     <!-- 網頁載入動畫:立即顯示深底,蓋住 bundle/字體下載期間的白屏,React 首次繪製後淡出 -->
     <style>
       #dp-splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#0b0b09;transition:opacity .45s ease}

@@ -3,7 +3,9 @@
 // 設計約束:純 CSS-in-JS、單檔自含、prefers-reduced-motion 已降級;不引入任何動畫套件。
 
 const CSS = `
-.dpl-root{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0b0b09;font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",ui-sans-serif,sans-serif;isolation:isolate}
+.dpl-root{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0b0b09;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",ui-sans-serif,sans-serif;isolation:isolate}
+/* 表單控件不繼承字體(瀏覽器預設),強制跟隨頁面字體 */
+.dpl-root input,.dpl-root button{font-family:inherit}
 /* fixed 模式:內容可能比螢幕高(登入頁含 email 表單)→ 改可垂直捲動,
    置中改用 margin:auto(內容矮時居中、高時從頂部開始可完整捲到底,不會像 justify-content:center 把上緣裁掉) */
 .dpl-root.dpl-fixed{position:fixed;inset:0;z-index:9999;overflow-y:auto;flex-direction:column;align-items:stretch;justify-content:flex-start}
@@ -17,17 +19,17 @@ const CSS = `
 .dpl-haz{position:absolute;left:0;right:0;height:5px;z-index:3;background:repeating-linear-gradient(45deg,#E8B600 0 12px,#16150f 12px 24px);background-size:34px 34px;opacity:.8;animation:dpl-haz 2.4s linear infinite}
 .dpl-haz.dpl-t{top:0}.dpl-haz.dpl-b{bottom:0}
 .dpl-content{position:relative;z-index:4;display:flex;flex-direction:column;align-items:center;gap:18px;padding:0 24px;text-align:center;width:100%;box-sizing:border-box}
-.dpl-badge{display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(232,182,0,.55);border-radius:3px;padding:7px 16px;font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.22em;color:#cfcabb;opacity:0;animation:dpl-up .5s ease-out .5s both}
+.dpl-badge{display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(232,182,0,.55);border-radius:3px;padding:7px 16px;font-family:'Space Mono','Noto Sans TC',ui-monospace,monospace;font-size:12px;letter-spacing:.22em;color:#cfcabb;opacity:0;animation:dpl-up .5s ease-out .5s both}
 .dpl-dot{width:8px;height:8px;border-radius:50%;background:#E8553B;box-shadow:0 0 8px #E8553B;animation:dpl-blink 1.1s steps(1,end) infinite}
 .dpl-sep{color:#5a5b52}
 .dpl-word{display:flex;line-height:.92;font-weight:800;letter-spacing:.04em;font-size:clamp(52px,12vw,118px);opacity:0;animation:dpl-flicker .55s ease-out both}
 .dpl-word .dpl-w1{color:#ededed;text-shadow:0 3px 0 rgba(0,0,0,.5)}
 .dpl-word .dpl-w2{color:#E8B600;text-shadow:0 3px 0 rgba(0,0,0,.5);animation:dpl-glow 2.6s ease-in-out infinite}
-.dpl-sub{position:relative;font-family:ui-monospace,Menlo,monospace;font-weight:700;letter-spacing:.34em;font-size:clamp(15px,3.2vw,30px);color:#5f6157;padding-bottom:8px;opacity:0;animation:dpl-up .5s ease-out .65s both}
+.dpl-sub{position:relative;font-family:'Space Mono','Noto Sans TC',ui-monospace,monospace;font-weight:700;letter-spacing:.34em;font-size:clamp(15px,3.2vw,30px);color:#5f6157;padding-bottom:8px;opacity:0;animation:dpl-up .5s ease-out .65s both}
 .dpl-sub .dpl-num{color:#cfcabb}
 .dpl-uline{position:absolute;left:50%;bottom:0;width:120px;max-width:60%;height:3px;background:#E8B600;transform:translateX(-50%) scaleX(0);transform-origin:center;animation:dpl-draw .6s ease-out .9s both}
 .dpl-loader{width:min(440px,82%);margin-top:6px;opacity:0;animation:dpl-up .5s ease-out .8s both}
-.dpl-lrow{display:flex;justify-content:space-between;font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.2em;color:#7c7d72;margin-bottom:9px}
+.dpl-lrow{display:flex;justify-content:space-between;font-family:'Space Mono','Noto Sans TC',ui-monospace,monospace;font-size:12px;letter-spacing:.2em;color:#7c7d72;margin-bottom:9px}
 .dpl-proc::after{content:"";animation:dpl-dots 1.4s steps(1,end) infinite}
 .dpl-track{position:relative;height:8px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden}
 .dpl-fill{position:relative;height:100%;background:repeating-linear-gradient(45deg,#E8B600 0 9px,#a87f00 9px 18px);background-size:26px 26px;animation:dpl-haz 1s linear infinite;transition:width .4s cubic-bezier(.23,1,.32,1)}
@@ -41,7 +43,7 @@ const CSS = `
 .dpl-dc:active{transform:translateY(1px)}
 .dpl-dc svg{flex:0 0 auto}
 .dpl-privacy{margin-top:2px;text-align:center;font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",ui-sans-serif,sans-serif;color:#7c7d72;font-size:12.5px;line-height:1.85;max-width:100%}
-.dpl-privacy .dpl-pv-t{display:block;font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em;color:#5f6157;margin-bottom:7px}
+.dpl-privacy .dpl-pv-t{display:block;font-family:'Space Mono','Noto Sans TC',ui-monospace,monospace;font-size:11px;letter-spacing:.22em;color:#5f6157;margin-bottom:7px}
 .dpl-privacy p{margin:0;white-space:nowrap}
 /* 窄螢幕:隱私說明允許換行(nowrap 會超出螢幕),左對齊較易讀 */
 @media (max-width:640px){
@@ -50,7 +52,7 @@ const CSS = `
 .dpl-choose{white-space:normal;max-width:min(88vw,360px)}
 }
 /* Email 第二通道:分隔線 + 切換式表單(登入/註冊/忘記密碼/設定新密碼共用) */
-.dpl-or{display:flex;align-items:center;gap:12px;width:min(320px,88vw);color:#5f6157;font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.22em}
+.dpl-or{display:flex;align-items:center;gap:12px;width:min(320px,88vw);color:#5f6157;font-family:'Space Mono','Noto Sans TC',ui-monospace,monospace;font-size:11px;letter-spacing:.22em}
 .dpl-or span{flex:1;height:1px;background:rgba(207,202,187,.18)}
 .dpl-or em{font-style:normal;white-space:nowrap}
 .dpl-mail{display:flex;flex-direction:column;gap:10px;width:min(320px,88vw)}
@@ -69,7 +71,7 @@ const CSS = `
 .dpl-lnk:hover{color:#E8B600}
 .dpl-err{margin:0;color:#E8553B;font-size:13px;line-height:1.6;text-align:center}
 .dpl-ok{margin:0;color:#9fc46a;font-size:13px;line-height:1.6;text-align:center}
-.dpl-back{display:inline-block;padding:8px 18px;border:1px solid rgba(207,202,187,.22);border-radius:3px;background:transparent;color:#9a9b90;font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.14em;text-decoration:none;cursor:pointer;transition:border-color .2s ease,color .2s ease}
+.dpl-back{display:inline-block;padding:8px 18px;border:1px solid rgba(207,202,187,.22);border-radius:3px;background:transparent;color:#9a9b90;font-family:'Space Mono','Noto Sans TC',ui-monospace,monospace;font-size:12px;letter-spacing:.14em;text-decoration:none;cursor:pointer;transition:border-color .2s ease,color .2s ease}
 .dpl-back:hover{border-color:rgba(232,182,0,.55);color:#cfcabb}
 @keyframes dpl-scan{0%{top:-30%}100%{top:120%}}
 @keyframes dpl-haz{0%{background-position:0 0}100%{background-position:34px 0}}

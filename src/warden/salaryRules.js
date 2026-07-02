@@ -35,8 +35,7 @@ export const w = n => String(Math.round((Number(n) || 0) * 100) / 100)
 export const money = n => `${w(n)} 萬`
 
 // 拍立得明細列:依「本單犯人」分組,回傳 { name, tag, calc, amount }
-function polaroidRows(items, signed) {
-  const unit = signed ? RATES.polaroidSigned : RATES.polaroidUnsigned
+function polaroidRows(items, signed, unit) {
   const groups = {}
   for (const r of items) {
     const key = r._customer || r.person_name || '（未指定）'
@@ -90,7 +89,11 @@ export function formatElaiAndPrisonPayout(elai, result, session = {}) {
   return lines.join('\n')
 }
 
-export function calcSettlement({ kind, guards, items }) {
+// rates:價目表(price_items.guard_cut)組出的拆帳率覆蓋(settlementRates 產出;值為 null 的鍵落回 RATES 預設)。
+// 不帶 rates 時行為與過去完全相同。優惠結帳不影響結算:以張數/時段數 × 拆帳率計,不看實收金額。
+export function calcSettlement({ kind, guards, items, rates = null }) {
+  const R = { ...RATES }
+  for (const [k, v] of Object.entries(rates ?? {})) if (v != null) R[k] = v
   const byGuard = {}
   for (const it of items) { const g = it.target_guard_id; if (!g) continue; (byGuard[g] ??= []).push(it) }
   const revenue = items.reduce((s, it) => s + (it.amount || 0), 0)
@@ -102,7 +105,7 @@ export function calcSettlement({ kind, guards, items }) {
     const pol = its.filter(x => x.item_type === 'polaroid')
     const polU = pol.filter(x => !x.with_signature), polS = pol.filter(x => x.with_signature)
     const qtyU = polU.reduce((s, x) => s + (x.qty || 0), 0), qtyS = polS.reduce((s, x) => s + (x.qty || 0), 0)
-    const polUAmt = RATES.polaroidUnsigned * qtyU, polSAmt = RATES.polaroidSigned * qtyS
+    const polUAmt = R.polaroidUnsigned * qtyU, polSAmt = R.polaroidSigned * qtyS
     const portraits = its.filter(x => x.item_type === 'portrait')
     const supervises = its.filter(x => x.item_type === 'signup' && x.supervise)
     const visits = its.filter(x => x.item_type === 'visit')
@@ -112,24 +115,24 @@ export function calcSettlement({ kind, guards, items }) {
     let direct                                  // 三分支(肖像/指名/集體)必其一賦值
 
     if (portraits.length > 0) {                 // 肖像畫獄卒:全收,當日無底薪
-      const amt = RATES.portrait * portraits.length
-      segments.push({ title: '肖像畫', amount: amt, rows: portraits.map(p => ({ name: p._customer || p.person_name || '（未指定）', amount: RATES.portrait })) })
+      const amt = R.portrait * portraits.length
+      segments.push({ title: '肖像畫', amount: amt, rows: portraits.map(p => ({ name: p._customer || p.person_name || '（未指定）', amount: R.portrait })) })
       direct = amt
     } else if (kind === 'named') {              // 指名互動:max(底薪, 服務收入)
       let service = 0
-      if (slots) { const a = RATES.namedSlot * slots; segments.push({ title: '指名時段', amount: a, rows: noms.map(x => ({ name: x._customer || '（未指定）', calc: `${w(RATES.namedSlot)}萬 × ${arr(x.slot_times).length}段`, amount: RATES.namedSlot * arr(x.slot_times).length })) }); service += a }
-      if (qtyU) { segments.push({ title: '拍立得（空白）', amount: polUAmt, rows: polaroidRows(polU, false) }); service += polUAmt }
-      if (qtyS) { segments.push({ title: '拍立得（簽繪）', amount: polSAmt, rows: polaroidRows(polS, true) }); service += polSAmt }
-      const floor = Math.max(0, RATES.base - service)
-      if (floor > 0) segments.push({ title: '底薪補足', amount: floor })
+      if (slots) { const a = R.namedSlot * slots; segments.push({ title: '指名時段', amount: a, rows: noms.map(x => ({ name: x._customer || '（未指定）', calc: `${w(R.namedSlot)}萬 × ${arr(x.slot_times).length}段`, amount: R.namedSlot * arr(x.slot_times).length })) }); service += a }
+      if (qtyU) { segments.push({ title: '拍立得（空白）', amount: polUAmt, rows: polaroidRows(polU, false, R.polaroidUnsigned) }); service += polUAmt }
+      if (qtyS) { segments.push({ title: '拍立得（簽繪）', amount: polSAmt, rows: polaroidRows(polS, true, R.polaroidSigned) }); service += polSAmt }
+      const floor = Math.max(0, R.base - service)
+      if (floor > 0) segments.push({ title: service > 0 ? '底薪補足' : '底薪', amount: floor })
       direct = service + floor
     } else {                                    // 集體趕稿:底薪 + 個人服務獎金
-      segments.push({ title: '底薪', amount: RATES.base })
-      direct = RATES.base
-      if (qtyU) { segments.push({ title: '拍立得（空白）', amount: polUAmt, rows: polaroidRows(polU, false) }); direct += polUAmt }
-      if (qtyS) { segments.push({ title: '拍立得（簽繪）', amount: polSAmt, rows: polaroidRows(polS, true) }); direct += polSAmt }
-      if (supervises.length) { const a = RATES.supervise * supervises.length; segments.push({ title: '指定監督', amount: a, rows: countRows(supervises, RATES.supervise) }); direct += a }
-      if (visits.length) { const a = RATES.visit * visits.length; segments.push({ title: '互動探監', amount: a, rows: visits.map(x => ({ name: `${x.visitor_name || '?'} → ${x.person_name || '?'}`, amount: RATES.visit })) }); direct += a }
+      segments.push({ title: '底薪', amount: R.base })
+      direct = R.base
+      if (qtyU) { segments.push({ title: '拍立得（空白）', amount: polUAmt, rows: polaroidRows(polU, false, R.polaroidUnsigned) }); direct += polUAmt }
+      if (qtyS) { segments.push({ title: '拍立得（簽繪）', amount: polSAmt, rows: polaroidRows(polS, true, R.polaroidSigned) }); direct += polSAmt }
+      if (supervises.length) { const a = R.supervise * supervises.length; segments.push({ title: '指定監督', amount: a, rows: countRows(supervises, R.supervise) }); direct += a }
+      if (visits.length) { const a = R.visit * visits.length; segments.push({ title: '互動探監', amount: a, rows: visits.map(x => ({ name: `${x.visitor_name || '?'} → ${x.person_name || '?'}`, amount: R.visit })) }); direct += a }
     }
     return { id: g.id, name: g.name, inmate_no: g.inmate_no, direct, pool: 0, final: direct, segments }
   })
@@ -156,7 +159,7 @@ export function calcSettlement({ kind, guards, items }) {
 
   // 集體趕稿 / 指名互動 皆有均分獎金:淨收入 50% 均分給出勤獄卒、50% 監獄留存
   const net = revenue - directTotal
-  const pool = net > 0 ? net * RATES.poolRate : 0   // 淨收為負時不發獎金(獎金 0,不倒扣獄卒);監獄留存吸收負值
+  const pool = net > 0 ? net * R.poolRate : 0   // 淨收為負時不發獎金(獎金 0,不倒扣獄卒);監獄留存吸收負值
   const perPool = guards.length ? pool / guards.length : 0
   const retain = net - pool
   perGuard.forEach(g => {

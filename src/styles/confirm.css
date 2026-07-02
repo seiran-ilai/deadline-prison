@@ -1,0 +1,25 @@
+/* 共用確認彈窗(ConfirmDialog):自帶樣式,後台與官網皆可用(不依賴 admin.css / prison-site.css) */
+.cfm-bg{position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,.62); backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center; padding:20px}
+.cfm-modal{width:min(440px,100%); background:#16181d; border:1px solid rgba(255,255,255,.12); border-radius:10px;
+  box-shadow:0 18px 50px rgba(0,0,0,.55); padding:18px 20px 16px; color:#e8eaf0; animation:cfm-pop .14s ease-out;
+  font-family:'Noto Sans TC',system-ui,sans-serif}
+.cfm-modal button{font-family:inherit}
+@keyframes cfm-pop{from{transform:scale(.96); opacity:0} to{transform:scale(1); opacity:1}}
+.cfm-head{display:flex; align-items:center; gap:10px; margin-bottom:10px}
+.cfm-head h3{margin:0; font-size:16px; letter-spacing:1px; flex:1; min-width:0}
+.cfm-ico{flex:0 0 30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-size:15px; background:rgba(245,197,24,.14); color:#f5c518}
+.cfm-ico.danger{background:rgba(216,65,47,.16); color:#e88}
+.cfm-x{flex:0 0 auto; width:28px; height:28px; min-height:auto; padding:0; border:0; border-radius:6px; cursor:pointer;
+  background:transparent; color:#9298a2; font-size:14px; line-height:1}
+.cfm-x:hover{background:rgba(255,255,255,.08); color:#e8eaf0}
+.cfm-msg{margin:0 0 18px; font-size:14px; line-height:1.7; color:#b9bdc7; white-space:pre-wrap; word-break:break-word}
+.cfm-acts{display:flex; justify-content:flex-end; gap:8px}
+.cfm-btn{min-height:36px; padding:7px 18px; border-radius:7px; cursor:pointer; font-size:14px; letter-spacing:1px;
+  border:1px solid rgba(255,255,255,.16); background:transparent; color:#c9cdd6; transition:background .15s,border-color .15s}
+.cfm-btn:hover{background:rgba(255,255,255,.06)}
+.cfm-btn.pri{background:#f5c518; border-color:#f5c518; color:#111; font-weight:700}
+.cfm-btn.pri:hover{background:#ffd83d}
+.cfm-btn.pri.danger{background:#d8412f; border-color:#d8412f; color:#fff}
+.cfm-btn.pri.danger:hover{background:#e85a48}

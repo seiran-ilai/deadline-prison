@@ -4,6 +4,7 @@ import MessageBanner from '../MessageBanner'
 import OverviewTab from './OverviewTab'
 import SessionTab from './SessionTab'
 import SessionsOverviewTab from './SessionsOverviewTab'
+import PriceListTab from './PriceListTab'
 import EditMemberModal from './EditMemberModal'
 import ProfileCard from '../ProfileCard'
 import { normalizeStatus } from './constants'
@@ -12,24 +13,27 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
   const isWarden = myRole === 'warden'
   const [inmates, setInmates] = useState([])
   const [sessions, setSessions] = useState([])
+  const [endedSessions, setEndedSessions] = useState([]) // 已結束場次(進行中場次分頁可選,用於補登/修改購買紀錄)
   const [currentSession, setCurrentSession] = useState('')
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(true)           // 共用資料載入中
   const [wtab, setWtab] = useState('overview')           // 主控台子頁籤
   const [editingMember, setEditingMember] = useState(null) // 編輯中的犯人資料(modal)
 
-  // 共用資料:全部 profiles / 進行中場次(供「進行中場次」控台用)
-  // 「進行中場次」只放「開始入場」之後的場次(intake/serving);
-  // booking/booking_paused 階段的操作在「場次總覽」分頁,不在此控台出現。
+  // 共用資料:全部 profiles / 未結束場次(供「進行中場次」控台用)
+  // 控制列列出「所有未結束」場次(預約中/停止預約/服刑中):
+  // 開始服刑前典獄長也能進場操作(報到/指派/開始服刑),不必先到「場次總覽」。
   async function load() {
     setLoading(true)
     const { data: all } = await supabase.from('profiles').select('id, inmate_no, game_name, display_name, server, discord_account, avatar_url, role, account_type, offers_polaroid, portrait_only')
     const { data: sess } = await supabase.from('sessions').select('*').order('created_at', { ascending: false })
-    const live = (sess ?? []).filter(s => ['intake', 'serving'].includes(normalizeStatus(s)))
+    const live = (sess ?? []).filter(s => normalizeStatus(s) !== 'ended')
+    const ended = (sess ?? []).filter(s => normalizeStatus(s) === 'ended')
     setInmates(all ?? [])
     setSessions(live)
-    // 目前選的場次若已不在清單(尚未入場/已結束)→ 改選第一個可用場次
-    setCurrentSession(prev => (live.some(s => s.id === prev) ? prev : (live[0]?.id ?? '')))
+    setEndedSessions(ended)
+    // 目前選的場次不在清單才改選第一個可用場次(選中已結束場次補登購買紀錄時不跳走)
+    setCurrentSession(prev => ((live.some(s => s.id === prev) || ended.some(s => s.id === prev)) ? prev : (live[0]?.id ?? '')))
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -39,6 +43,7 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
     setEditingMember({
       id: p.id,
       game_name: p.game_name ?? '',
+      server: p.server ?? '',
       avatar_url: p.avatar_url ?? '',
       discord_account: p.discord_account ?? '',
       role: p.role ?? 'member',
@@ -55,18 +60,20 @@ export default function WardenPanel({ myRole, userId, onGoToManuscripts }) {
         <button className={wtab === 'overview' ? 'on' : ''} onClick={() => setWtab('overview')}>名單總覽</button>
         {isWarden && <button className={wtab === 'sessions' ? 'on' : ''} onClick={() => setWtab('sessions')}>場次總覽</button>}
         <button className={wtab === 'session' ? 'on' : ''} onClick={() => setWtab('session')}>進行中場次</button>
+        {isWarden && <button className={wtab === 'prices' ? 'on' : ''} onClick={() => setWtab('prices')}>品項價目表</button>}
       </div>
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
       {wtab === 'session' && (
         <SessionTab
           currentSession={currentSession} setCurrentSession={setCurrentSession}
-          sessions={sessions} inmates={inmates} isWarden={isWarden}
+          sessions={sessions} endedSessions={endedSessions} inmates={inmates} isWarden={isWarden}
           setMsg={setMsg} reloadShared={load} onGoToManuscripts={onGoToManuscripts} />
       )}
       {wtab === 'sessions' && isWarden && (
         <SessionsOverviewTab setMsg={setMsg} reloadShared={load} inmates={inmates} />
       )}
+      {wtab === 'prices' && isWarden && <PriceListTab setMsg={setMsg} />}
       {wtab === 'overview' && (
         <OverviewTab inmates={inmates}
           loading={loading} isWarden={isWarden} onEditMember={openEditMember}

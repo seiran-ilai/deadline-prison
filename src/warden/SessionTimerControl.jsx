@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { pomodoroState } from '../pomodoro'
+import { revertToBookingChain, REVERT_CONFIRM } from './sessionActions'
+import { askConfirm } from '../ConfirmDialog'
 
 // 單一場次的番茄鐘控台(僅典獄長)。容器層只在「場次 = serving」時才 render(見 SessionTab)。
 // 「開始服刑」已移到「場次總覽」狀態機(intake→serving),轉 serving 時後端自動設 timer_started_at,
@@ -20,7 +22,7 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
 
   // 提早結束:serving → ended(走場次狀態機,不直接動 timer_*)
   async function endTimer() {
-    if (!window.confirm('確定結束本場服刑？結束後不可重開')) return
+    if (!await askConfirm({ title: '結束服刑', message: '確定結束本場服刑？結束後不可重開。', confirmLabel: '結束服刑', danger: true })) return
     setBusy(true)
     try {
       const { error } = await supabase.rpc('set_session_status', { p_session: sessionId, p_new_status: 'ended' })
@@ -29,14 +31,14 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
     } finally { setBusy(false) }
   }
 
-  // 退回入場:serving → intake(後端轉 intake 時會自動清掉番茄鐘計時)
+  // 退回預約中:鏈式 serving→intake(後端清番茄鐘)→booking(觸發器清本場名單)
   async function resetTimer() {
-    if (!window.confirm('將清掉番茄鐘計時、退回入場狀態，全場回到等待')) return
+    if (!await askConfirm({ title: '退回預約中', message: REVERT_CONFIRM, confirmLabel: '退回預約中', danger: true })) return
     setBusy(true)
     try {
-      const { error } = await supabase.rpc('set_session_status', { p_session: sessionId, p_new_status: 'intake' })
-      if (error) { setMsg('退回入場失敗：' + error.message); return }
-      setMsg('已退回入場'); reloadShared()
+      const r = await revertToBookingChain(session)
+      if (r.error) { setMsg(r.error); reloadShared(); return }   // 可能停在「準備服刑」,同步取回實際狀態
+      setMsg(r.msg); reloadShared()
     } finally { setBusy(false) }
   }
 
@@ -67,7 +69,7 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
   // 整合進場次控制條:番茄鐘狀態做為一個 .seg,主要動作放右側 .go
   return (
     <>
-      {/* running:狀態 + ±輪 / 提早結束(轉 ended)/ 退回入場(轉 intake) */}
+      {/* running:狀態 + ±輪 / 提早結束(轉 ended)/ 退回預約中(鏈式清番茄鐘+名單) */}
       {timerStatus === 'running' && (
         <>
           <div className="seg">
@@ -81,7 +83,7 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
           </div>
           <div className="go">
             <button className="btn-danger btn-sm" disabled={busy} onClick={endTimer}>{busy ? '處理中…' : '提早結束'}</button>
-            <button className="btn-danger btn-sm" disabled={busy} onClick={resetTimer}>{busy ? '處理中…' : '退回入場'}</button>
+            <button className="btn-danger btn-sm" disabled={busy} onClick={resetTimer}>{busy ? '處理中…' : '退回預約中'}</button>
           </div>
         </>
       )}
@@ -95,7 +97,7 @@ export default function SessionTimerControl({ session, setMsg, reloadShared }) {
           </div>
           <div className="go">
             <button className="btn-danger btn-sm" disabled={busy} onClick={endTimer}>{busy ? '處理中…' : '結束服刑'}</button>
-            <button className="btn-danger btn-sm" disabled={busy} onClick={resetTimer}>{busy ? '處理中…' : '退回入場（清番茄鐘）'}</button>
+            <button className="btn-danger btn-sm" disabled={busy} onClick={resetTimer}>{busy ? '處理中…' : '退回預約中（清番茄鐘）'}</button>
           </div>
         </>
       )}

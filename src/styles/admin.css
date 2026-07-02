@@ -11,7 +11,7 @@
   --text:#e4e5e7; --dim:#9298a2; --faint:#646a74;
   --hazard:#f5c518; --hazard-d:#caa00f; --alarm:#d8412f; --ok:#3fb36b;
   --steel:#3a4049;
-  --mono:'Space Mono',ui-monospace,monospace;
+  --mono:'Space Mono','Noto Sans TC',ui-monospace,monospace;   /* 中文需先命中 Noto,否則被通用 monospace 攔走變新細明體 */
   --ui:'Noto Sans TC',system-ui,sans-serif;
   --r:6px;
 
@@ -285,6 +285,50 @@
 .admin .sg-named .sg-item.sg-item-total{border-top:1px dashed var(--line); margin-top:3px; padding-top:6px; font-weight:700}
 .admin .sg-named .sg-item.sg-item-total .si-name{color:var(--dim)}
 
+/* ---- 指名互動:本場預約與購入(番茄鐘位置;依獄卒分欄,欄多可左右滑動、底部費用彙總固定不動)---- */
+.admin .sg-buypanel{display:flex; flex-direction:column; min-width:0}
+.admin .sg-buypanel > .body{display:flex; flex-direction:column; gap:10px; min-width:0}
+.admin .sg-buy-scroll{display:flex; gap:12px; overflow-x:auto; padding-bottom:4px}
+.admin .sg-buy-col{flex:0 0 auto; min-width:200px; max-width:280px; border:1px solid var(--line);
+  border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:6px; background:rgba(255,255,255,.02)}
+.admin .sg-buy-guard{font-weight:700; font-size:13px; color:var(--ok); padding-bottom:4px; border-bottom:1px dashed var(--line)}
+.admin .sg-buy-line{display:flex; align-items:baseline; gap:6px; font-size:13px}
+.admin .sg-buy-line .sb-tag{flex:0 0 auto; font-size:10px; letter-spacing:1px; padding:1px 6px; border-radius:9px}
+.admin .sg-buy-line .sb-tag.bk{background:rgba(180,120,255,.16); color:#c2a3ff}
+.admin .sg-buy-line .sb-tag.pos{background:rgba(63,140,255,.14); color:#7fb0ff}
+.admin .sg-buy-line .sb-desc{flex:1; min-width:0; word-break:break-word}
+.admin .sg-buy-line .sb-amt{color:var(--hazard); white-space:nowrap}
+.admin .sg-buy-sub{margin-top:auto; display:flex; justify-content:space-between; gap:8px; font-size:13px; font-weight:700;
+  border-top:1px dashed var(--line); padding-top:6px; color:var(--dim)}
+.admin .sg-buy-summary{border-top:1px solid var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px}
+.admin .sg-buy-srow{display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--dim)}
+.admin .sg-buy-srow.total{font-weight:700; font-size:15px; color:var(--text)}
+.admin .sg-buy-srow.total .mono{color:var(--hazard)}
+
+/* ---- 自由入場:個人番茄鐘 ---- */
+.admin .pp-setup{gap:10px}
+.admin .pp-modes{display:flex; gap:8px; justify-content:center; margin-top:6px}
+.admin .pp-mode{cursor:pointer; font-size:13px; padding:6px 14px; border-radius:16px;
+  border:1px solid var(--line); background:transparent; color:var(--dim)}
+.admin .pp-mode.on{border-color:var(--hazard); color:var(--hazard); background:rgba(245,197,24,.1)}
+.admin .pp-fields{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-top:8px}
+.admin .pp-fields label{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--dim)}
+.admin .pp-fields input[type="number"]{width:58px; padding:4px 6px; background:var(--panel);
+  border:1px solid var(--line); border-radius:6px; color:var(--text); text-align:center}
+.admin .pp-bell{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--dim); cursor:pointer}
+.admin .pp-bell.sm{font-size:12px}
+.admin .pp-hint{font-size:12px; color:var(--faint); margin-top:6px}
+.admin .pp-start{margin-top:10px}
+.admin .pp-ctrl{display:flex; gap:8px; justify-content:center; align-items:center; margin-top:12px; flex-wrap:wrap}
+
+/* ---- 服刑紀錄:追加統計卡(拍立得/累計金額,獨立於三類別)---- */
+.admin .rec-typecard.k-extra{border-color:rgba(245,197,24,.3)}
+.admin .rec-typecard.k-extra .tc-head-static{display:flex; align-items:center; gap:8px; cursor:default}
+
+/* ---- POS:優惠標記 + 購物車手動調價 ---- */
+.admin .pos-off-tag{font-size:11px; color:var(--ok); white-space:nowrap}
+.admin .pos-cart-amt{display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--dim)}
+
 /* 獄卒作業:指名互動——犯人的預約內容 + 購買項目(掛在犯人卡下方) */
 .admin .inmate .in-extra{width:100%; margin-top:8px; padding-top:8px; border-top:1px dashed var(--line);
   display:flex; flex-direction:column; gap:5px}
@@ -389,44 +433,44 @@
 .admin .memo-radio input[type=radio]{accent-color:var(--hazard); width:16px; height:16px; cursor:pointer}
 
 /* 管理分頁:MEMO 列 */
-/* 教學導覽:置中步驟卡 + 半透明遮罩 */
-.admin .tour-bg{position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
-  background:rgba(0,0,0,.62); padding:20px}
-.admin .tour-card{width:440px; max-width:100%; background:var(--panel); border:1px solid var(--line-2);
-  border-radius:12px; padding:20px 22px; box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.admin .tour-card .tour-head{display:flex; align-items:center; gap:10px; margin-bottom:12px}
-.admin .tour-card .tour-label{font-size:12px; font-weight:700; letter-spacing:1px; padding:3px 10px; border-radius:999px;
+/* 教學導覽:指向式氣泡(coach-mark)= 淡遮罩 + 高亮外框 + 帶箭頭氣泡 */
+.admin .cm-scrim{position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.42); pointer-events:none}
+/* 高亮外框:巨大外陰影挖洞 —— 被指區塊保持原亮度,四周變暗。
+   不做 top/left transition:位置由捲動/重算即時更新,加過渡會跟捲動打架造成殘影延遲 */
+.admin .cm-ring{position:fixed; z-index:201; pointer-events:none; border-radius:8px;
+  box-shadow:0 0 0 2px var(--hazard), 0 0 22px 4px rgba(245,197,24,.28), 0 0 0 200vmax rgba(0,0,0,.55)}
+.admin .cm-bubble{position:fixed; z-index:202; width:360px; max-width:calc(100vw - 24px); pointer-events:auto;
+  background:var(--panel); border:1px solid var(--line-2); border-radius:12px; padding:18px 20px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.admin .cm-bubble .cm-scroll{max-height:calc(100vh - 64px); overflow-y:auto}
+/* 導覽示範頁的裝飾按鈕:外觀同真實按鈕但不可互動(避免誤以為能操作/壞掉) */
+.admin .demo-btn{pointer-events:none}
+/* 箭頭(四方向 CSS 三角,雙層描邊配合氣泡邊框) */
+.admin .cm-arrow{position:absolute; width:0; height:0}
+.admin .cm-arrow.down{top:-9px; border-left:9px solid transparent; border-right:9px solid transparent; border-bottom:9px solid var(--line-2)}
+.admin .cm-arrow.down::after{content:''; position:absolute; top:1px; left:-8px; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:8px solid var(--panel)}
+.admin .cm-arrow.up{bottom:-9px; border-left:9px solid transparent; border-right:9px solid transparent; border-top:9px solid var(--line-2)}
+.admin .cm-arrow.up::after{content:''; position:absolute; top:-9px; left:-8px; border-left:8px solid transparent; border-right:8px solid transparent; border-top:8px solid var(--panel)}
+.admin .cm-arrow.right{left:-9px; border-top:9px solid transparent; border-bottom:9px solid transparent; border-right:9px solid var(--line-2)}
+.admin .cm-arrow.right::after{content:''; position:absolute; top:-8px; left:1px; border-top:8px solid transparent; border-bottom:8px solid transparent; border-right:8px solid var(--panel)}
+.admin .cm-arrow.left{right:-9px; border-top:9px solid transparent; border-bottom:9px solid transparent; border-left:9px solid var(--line-2)}
+.admin .cm-arrow.left::after{content:''; position:absolute; top:-8px; right:1px; border-top:8px solid transparent; border-bottom:8px solid transparent; border-left:8px solid var(--panel)}
+/* 氣泡內容(沿用舊 tour-* 命名,樣式不變) */
+.admin .cm-bubble .tour-head{display:flex; align-items:center; gap:10px; margin-bottom:12px}
+.admin .cm-bubble .tour-label{font-size:12px; font-weight:700; letter-spacing:1px; padding:3px 10px; border-radius:999px;
   background:rgba(245,197,24,.16); color:var(--hazard)}
-.admin .tour-card .tour-count{font-family:var(--mono); font-size:12px; color:var(--faint)}
-.admin .tour-card .tour-x{margin-left:auto; width:26px; height:26px; min-height:auto; padding:0; border-radius:6px;
+.admin .cm-bubble .tour-count{font-family:var(--mono); font-size:12px; color:var(--faint)}
+.admin .cm-bubble .tour-x{margin-left:auto; width:26px; height:26px; min-height:auto; padding:0; border-radius:6px;
   background:transparent; border:1px solid transparent; color:var(--dim); font-size:14px}
-.admin .tour-card .tour-x:hover{background:var(--raise); border-color:var(--line-2); color:var(--text)}
-.admin .tour-card .tour-title{font-size:18px; margin:0 0 8px}
-.admin .tour-card .tour-body{font-size:14px; color:var(--dim); line-height:1.7; margin:0 0 14px}
-/* 導覽模擬畫面(講解看不到的頁面) */
-.admin .tour-mock{border:1px solid var(--line-2); border-radius:8px; background:var(--panel-2); padding:12px 14px; margin:0 0 14px}
-.admin .tour-mock .tm-timer{text-align:center}
-.admin .tour-mock .tm-phase{display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:4px}
-.admin .tour-mock .tm-badge{font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; background:rgba(245,197,24,.16); color:var(--hazard)}
-.admin .tour-mock .tm-round{font-size:12px; color:var(--dim)}
-.admin .tour-mock .tm-clock{font-family:var(--mono); font-size:40px; font-weight:700; color:var(--text); line-height:1.1}
-.admin .tour-mock .tm-dots{display:flex; gap:6px; justify-content:center; margin-top:6px}
-.admin .tour-mock .tm-dots i{width:8px; height:8px; border-radius:50%; background:var(--line-2)}
-.admin .tour-mock .tm-dots i.cur{background:var(--hazard)}
-.admin .tour-mock .tm-wrow{display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); font-size:13px}
-.admin .tour-mock .tm-type{font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px; background:rgba(63,140,255,.16); color:#7fb0ff}
-.admin .tour-mock .tm-type.sup{background:rgba(63,179,107,.16); color:var(--ok)}
-.admin .tour-mock .tm-who{color:var(--text)}
-.admin .tour-mock .tm-amt{margin-left:auto; font-family:var(--mono); color:var(--dim)}
-.admin .tour-mock .tm-income{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-top:8px; padding-top:8px; border-top:1px solid var(--hazard-d); color:var(--hazard); font-weight:700; font-size:13px}
-.admin .tour-mock .tm-income b{font-family:var(--mono)}
-.admin .tour-mock .tm-cap{font-size:12px; color:var(--faint); margin-top:8px; line-height:1.6}
-.admin .tour-card .tour-dots{display:flex; gap:6px; margin-bottom:14px}
-.admin .tour-card .tour-dots i{width:7px; height:7px; border-radius:50%; background:var(--line-2)}
-.admin .tour-card .tour-dots i.on{background:var(--hazard)}
-.admin .tour-card .tour-acts{display:flex; align-items:center; gap:8px}
-.admin .tour-card .tour-skip{background:transparent; border:none; color:var(--faint); padding:6px 4px; min-height:auto}
-.admin .tour-card .tour-skip:hover{color:var(--text)}
+.admin .cm-bubble .tour-x:hover{background:var(--raise); border-color:var(--line-2); color:var(--text)}
+.admin .cm-bubble .tour-title{font-size:18px; margin:0 0 8px}
+.admin .cm-bubble .tour-body{font-size:14px; color:var(--dim); line-height:1.7; margin:0 0 14px}
+.admin .cm-bubble .tour-dots{display:flex; gap:6px; margin-bottom:14px}
+.admin .cm-bubble .tour-dots i{width:7px; height:7px; border-radius:50%; background:var(--line-2)}
+.admin .cm-bubble .tour-dots i.on{background:var(--hazard)}
+.admin .cm-bubble .tour-acts{display:flex; align-items:center; gap:8px}
+.admin .cm-bubble .tour-skip{background:transparent; border:none; color:var(--faint); padding:6px 4px; min-height:auto}
+.admin .cm-bubble .tour-skip:hover{color:var(--text)}
 
 /* MEMO 管理:卡片網格(寬螢幕多欄並排,避免整條滿版留白) */
 .admin .memo-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; margin-bottom:8px}
@@ -439,11 +483,20 @@
 
 /* 服刑中面板:可勾選確認項 */
 /* 確認項清單:寬版(如指名場上排 MEMO)自動兩直欄,窄版單欄 */
-.admin .memo-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:0 24px}
-.admin .memo-check{display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--line)}
+/* 本場 MEMO 確認項:面板與同排卡片等高(上排=獄卒身分卡、集體場=本場囚犯卡),內容區至少 240px、不隨項目數長高;
+   清單直向固定 3 列,超過往右長新欄、可左右滑動 */
+.admin .memo-panel{display:flex; flex-direction:column}
+.admin .ses-top.guard > .memo-panel{align-self:stretch}   /* 蓋掉上排 align-self:start,與左側身分卡等高 */
+.admin .memo-panel > .body{flex:1; min-height:240px; display:flex; flex-direction:column; overflow:hidden}
+.admin .memo-panel > .body > .empty{margin:auto}   /* 空狀態/載入中:固定高度內置中 */
+.admin .memo-list{display:grid; grid-auto-flow:column; grid-template-rows:repeat(3,minmax(64px,1fr));
+  grid-auto-columns:260px; gap:0 24px; overflow-x:auto; overscroll-behavior-x:contain; padding-bottom:6px;
+  flex:1; min-height:0}
+.admin .memo-check{display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); min-width:0}
 .admin .memo-check > input[type=checkbox]{margin-top:3px}
 .admin .memo-check .memo-check-body{flex:1; min-width:0; display:flex; flex-direction:column; gap:6px}
-.admin .memo-check .memo-check-body > span{white-space:pre-wrap; word-break:break-word}
+.admin .memo-check .memo-check-body > span{white-space:pre-wrap; word-break:break-word;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}   /* 固定列高:內容最多兩行,超出截斷 */
 .admin .memo-check .memo-check-meta{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
 .admin .memo-check .done-text{text-decoration:line-through; color:var(--faint)}
 
@@ -499,6 +552,13 @@
 .admin .gw-switch-btn.k-named .gw-kind{background:rgba(194,163,255,.16); color:#c2a3ff}
 .admin .gw-switch-btn.k-free .gw-kind{background:rgba(63,179,107,.15); color:var(--ok)}
 .admin .gw-switch-btn .gw-title{font-weight:600}
+/* 場次切換鈕的狀態徽章與日期(一眼看出每場狀態) */
+.admin .gw-switch-btn .gw-st{font-size:11px; font-weight:700; padding:1px 8px; border-radius:10px; white-space:nowrap}
+.admin .gw-switch-btn .gw-st.serving{background:rgba(216,65,47,.15); color:#f0a99c}
+.admin .gw-switch-btn .gw-st.booking{background:rgba(63,179,107,.15); color:var(--ok)}
+.admin .gw-switch-btn .gw-st.booking_paused,
+.admin .gw-switch-btn .gw-st.intake{background:rgba(255,255,255,.08); color:var(--dim)}
+.admin .gw-switch-btn .gw-date{font-family:var(--mono); font-size:11px; color:var(--dim)}
 /* 獄卒作業 · 指名互動:我的服務對象(每位犯人:預約時段 / 購買項目 / 目標稿件代勾) */
 .admin .serve-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:10px; align-items:start}
 /* 即時收入卡(獄卒作業:各項薪資 + 個人薪資 + 獎金 = 總金額) */
@@ -548,7 +608,9 @@
 .admin .serve-buy .sb-chk input{cursor:pointer}
 .admin .ses-top{display:grid; gap:14px; margin-bottom:14px; align-items:stretch}
 .admin .ses-top.prisoner{grid-template-columns:240px 240px 1fr}
+.admin .ses-top.prisoner.free{grid-template-columns:240px 1fr}   /* 自由入場:無專屬獄卒卡,兩件式 */
 .admin .ses-top.guard{grid-template-columns:240px 1fr}
+.admin .ses-top.guard > .card-panel{align-self:start}   /* 指名場上排 MEMO 面板:內容少時不撐滿等高留白 */
 
 /* 直式身分卡(頭像在上、文字置中在下;頭像正方 120×120 與本場獄卒卡一致)
    內容整體垂直置中:與計時器等高拉伸時,留白上下均分,不再擠在上半部留出大片空底。 */
@@ -730,8 +792,9 @@
 .admin .rec-card .rec-visit{font-size:13px; color:var(--text); word-break:break-word}
 
 /* 服刑紀錄儀表板:場次類型統計卡(點卡 = 過濾勾選) */
-.admin .records-page .rec-dash{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px}
+.admin .records-page .rec-dash{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:18px}
 .admin .records-page .rec-dash.rec-dash-2{grid-template-columns:repeat(2,1fr)}
+@media (max-width:1080px){ .admin .records-page .rec-dash{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:640px){ .admin .records-page .rec-dash{grid-template-columns:1fr} }
 .admin .rec-typecard{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;
   display:flex; flex-direction:column; transition:border-color .15s, opacity .15s}
@@ -822,10 +885,26 @@
   .admin .gc-grid{grid-template-columns:repeat(4,1fr)}
 }
 
-@media (max-width:860px){
-  .admin .ses-top.prisoner, .admin .ses-top.guard{grid-template-columns:1fr}
+/* 服刑/獄卒頁響應式:600 以下單欄(手機);601–860 兩卡同列、計時器整列;861–1100 微縮 */
+@media (max-width:600px){
+  .admin .ses-top.prisoner, .admin .ses-top.prisoner.free, .admin .ses-top.guard{grid-template-columns:1fr}
   .admin .ses-mid{grid-template-columns:1fr}
   .admin .ses-timer .st-clock{font-size:52px}
+}
+@media (min-width:601px) and (max-width:860px){
+  .admin .ses-top.prisoner{grid-template-columns:240px 240px}
+  .admin .ses-top.prisoner > .ses-timer{grid-column:1 / -1}
+  .admin .ses-top.prisoner > .sg-buypanel{grid-column:1 / -1}   /* 指名互動:本場預約與購入面板同計時器整列 */
+  .admin .ses-top.prisoner.free{grid-template-columns:240px 1fr}
+  .admin .ses-top.prisoner.free > .ses-timer{grid-column:auto}
+  .admin .ses-top.guard{grid-template-columns:240px 1fr}
+  .admin .ses-mid{grid-template-columns:1fr}
+  .admin .ses-timer .st-clock{font-size:56px}
+  .admin .serve-list{grid-template-columns:1fr}
+}
+@media (min-width:861px) and (max-width:1100px){
+  .admin .ses-timer .st-clock{font-size:58px}
+  .admin .serve-list{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
 }
 
 /* 獄卒排班:卡片選擇(點卡片切上班;named 上班卡再點時格)— SessionGuardPlan */

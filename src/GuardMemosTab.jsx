@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
 import GuardMemoModal from './GuardMemoModal'
+import { askConfirm } from './ConfirmDialog'
 
 // 獄卒「MEMO / 確認項」管理分頁:只列自己的 MEMO,分「每場」與各「指定場」分組,可編輯 / 刪除。
 // 完成狀態屬「服刑中按場勾」,此處不處理(見 SessionMemoPanel)。
@@ -38,7 +39,7 @@ export default function GuardMemosTab({ userId }) {
   useEffect(() => { load() }, [load])
 
   async function remove(memo) {
-    if (!window.confirm('確定刪除這條 MEMO？所有場次的完成紀錄也會一併移除')) return
+    if (!await askConfirm({ title: '刪除 MEMO', message: '確定刪除這條 MEMO？所有場次的完成紀錄也會一併移除。', confirmLabel: '刪除', danger: true })) return
     const { error } = await supabase.from('guard_memos').delete().eq('id', memo.id)
     if (error) { setMsg('刪除失敗：' + error.message); return }
     setMsg('已刪除'); load()

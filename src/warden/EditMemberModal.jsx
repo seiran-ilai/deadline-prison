@@ -8,6 +8,7 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
     const m = member
     const { error } = await supabase.from('profiles').update({
       game_name: m.game_name || null,
+      server: m.server || null,
       avatar_url: m.avatar_url || null,
       discord_account: m.discord_account || null,
       role: m.role,
@@ -48,6 +49,9 @@ export default function EditMemberModal({ member, setMember, setMsg, reloadShare
         </label>
         <label>遊戲暱稱
           <input value={member.game_name} onChange={e => setMember({ ...member, game_name: e.target.value })} />
+        </label>
+        <label>伺服器
+          <input value={member.server ?? ''} onChange={e => setMember({ ...member, server: e.target.value })} />
         </label>
         <div className="field">
           <span className="field-lbl">頭像</span>

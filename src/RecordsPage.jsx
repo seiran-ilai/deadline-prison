@@ -109,8 +109,8 @@ function RecHead({ rec }) {
   )
 }
 
-// 服刑時數估算:輪數 × 25 分,換算「X 小時 Y 分」。明確為估算,非實際工時。
-function fmtRounds(rounds) {
+// 服刑時數估算:輪數 × 25 分,換算「X 小時 Y 分」。明確為估算,非實際工時。(導覽示範頁共用)
+export function fmtRounds(rounds) {
   const mins = (rounds ?? 0) * 25
   const h = Math.floor(mins / 60), m = mins % 60
   return h > 0 ? `${h} 小時 ${m} 分` : `${m} 分`
@@ -210,6 +210,21 @@ export default function RecordsPage({ userId }) {
     return s
   }, [rows])
 
+  // 追加統計:拍立得次數(獨立,不入三類別)、累計金額、最常指名(指名互動,依購入時段數)、最常合照(拍立得張數最多的對象獄卒)
+  const extra = useMemo(() => {
+    const items = rows.flatMap(r => r.items ?? [])
+    const polaroidCount = items.filter(i => i.item_type === 'polaroid').reduce((s, i) => s + (i.qty || 0), 0)
+    const totalSpent = items.reduce((s, i) => s + (i.amount || 0), 0)
+    const topOf = (counts) => Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+    const nomCount = {}, polCount = {}
+    for (const i of items) {
+      if (!i.guard_name) continue
+      if (i.item_type === 'nominate') nomCount[i.guard_name] = (nomCount[i.guard_name] || 0) + Math.max(1, arr(i.slot_times).length)
+      if (i.item_type === 'polaroid') polCount[i.guard_name] = (polCount[i.guard_name] || 0) + (i.qty || 1)
+    }
+    return { polaroidCount, totalSpent, topNominated: topOf(nomCount), topPolaroid: topOf(polCount) }
+  }, [rows])
+
   const toggleKind = (k) => setActive(prev => {
     const n = new Set(prev)
     n.has(k) ? n.delete(k) : n.add(k)
@@ -255,7 +270,10 @@ export default function RecordsPage({ userId }) {
         { num: st.visits, lbl: '收到探監', onClick: openVisitLog },
       ],
     }),
-    named: (st) => ({ main: { num: st.count, lbl: '服刑次數' }, subs: [] }),
+    named: (st) => ({
+      main: { num: st.count, lbl: '服刑次數' },
+      subs: [{ num: extra.topNominated ?? '—', lbl: '最常指名' }],
+    }),
     free: (st) => ({ main: { num: st.count, lbl: '服刑次數' }, subs: [] }),
   }
 
@@ -296,6 +314,24 @@ export default function RecordsPage({ userId }) {
             </div>
           )
         })}
+
+        {/* 追加統計卡:拍立得次數(獨立,不記錄在三類別之下)+ 最常合照獄卒 + 累計金額。純顯示,不參與過濾。 */}
+        <div className="rec-typecard k-extra on">
+          <div className="tc-head tc-head-static">
+            <span className="tc-name">消費統計</span>
+          </div>
+          <div className="tc-body">
+            <div className="tc-main"><span className="tc-num">{extra.polaroidCount}</span><span className="tc-lbl">拍立得（張）</span></div>
+            <div className="tc-subs">
+              <div className="tc-subrow" title="拍立得張數最多的對象獄卒">
+                <span className="tsr-lbl">最常合照</span><span className="tsr-val mono">{extra.topPolaroid ?? '—'}</span>
+              </div>
+              <div className="tc-subrow">
+                <span className="tsr-lbl">累計金額</span><span className="tsr-val mono">{extra.totalSpent} 萬</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 紀錄清單(依勾選過濾,新→舊) */}

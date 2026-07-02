@@ -1,18 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import { ProgressBar } from './ManuscriptManager'
+import { ProgressBar, PRIORITY } from './ManuscriptManager'
 import MessageBanner from './MessageBanner'
 import SessionStatus from './SessionStatus'
 import { computeProgress } from './progress'
 import ProfileCard from './ProfileCard'
 import SessionVisits from './SessionVisits'
+import PersonalPomodoro from './PersonalPomodoro'
 import { normalizeStatus } from './warden/constants'
-
-const PRIORITY = {
-  1: { label: '高', bg: '#d9534f' },
-  2: { label: '中', bg: '#e08e0b' },
-  3: { label: '低', bg: '#888' },
-}
+import { slotLabel } from './slots'
+import { priceMap, effPrice, fetchPriceRows } from './prices'
 
 // 指名互動場的預約/購入顯示輔助
 const gArr = (v) => (Array.isArray(v) ? v : [])
@@ -21,6 +18,86 @@ function posItemDesc(it) {
   if (it.item_type === 'polaroid') return `拍立得 ${it.qty ?? 0} 張${it.with_signature ? '（含簽繪）' : ''}`
   if (it.item_type === 'nominate') { const n = gArr(it.slot_times).length; return `指名時段${n ? ` ${n} 段` : ''}` }
   return ITEM_LABEL[it.item_type] ?? it.item_type
+}
+
+// 指名互動:「本場預約與購入」面板(取代番茄鐘位置)。
+// 依獄卒分組:每卒一欄列出 預約時段/加購/現場購入 + 小計;欄多可左右滑動,底部分隔線後的
+// 指名費用/拍立得費用/合計 固定不隨滑動。預約列金額以價目表估算(生效價),購入列用 POS 實收。
+function NamedPurchasePanel({ session, myBooking, myItems, bkGuardName, priceRows }) {
+  const pm = priceMap(priceRows)
+  const P = (key) => effPrice(pm[`named|${key}`])
+  const gname = (id) => bkGuardName[id] ?? '（獄卒）'
+  const groups = new Map()
+  const grp = (name) => {
+    if (!groups.has(name)) groups.set(name, { name, lines: [], subtotal: 0 })
+    return groups.get(name)
+  }
+  let nominateTotal = 0, polaroidTotal = 0, otherTotal = 0
+  // 預約時段(依獄卒彙整)
+  const slotsByG = {}
+  for (const x of gArr(myBooking?.requested_slots)) if (x.s != null) (slotsByG[x.g] ??= []).push(Number(x.s))
+  for (const [gid, ss] of Object.entries(slotsByG)) {
+    const amt = P('nominate') * ss.length
+    const g = grp(gname(gid))
+    g.lines.push({ tag: '預約', desc: `預約時段 ${ss.sort((a, b) => a - b).map(s => slotLabel(session.start_time, s)).join('、')}`, amt })
+    g.subtotal += amt; nominateTotal += amt
+  }
+  // 預約加購(拍立得/簽繪/肖像畫)
+  for (const a of gArr(myBooking?.addons)) {
+    if (!a) continue
+    const g = grp(gname(a.g))
+    if ((a.polaroid || 0) > 0) {
+      const amt = (P('polaroid') + (a.sign ? P('sign') : 0)) * a.polaroid
+      g.lines.push({ tag: '預約', desc: `拍立得${a.sign ? '（含簽繪）' : '（空白）'} x${a.polaroid}`, amt })
+      g.subtotal += amt; polaroidTotal += amt
+    }
+    if ((a.portrait || 0) > 0) {
+      const amt = P('portrait') * a.portrait
+      g.lines.push({ tag: '預約', desc: `肖像畫 x${a.portrait}`, amt })
+      g.subtotal += amt; otherTotal += amt
+    }
+  }
+  // 現場購入(POS 實收)
+  for (const it of myItems) {
+    const g = grp(it.guard_name || '未指定獄卒')
+    const amt = it.amount ?? 0
+    g.lines.push({ tag: '購入', desc: posItemDesc(it), amt })
+    g.subtotal += amt
+    if (it.item_type === 'nominate') nominateTotal += amt
+    else if (it.item_type === 'polaroid') polaroidTotal += amt
+    else otherTotal += amt
+  }
+  const total = nominateTotal + polaroidTotal + otherTotal
+  return (
+    <div className="card-panel sg-buypanel">
+      <div className="head"><h2>本場預約與購入</h2><span className="count">指名互動</span></div>
+      <div className="body">
+        {groups.size === 0 ? <p className="empty">本場尚無預約或購入紀錄</p> : (
+          <div className="sg-buy-scroll">
+            {[...groups.values()].map(g => (
+              <div key={g.name} className="sg-buy-col">
+                <div className="sg-buy-guard">🛡 {g.name}</div>
+                {g.lines.map((l, i) => (
+                  <div key={i} className="sg-buy-line">
+                    <span className={`sb-tag ${l.tag === '預約' ? 'bk' : 'pos'}`}>{l.tag}</span>
+                    <span className="sb-desc">{l.desc}</span>
+                    <span className="sb-amt mono">{l.amt} 萬</span>
+                  </div>
+                ))}
+                <div className="sg-buy-sub"><span>小計</span><span className="mono">{g.subtotal} 萬</span></div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="sg-buy-summary">
+          {nominateTotal > 0 && <div className="sg-buy-srow"><span>指名費用</span><span className="mono">{nominateTotal} 萬</span></div>}
+          {polaroidTotal > 0 && <div className="sg-buy-srow"><span>拍立得費用</span><span className="mono">{polaroidTotal} 萬</span></div>}
+          {otherTotal > 0 && <div className="sg-buy-srow"><span>其他費用</span><span className="mono">{otherTotal} 萬</span></div>}
+          <div className="sg-buy-srow total"><span>合計</span><span className="mono">{total} 萬</span></div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function SessionGoals({ userId, onGoToManuscripts }) {
@@ -39,6 +116,8 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
   const [myItems, setMyItems] = useState([])              // 指名互動:我的 POS 購入明細(本場)
   const [myBooking, setMyBooking] = useState(null)        // 指名互動:我的本場預約(時段/加購/抓捕)
   const [bkGuardName, setBkGuardName] = useState({})      // 預約牽涉的獄卒 id → 名字
+  const [nominated, setNominated] = useState([])          // 指名互動:我預約時段指名的獄卒 profiles(獄卒欄位顯示用)
+  const [priceRows, setPriceRows] = useState(null)        // 價目表(指名場估算預約金額用;null=未載)
   const [newGoalTitle, setNewGoalTitle] = useState('')    // 新增本場目標 modal:手動新建稿件標題
   const [msg, setMsg] = useState('')
 
@@ -51,7 +130,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
     if (si && si.length) {
       // 全撈 + normalizeStatus 過濾(過渡期 DB 仍可能有舊值,不用 .eq('status','open'))
       const { data: rows } = await supabase.from('sessions')
-        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind')
+        .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind, start_time')
         .in('id', si.map(r => r.session_id))
       const live = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')
       sess = live[0] ?? null
@@ -64,7 +143,7 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       const bookedIds = [...new Set((bk ?? []).map(b => b.session_id))]
       if (bookedIds.length) {
         const { data: rows } = await supabase.from('sessions')
-          .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind').in('id', bookedIds)
+          .select('id, title, status, timer_started_at, timer_ended_at, total_rounds, kind, start_time').in('id', bookedIds)
         const target = (rows ?? []).filter(s => normalizeStatus(s) !== 'ended')[0] ?? null
         if (target) {
           await supabase.rpc('self_check_in', { p_session: target.id })
@@ -102,27 +181,32 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       setStepsByMs({})
     }
 
-    // 指名互動場額外資料:我的本場預約(時段/加購)+ 我的 POS 購入明細
+    // 指名互動場額外資料:我的本場預約(時段/加購)+ 我的 POS 購入明細 + 價目表(估算預約金額)
     if (sess.kind === 'named') {
-      const [{ data: bk }, { data: pos }] = await Promise.all([
+      const [{ data: bk }, { data: pos }, prices] = await Promise.all([
         supabase.from('bookings').select('requested_slots, addons, capture, status')
           .eq('user_id', userId).eq('session_id', sess.id).neq('status', 'cancelled'),
         supabase.rpc('my_pos_items'),
+        fetchPriceRows(),
       ])
+      setPriceRows(prices)
       const booking = (bk ?? [])[0] ?? null
       const items = (pos ?? []).filter(p => p.session_id === sess.id)
       const gIds = [...new Set([
         ...gArr(booking?.requested_slots).map(x => x.g),
         ...gArr(booking?.addons).map(x => x.g),
       ].filter(Boolean))]
-      const gName = {}
+      const gName = {}, gProf = {}
       if (gIds.length) {
-        const { data: gp } = await supabase.from('profiles').select('id, game_name, display_name').in('id', gIds)
-        for (const p of gp ?? []) gName[p.id] = p.game_name ?? p.display_name
+        const { data: gp } = await supabase.from('profiles').select('id, game_name, display_name, avatar_url, role').in('id', gIds)
+        for (const p of gp ?? []) { gName[p.id] = p.game_name ?? p.display_name; gProf[p.id] = p }
       }
+      // 我指名的獄卒(預約時段的對象;獄卒欄位顯示用,沒有即顯示「未指名」)
+      const nomIds = [...new Set(gArr(booking?.requested_slots).filter(x => x.s != null).map(x => x.g).filter(Boolean))]
+      setNominated(nomIds.map(id => gProf[id]).filter(Boolean))
       setMyBooking(booking); setMyItems(items); setBkGuardName(gName)
     } else {
-      setMyBooking(null); setMyItems([]); setBkGuardName({})
+      setMyBooking(null); setMyItems([]); setBkGuardName({}); setNominated([])
     }
     setLoading(false)
   }
@@ -260,39 +344,71 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
       </div>
     )
   }
-  const isIntake = ds === 'intake'   // 等待室:本場目標仍可編輯,僅多一個提示徽章
+  const waiting = ds !== 'serving'   // 尚未開始服刑(報名即可先進頁):本場目標仍可編輯,僅多一個提示徽章
+  const isFree = session.kind === 'free'   // 自由入場:無獄卒相關資訊(專屬獄卒/本場獄卒/本場廣播)
+  const isNamed = session.kind === 'named' // 指名互動:無本場廣播;番茄鐘位置改顯示本場預約與購入,順序 本場獄卒 → 本場目標
 
   // 可挑選 = active 稿件中,尚未挑進本場的
   const goalIds = goals.map(g => g.manuscript_id)
   const available = actives.filter(m => !goalIds.includes(m.id))
 
+  // 獄卒欄位:指名互動顯示「我指名的獄卒」(沒指名落回典獄長指派;都沒有 → 未指名),其餘場次顯示專屬獄卒
+  const guardLbl = isNamed ? '指名獄卒' : '專屬獄卒'
+  const guardCards = (isNamed && nominated.length ? nominated : myGuards.map(g => g.profile)).filter(Boolean)
+
+  // 本場獄卒面板(指名互動排在本場目標之前,其餘場次照舊排最底;抽成變數兩處共用)
+  const guardsPanel = (
+    <div className="card-panel sg-section">
+      <div className="head"><h2>本場獄卒</h2>{guards.length > 0 && <span className="count">{guards.length} 位</span>}</div>
+      <div className="body">
+        {guards.length === 0 ? (
+          <p className="empty">本場目前沒有獄卒在場</p>
+        ) : (
+          <div className="guard-grid">
+            {guards.map(gd => (
+              <div key={gd.siId} className="guard-cell">
+                <div className="g-av">
+                  {gd.profile?.avatar_url
+                    ? <img src={gd.profile.avatar_url} alt="" />
+                    : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
+                </div>
+                <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '（未知）'}</div>
+                <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <div className="sg-page">
       <MessageBanner msg={msg} onClose={() => setMsg('')} />
 
-      {/* === 上排:我 + 專屬獄卒 + 計時器(主角) === */}
-      <div className="ses-top prisoner">
+      {/* === 上排:我 + 專屬獄卒 + 計時器(主角)。自由入場無獄卒相關資訊,不顯示專屬獄卒卡。 === */}
+      <div className={`ses-top prisoner${isFree ? ' free' : ''}`}>
         {/* 我(直式身分卡,沿用 ProfileCard 的個人資料來源 + 編輯) */}
         <ProfileCard userId={userId} variant="id" label="我 · 服刑中" editable={false} />
 
         {/* 專屬獄卒(直式卡;骨架與 ProfileCard variant="id" 一致:id-av / id-lbl / id-no / id-nm / id-watch,
             缺的欄位以 &nbsp; + 既有 min-height 留白佔位;底部以 id-spacer(margin-top:auto)推齊讓並排卡片對齊) */}
-        {myGuards.length > 0 ? (
+        {isFree ? null : guardCards.length > 0 ? (
           <div className="idcard-stack">
-            {myGuards.map(g => (
-              <div key={g.id} className="idcard">
+            {guardCards.map((p, i) => (
+              <div key={p?.id ?? i} className="idcard">
                 <div className="id-av">
-                  {g.profile?.avatar_url
-                    ? <img src={g.profile.avatar_url} alt="" />
-                    : (g.profile?.game_name ?? g.profile?.display_name ?? '?')[0]}
+                  {p?.avatar_url
+                    ? <img src={p.avatar_url} alt="" />
+                    : (p?.game_name ?? p?.display_name ?? '?')[0]}
                 </div>
-                <div className="id-lbl">專屬獄卒</div>
+                <div className="id-lbl">{guardLbl}</div>
                 <div className="id-no">{' '}</div>
                 <div className="id-nm">
-                  {g.profile?.game_name ?? g.profile?.display_name ?? '（未知）'}
-                  <span className="role-tag guard">{g.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
+                  {p?.game_name ?? p?.display_name ?? '（未知）'}
+                  <span className="role-tag guard">{p?.role === 'warden' ? '典獄長' : '獄卒'}</span>
                 </div>
-                <div className="id-watch">👁 正在看著你服刑</div>
+                <div className="id-watch">👁 {isNamed ? '本場為你服務' : '正在看著你服刑'}</div>
                 <div className="id-spacer" aria-hidden="true">&nbsp;</div>
               </div>
             ))}
@@ -300,24 +416,29 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         ) : (
           <div className="idcard">
             <div className="id-av">？</div>
-            <div className="id-lbl">專屬獄卒</div>
+            <div className="id-lbl">{guardLbl}</div>
             <div className="id-no">{' '}</div>
-            <div className="id-nm muted">尚未配對</div>
+            <div className="id-nm muted">{isNamed ? '未指名' : '尚未配對'}</div>
             <div className="id-watch">&nbsp;</div>
             <div className="id-spacer" aria-hidden="true">&nbsp;</div>
           </div>
         )}
 
-        {/* 計時器(主角) */}
-        <SessionStatus userId={userId} />
+        {/* 第三欄:集體趕稿=全場番茄鐘;自由入場=個人番茄鐘(自行啟用);指名互動=本場預約與購入 */}
+        {isFree ? <PersonalPomodoro title={`本場：${session.title}`} />
+          : isNamed ? <NamedPurchasePanel session={session} myBooking={myBooking} myItems={myItems} bkGuardName={bkGuardName} priceRows={priceRows} />
+          : <SessionStatus userId={userId} />}
       </div>
+
+      {/* 指名互動:本場獄卒排在本場目標之前 */}
+      {isNamed && guardsPanel}
 
       {/* 本場目標(稿件不對同場犯人公開,已移除本場囚犯同囚清單) */}
       <div className="card-panel">
         <div className="head">
           <h2>本場目標</h2>
           {goals.length > 0 && <span className="count">{goals.length} 項</span>}
-          {isIntake && <span className="hint-badge">等待開始服刑，可先挑選本場目標</span>}
+          {waiting && <span className="hint-badge">等待開始服刑，可先挑選本場目標</span>}
           {goals.length > 5 && (
             <>
               <span className="spacer" />
@@ -377,86 +498,11 @@ export default function SessionGoals({ userId, onGoToManuscripts }) {
         </div>
       </div>
 
-      {/* === 指名互動:本場預約與購入(時段 / 加購 / POS 購入明細) === */}
-      {session.kind === 'named' && (() => {
-        const slots = gArr(myBooking?.requested_slots).filter(x => x.s != null)
-        const addons = gArr(myBooking?.addons).filter(x => (x.polaroid || 0) + (x.sign || 0) > 0)
-        const gname = (id) => bkGuardName[id] ?? '（獄卒）'
-        const itemsTotal = myItems.reduce((s, it) => s + (it.amount ?? 0), 0)
-        return (
-          <div className="card-panel sg-section">
-            <div className="head"><h2>本場預約與購入</h2><span className="count">指名互動</span></div>
-            <div className="body sg-named">
-              <div className="sg-nblock">
-                <div className="sg-nsub">預約時段</div>
-                {slots.length === 0 ? <p className="empty">本場沒有指名時段</p> : (
-                  <div className="sg-chips">
-                    {slots.map((x, i) => <span key={i} className="sg-chip">🛡 {gname(x.g)} · 第 {Number(x.s) + 1} 段</span>)}
-                  </div>
-                )}
-              </div>
-              {addons.length > 0 && (
-                <div className="sg-nblock">
-                  <div className="sg-nsub">預約加購</div>
-                  <div className="sg-chips">
-                    {addons.map((x, i) => (
-                      <span key={i} className="sg-chip">🛡 {gname(x.g)}
-                        {x.polaroid ? ` · 拍立得 ${x.polaroid}` : ''}
-                        {x.sign ? ` · 簽繪 ${x.sign}` : ''}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="sg-nblock">
-                <div className="sg-nsub">購入內容（現場結帳）</div>
-                {myItems.length === 0 ? <p className="empty">目前沒有加購紀錄</p> : (
-                  <div className="sg-items">
-                    {myItems.map((it, i) => (
-                      <div key={i} className="sg-item">
-                        <span className="si-name">{posItemDesc(it)}</span>
-                        {it.guard_name && <span className="si-guard">🛡 {it.guard_name}</span>}
-                        <span className="si-amt mono">{it.amount ?? 0} 萬</span>
-                      </div>
-                    ))}
-                    <div className="sg-item sg-item-total">
-                      <span className="si-name">合計</span>
-                      <span className="si-amt mono">{itemsTotal} 萬</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )
-      })()}
+      {/* === 本場廣播(探望我的,唯讀)。自由入場無獄卒相關資訊、指名互動無本場廣播,皆不顯示。 === */}
+      {!isFree && !isNamed && <SessionVisits sessionId={session.id} userId={userId} role="inmate" />}
 
-      {/* === 本場廣播(探望我的,唯讀) === */}
-      <SessionVisits sessionId={session.id} userId={userId} role="inmate" />
-
-      {/* === 底部:本場獄卒(頭貼格狀) === */}
-      <div className="card-panel sg-section">
-        <div className="head"><h2>本場獄卒</h2>{guards.length > 0 && <span className="count">{guards.length} 位</span>}</div>
-        <div className="body">
-          {guards.length === 0 ? (
-            <p className="empty">本場目前沒有獄卒在場</p>
-          ) : (
-            <div className="guard-grid">
-              {guards.map(gd => (
-                <div key={gd.siId} className="guard-cell">
-                  <div className="g-av">
-                    {gd.profile?.avatar_url
-                      ? <img src={gd.profile.avatar_url} alt="" />
-                      : (gd.profile?.game_name ?? gd.profile?.display_name ?? '?')[0]}
-                  </div>
-                  <div className="g-nm">{gd.profile?.game_name ?? gd.profile?.display_name ?? '（未知）'}</div>
-                  <span className="role-tag guard">{gd.profile?.role === 'warden' ? '典獄長' : '獄卒'}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* === 底部:本場獄卒(頭貼格狀;自由入場無獄卒不顯示;指名互動已移至本場目標之前) === */}
+      {!isFree && !isNamed && guardsPanel}
 
       {/* 新增本場目標 modal:把原本 inline 挑稿清單搬進 modal,挑稿沿用既有 addGoal,可連續挑多筆。
           available 即時依 goals/actives 重算(挑進來的稿自動從清單移除)。 */}

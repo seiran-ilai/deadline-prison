@@ -120,7 +120,7 @@ export default function SessionStatus({ userId, session: sessionProp = undefined
   ) : null
 
   // 階段1:沒有任何未結束場次可服刑
-  if (!session) return <TimerWaiting text="尚未加入場次" sub="開始入場後將自動進入本場" />
+  if (!session) return <TimerWaiting text="尚未加入場次" sub="報名場次後將自動帶入" />
 
   // 狀態一律看 normalizeStatus,不再用 timer_started_at 有無當狀態判斷
   const ds = normalizeStatus(session)
@@ -128,20 +128,20 @@ export default function SessionStatus({ userId, session: sessionProp = undefined
   // 指名互動 / 自由入場:不需要番茄鐘,只顯示本場狀態
   if (session.kind === 'named' || session.kind === 'free') {
     const kindTxt = session.kind === 'named' ? '指名互動' : '自由入場'
-    const t = ds === 'ended' ? '本場已結束' : ds === 'serving' ? `${kindTxt}進行中` : '尚未開始'
+    const t = ds === 'ended' ? '本場已結束' : ds === 'serving' ? `${kindTxt}進行中` : '等待開始服刑'
     return <TimerWaiting text={t} sub={`本場：${session.title}（${kindTxt} · 無番茄鐘）`} />
-  }
-
-  // intake(尚未開始倒數):場次已開始入場即視為在場,番茄鐘尚未起跑。先放鈴聲啟用鈕。
-  if (ds === 'intake') {
-    return <>
-      <TimerWaiting text="尚未開始倒數" sub={`本場：${session.title}`} />
-      {bellBtn}
-    </>
   }
 
   // ended:理論上犯人頁外層會擋,保險起見顯示收尾文字
   if (ds === 'ended') return <TimerWaiting text="本場已結束" sub={`本場：${session.title}`} />
+
+  // 尚未開始服刑(booking / booking_paused / intake 殘留):報名即可進頁,先等待 + 預先啟用鈴聲。
+  if (ds !== 'serving') {
+    return <>
+      <TimerWaiting text="等待開始服刑" sub={`本場：${session.title}`} />
+      {bellBtn}
+    </>
+  }
 
   // serving:番茄鐘倒數(timer_started_at 只在此拿來算倒數)
   const N = session.total_rounds ?? 4

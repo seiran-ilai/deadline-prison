@@ -63,8 +63,8 @@ export default function SessionGuardPlan({ sessionId, staff, slotCount, startTim
       <div className="group-lbl">獄卒排班 · 上班 {onDutyCount}{isNamed ? `／可指名 ${nameableCount}` : ''}<span className="ln" /></div>
       <p className="faint" style={{ margin: '0 0 10px' }}>
         {isNamed
-          ? '點卡片選當日上班獄卒;上班後再點卡片內時格開放被指名(每格半小時、一名客人)。'
-          : '點卡片選當日上班獄卒(集體場可被指定監督)。'}
+          ? '點卡片選當日上班獄卒；上班後再點卡片內時格開放被指名（每格半小時、一名客人）。'
+          : '點卡片選當日上班獄卒（集體場可被指定監督）。'}
       </p>
       <div className="gp-cards">
         {staff.map(g => {

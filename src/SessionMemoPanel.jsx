@@ -64,7 +64,7 @@ export default function SessionMemoPanel({ userId, session }) {
   }
 
   return (
-    <div className="card-panel sg-section">
+    <div className="card-panel sg-section memo-panel">
       <div className="head">
         <h2>本場 MEMO · 確認項</h2>
         <span className="spacer" />
@@ -80,7 +80,7 @@ export default function SessionMemoPanel({ userId, session }) {
             <div key={m.id} className="memo-check">
               <input type="checkbox" checked={done} onChange={() => toggle(m)} />
               <div className="memo-check-body">
-                <span className={done ? 'done-text' : ''}>{m.content}</span>
+                <span className={done ? 'done-text' : ''} title={m.content}>{m.content}</span>
                 <div className="memo-check-meta">
                   <span className={`role-tag ${m.scope === 'every' ? 'warden' : 'guard'}`}>{m.scope === 'every' ? '每場' : '本場'}</span>
                   {m.target_prisoner_id && <span className="faint">對象：{prisonerName[m.target_prisoner_id] ?? '（已不存在）'}</span>}

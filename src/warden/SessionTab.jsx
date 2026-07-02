@@ -2,21 +2,23 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { ProgressBar } from '../ManuscriptManager'
 import { computeProgress } from '../progress'
-import { normalizeStatus, materializeResultMsg } from './constants'
+import { normalizeStatus, SESSION_STATUS_LABEL, materializeResultMsg } from './constants'
+import { startServingChain } from './sessionActions'
 import SessionTimerControl from './SessionTimerControl'
 import GuardAssign from './GuardAssign'
 import SessionPOS from './SessionPOS'
 import SalarySettlement from './SalarySettlement'
+import { askConfirm } from '../ConfirmDialog'
 
-// 非 serving 狀態時,控制條番茄鐘區的提示(實際狀態機按鈕在「場次總覽」分頁)
+// 非 serving 狀態時,控制條番茄鐘區的提示(典獄長另有「開始服刑」鈕;獄卒僅見提示)
 const TIMER_HINT = {
-  booking: '場次預約中，尚未開始入場',
-  booking_paused: '已停止預約，尚未開始入場',
-  intake: '已開始入場，於「場次總覽」按『開始服刑』啟動番茄鐘',
+  booking: '場次預約中，尚未開始服刑',
+  booking_paused: '已停止預約，尚未開始服刑',
+  intake: '準備服刑中，請按「開始服刑」完成啟動',
   ended: '本場已結束',
 }
 
-export default function SessionTab({ currentSession, setCurrentSession, sessions, inmates, isWarden, setMsg, reloadShared, onGoToManuscripts }) {
+export default function SessionTab({ currentSession, setCurrentSession, sessions, endedSessions = [], inmates, isWarden, setMsg, reloadShared, onGoToManuscripts }) {
   const [roster, setRoster] = useState([])
   const [rosterLoading, setRosterLoading] = useState(false)
   const [goalsByInmate, setGoalsByInmate] = useState({}) // session_inmate_id -> [{id, manuscript_id, title}]
@@ -96,7 +98,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
   }
 
   async function removeFromSession(sessionInmateId) {
-    if (!window.confirm('確定將這位犯人移出本場？')) return
+    if (!await askConfirm({ title: '移出本場', message: '確定將這位犯人移出本場？本場目標會一併清除。', confirmLabel: '移出本場', danger: true })) return
     const { error } = await supabase.from('session_inmates').delete().eq('id', sessionInmateId)
     if (error) { setMsg('移出失敗：' + error.message); return }
     setMsg('已移出本場'); loadRoster(currentSession)  // 本場目標靠 cascade 自動清
@@ -121,23 +123,23 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
       : [...prev, goalId])
   }
 
-  // 直接開始服刑(僅 warden,intake 狀態用):不必跳到「場次總覽」,在本分頁就能啟動番茄鐘。
-  // 走與「場次總覽」相同的 set_session_status(serving)(後端會設 timer_started_at);
+  // 直接開始服刑(僅 warden):本分頁一鈕完成 帶入預約名單 + 進 serving,不必跳「場次總覽」。
   // 成功後 reloadShared 刷新共用 sessions → currentSessionObj 變 serving → 自動切換成番茄鐘控台。
   async function startServing() {
-    if (!currentSession) return
+    if (!currentSessionObj) return
     setStartingServe(true)
-    const { error } = await supabase.rpc('set_session_status', { p_session: currentSession, p_new_status: 'serving' })
+    const r = await startServingChain(currentSessionObj)
     setStartingServe(false)
-    if (error) { setMsg('開始服刑失敗：' + error.message); return }
-    setMsg('已開始服刑')
+    if (r.error) { setMsg(r.error); reloadShared(); return }
+    setMsg(r.msg)
+    loadRoster(currentSession)   // 名單剛帶入,立即刷新
     reloadShared()
   }
 
   // 結束服刑(進行中場次直接結束,不必跳「場次總覽」)。
   async function endServing() {
     if (!currentSession) return
-    if (!window.confirm('確定結束本場服刑？結束後不可重開')) return
+    if (!await askConfirm({ title: '結束服刑', message: '確定結束本場服刑？結束後不可重開。', confirmLabel: '結束服刑', danger: true })) return
     const { error } = await supabase.rpc('set_session_status', { p_session: currentSession, p_new_status: 'ended' })
     if (error) { setMsg('結束服刑失敗：' + error.message); return }
     setMsg('已結束服刑'); reloadShared()
@@ -151,7 +153,7 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
     setMsg(materializeResultMsg(skipped))
     loadRoster(currentSession)
   }
-  const currentSessionObj = sessions.find(s => s.id === currentSession)
+  const currentSessionObj = sessions.find(s => s.id === currentSession) ?? endedSessions.find(s => s.id === currentSession)
 
   return (
     <div>
@@ -162,7 +164,13 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
           <div className="row">
             <select className="sel" value={currentSession} onChange={e => setCurrentSession(e.target.value)}>
               <option value="">— 選擇場次 —</option>
-              {sessions.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+              {sessions.map(s => <option key={s.id} value={s.id}>{s.title}（{SESSION_STATUS_LABEL[normalizeStatus(s)] ?? '未知'}）</option>)}
+              {/* 已結束場次也可選:用於補登/修改購買紀錄(POS) */}
+              {endedSessions.length > 0 && (
+                <optgroup label="已結束場次（可編輯購買紀錄）">
+                  {endedSessions.map(s => <option key={s.id} value={s.id}>{s.title}（已結束）</option>)}
+                </optgroup>
+              )}
             </select>
           </div>
         </div>
@@ -181,14 +189,23 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
             key={session.id} 讓切換場次時內部狀態(輪數輸入等)自動重置。 */}
         {currentSessionObj && (() => {
           const st = normalizeStatus(currentSessionObj)
-          // 指名場/自由入場不使用番茄鐘;進行中可直接結束服刑。
+          const canStart = isWarden && (st === 'booking' || st === 'booking_paused' || st === 'intake')
+          const startBtn = canStart && (
+            <button className="btn-sm btn-pri" disabled={startingServe} onClick={startServing}>
+              {startingServe ? '啟動中…' : '開始服刑'}
+            </button>
+          )
+          // 指名場/自由入場不使用番茄鐘;未開始可一鈕開始服刑、進行中可直接結束。
           if (currentSessionObj.kind === 'named' || currentSessionObj.kind === 'free')
             return (
               <div className="seg">
                 <span className="lbl">{currentSessionObj.kind === 'named' ? '指名場' : '自由入場'}</span>
                 <div className="row timer-state">
-                  <span className="muted">{currentSessionObj.kind === 'named' ? '指名場不使用番茄鐘，於下方 POS 開單' : '自由入場無番茄鐘管理'}</span>
-                  {isWarden && <button className="btn-sm btn-danger" onClick={endServing}>結束服刑</button>}
+                  <span className="muted">{st === 'serving'
+                    ? (currentSessionObj.kind === 'named' ? '指名場不使用番茄鐘，於下方 POS 開單' : '自由入場無番茄鐘管理')
+                    : (TIMER_HINT[st] ?? '本場尚未開始服刑')}</span>
+                  {startBtn}
+                  {isWarden && st === 'serving' && <button className="btn-sm btn-danger" onClick={endServing}>結束服刑</button>}
                 </div>
               </div>
             )
@@ -199,14 +216,9 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
             <div className="seg">
               <span className="lbl">番茄鐘</span>
               <div className="row timer-state">
-                {/* intake:本分頁直接開始服刑(不必跳「場次總覽」);其餘狀態維持提示文字 */}
-                {isWarden && st === 'intake' ? (
-                  <button className="btn-sm btn-pri" disabled={startingServe} onClick={startServing}>
-                    {startingServe ? '啟動中…' : '開始服刑（啟動番茄鐘）'}
-                  </button>
-                ) : (
-                  <span className="muted">{TIMER_HINT[st] ?? '本場尚未開始服刑'}</span>
-                )}
+                {/* 未開始:本分頁一鈕開始服刑(帶入名單+啟動番茄鐘),不必跳「場次總覽」 */}
+                {startBtn || <span className="muted">{TIMER_HINT[st] ?? '本場尚未開始服刑'}</span>}
+                {canStart && <span className="muted">{TIMER_HINT[st]}</span>}
               </div>
             </div>
           )
@@ -293,9 +305,9 @@ export default function SessionTab({ currentSession, setCurrentSession, sessions
           </div>
         </div>
 
-      {/* 進行中場次 POS(指名/集體場):上班獄卒排程 + 走查加購(寫結算)+ 臨時追加犯人。上班獄卒直接由排班帶入 */}
-      {isWarden && currentSession && ['named', 'crunch'].includes(currentSessionObj?.kind)
-        && ['intake', 'serving'].includes(normalizeStatus(currentSessionObj)) && (
+      {/* 進行中場次 POS(指名/集體場):上班獄卒排程 + 走查加購(寫結算)+ 臨時追加犯人。上班獄卒直接由排班帶入。
+          不限場次狀態:預約中即可先臨時報名/開單,已結束也可補登/修改購買紀錄。 */}
+      {isWarden && currentSession && ['named', 'crunch'].includes(currentSessionObj?.kind) && (
         <SessionPOS session={currentSessionObj} inmates={inmates} setMsg={setMsg} reloadShared={reloadShared}
           onPosChange={() => setPosVer(v => v + 1)} />
       )}
