@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { SESSION_KIND_LABEL, DEFAULT_SESSION_KIND } from '../sessionKind'
-import { calcSettlement, money, formatElaiAndPrisonPayout } from './salaryRules'
+import { calcSettlement, money, formatElaiAndPrisonPayout, formatGuardPayslip } from './salaryRules'
 import { fetchPriceRows, settlementRates } from '../prices'
 import { sendSalaryBroadcast, zhSalaryError } from '../salaryApi'
 
@@ -28,6 +28,7 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
   const [gil, setGil] = useState('')          // 費用驗算:典獄長身上原有金額(萬)
   const [sending, setSending] = useState(false)
   const [sendMsg, setSendMsg] = useState(null)
+  const [sendingGuard, setSendingGuard] = useState(null) // 發送中的獄卒 id | '_all' | null
   const [priceRows, setPriceRows] = useState(null)   // 價目表(guard_cut 拆帳設定;未載/未建表落回內建預設)
 
   useEffect(() => { fetchPriceRows().then(setPriceRows) }, [posVersion])   // POS 異動時一併刷新拆帳設定
@@ -97,6 +98,30 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
     setSendMsg(r.ok ? '已發送伊萊諾斯薪資與監獄收支到頻道。' : `發送失敗：${zhSalaryError(r.error)}`)
   }
 
+  // 單一獄卒:薪資明細發到「該獄卒的個人薪資頻道」(webhook 由伺服器端對照)
+  async function sendGuardPayslip(g) {
+    setSendingGuard(g.id); setSendMsg(null)
+    const r = await sendSalaryBroadcast(formatGuardPayslip(g, sessionObj), g.name)
+    setSendingGuard(null)
+    setSendMsg(r.ok ? `已發送 ${g.name} 的薪資明細到個人頻道。` : `${g.name} 發送失敗：${zhSalaryError(r.error)}`)
+  }
+
+  // 一鍵發送全部獄卒(伊萊諾斯除外,其薪資走監獄收支頻道):逐位發送,結尾彙整成功/失敗
+  async function sendAllPayslips() {
+    const targets = result.guards.filter(g => g.inmate_no !== ELAI_INMATE_NO)
+    if (!targets.length) { setSendMsg('沒有可發送的獄卒。'); return }
+    setSendingGuard('_all'); setSendMsg(null)
+    const fails = []
+    for (const g of targets) {
+      const r = await sendSalaryBroadcast(formatGuardPayslip(g, sessionObj), g.name)
+      if (!r.ok) fails.push(`${g.name}（${zhSalaryError(r.error)}）`)
+    }
+    setSendingGuard(null)
+    setSendMsg(fails.length
+      ? `已發送 ${targets.length - fails.length}／${targets.length} 位；失敗：${fails.join('、')}`
+      : `已發送全部 ${targets.length} 位獄卒的薪資明細到各自頻道。`)
+  }
+
   return (
     <div className="settle-wrap">
       {!embedded && (
@@ -157,7 +182,17 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
                         </div>
                       ))}
                     </div>
-                    <div className="pay-card-foot"><span>最終薪資</span><Amt v={g.final} strong /></div>
+                    <div className="pay-card-foot">
+                      <span>最終薪資</span><Amt v={g.final} strong />
+                      {/* 伊萊諾斯薪資走「監獄收支」頻道發送,不在卡上單發 */}
+                      {g.inmate_no !== ELAI_INMATE_NO && (
+                        <button className="btn-sm" disabled={sendingGuard != null}
+                          title="發送這位獄卒的薪資明細到其個人 Discord 頻道"
+                          onClick={() => sendGuardPayslip(g)}>
+                          {sendingGuard === g.id ? '發送中…' : '📤 發送'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -217,9 +252,13 @@ export default function SalarySettlement({ currentSession, embedded = false, pos
               </div>
             </div>
 
-            {/* 發送今日薪資明細:兩欄下方置中一列(測試:只送伊萊諾斯 No.0001) */}
+            {/* 發送今日薪資明細:各獄卒送各自個人頻道;伊萊諾斯薪資+監獄收支送收支頻道 */}
             <div className="settle-send">
-              <button className="btn-sm btn-pri" onClick={sendElaiPayslip} disabled={sending}
+              <button className="btn-sm btn-pri" onClick={sendAllPayslips} disabled={sendingGuard != null || sending}
+                title="把每位獄卒的薪資明細發送到各自的 Discord 個人頻道（伊萊諾斯除外）">
+                {sendingGuard === '_all' ? '逐位發送中…' : '📤 發送全部獄卒薪資'}
+              </button>
+              <button className="btn-sm btn-pri" onClick={sendElaiPayslip} disabled={sending || sendingGuard != null}
                 title="把伊萊諾斯薪資與監獄收支一起發送到 Discord 頻道">
                 {sending ? '發送中…' : '發送薪資與監獄收支'}
               </button>

@@ -1,15 +1,16 @@
 import { supabase } from './supabaseClient'
 
 // 薪資明細發送前端封裝:帶目前登入者 access token,身分由 /api/salary-broadcast 伺服器端驗證(warden)。
+// guardName 不帶 → 送「伊萊諾斯和監獄的收支」頻道;帶 → 送該獄卒的個人薪資頻道(伺服器端對照 webhook)。
 // 回傳 { ok, status, ...伺服器 JSON }
-export async function sendSalaryBroadcast(content) {
+export async function sendSalaryBroadcast(content, guardName = null) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
   if (!token) return { ok: false, status: 401, error: 'not_authenticated' }
   const res = await fetch('/api/salary-broadcast', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, guard_name: guardName || null }),
   })
   const json = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, ...json }
@@ -21,6 +22,7 @@ export function zhSalaryError(code) {
     not_authenticated: '登入狀態已失效，請重新登入',
     forbidden: '僅典獄長可執行此操作',
     webhook_not_configured: '尚未設定薪資頻道 webhook（請在伺服器環境變數設定 DISCORD_SALARY_WEBHOOK_URL）',
+    guard_webhook_not_found: '這位獄卒尚未設定個人薪資 webhook',
     missing_content: '沒有可發送的內容',
     content_too_long: '內容過長（Discord 單則上限 2000 字）',
     discord_failed: '發送到 Discord 失敗，請稍後再試',
